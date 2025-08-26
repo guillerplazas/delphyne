@@ -10,7 +10,7 @@ with a single query, using the `iterative_mode` option of `few_shot`.
 from dataclasses import dataclass
 from typing import override, Never #,ClassVar
 import delphyne as dp
-from delphyne import Branch, Computation, Strategy, dfs, strategy
+from delphyne import Branch, Compute, Strategy, dfs, strategy
 import checker as ch  # assuming checker is available as ch
 
 @dataclass
@@ -53,7 +53,7 @@ class ProveEqualityAtOnce(dp.Query[ch.Proof]):
 
 
 @strategy
-def check_equality(equality: ch.Eq, proof: ch.Proof) -> Strategy[Computation, object, ch.Proof | dp.Error]:
+def check_equality(equality: ch.Eq, proof: ch.Proof) -> Strategy[Compute, object, ch.Proof | dp.Error]:
     """Compute strategy to check a proposed proof. Returns the proof if correct, or feedback as Error if incorrect."""
     # Run the checker on the target equality and the proposed proof.
     feedback = yield from dp.compute(ch.check, equality, proof, ch.TRIG_RULES)
