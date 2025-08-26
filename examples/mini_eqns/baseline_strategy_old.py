@@ -7,7 +7,8 @@ with a single query, using the `iterative_mode` option of `few_shot`.
 """
 
 from dataclasses import dataclass
-from typing import override # WHY
+from typing import override  
+# WHY @override? -> to ensure that we are actually overriding a method in the parent class.
 
 import delphyne as dp
 
@@ -18,10 +19,9 @@ import checker as ch
 class ProveEqualityAtOnce(dp.Query[ch.Proof]):
     equality: ch.Eq
 
-    #Parsing system -> completly different approach
-    @override
-    def parse(self) -> dp.Parser[ch.Proof]:
-         # Note: an explicit type annotation is needed here, until Python
+    @override #Parsing system -> completly different approach
+    def parser(self) -> dp.Parser[ch.Proof]:
+        # Note: an explicit type annotation is needed here, until Python
         # 3.14 introduces `TypeExpr`. See `yaml_as` docstring.
         parser: dp.Parser[ch.Proof] = dp.last_code_block.yaml_as(ch.Proof)
         return parser.validate(
