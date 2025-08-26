@@ -16,7 +16,7 @@ import checker as ch  # assuming checker is available as ch
 @dataclass
 class ProveEqualityInteractive(dp.Query[ch.Proof]):
     equality: ch.Eq
-    #prefix: str = ""
+    prefix: str = dp.AnswerPrefix
 
     @override
     def parser(self) -> dp.Parser[ch.Proof]:
@@ -95,10 +95,13 @@ def prove_equality_interactive(equality: ch.Eq
     # If we exit the loop with a proof (i.e., not an Error), return it
     return result_proof
 
+
+# Now in here -> loop as a param. , and return type not bool
 def prove_equality_interactive_policy(
     model_name: dp.StandardModelName, 
     temperature: float | None = None, 
-    max_feedback_cycles: int = 3):
+    max_feedback_cycles: int = 3,
+    loop: bool = False):
     """
     Returns a (search_policy, prompting_policy) pair for the interactive equality-proving strategy.
     - model_name: which LLM to use (e.g., dp.StandardModelName.GPT4 or a string for the model).
@@ -107,10 +110,13 @@ def prove_equality_interactive_policy(
     """
     model = dp.standard_model(model_name)
     # Search policy: allow looping with a DFS bound on depth to limit feedback cycles
-    sp = dp.loop() @ dfs(max_depth=2 * (max_feedback_cycles + 1))
+    sp = dfs(max_depth=2 * (max_feedback_cycles + 1))
+    if loop:
+        sp =dp.loop() @ sp
+    
     # Prompting policy: few-shot prompting with the chosen model and parameters
-    #pp = dp.few_shot(model, temperature=temperature, max_requests=1)
-    pp = dp.few_shot(model, enable_logging=False, temperature=temperature, max_requests=1,iterative_mode=False)
-    return (sp, pp)
+    pp = dp.few_shot(model, temperature=temperature, max_requests=1)
+    #pp = dp.few_shot(model, enable_logging=False, temperature=temperature, max_requests=1,iterative_mode=False)
+    return sp & pp
 
 
