@@ -14,7 +14,7 @@ from delphyne import Branch, Compute, Strategy, dfs, strategy
 import checker as ch  # assuming checker is available as ch
 
 @dataclass
-class ProveEqualityAtOnce(dp.Query[ch.Proof]):
+class ProveEqualityInteractive(dp.Query[ch.Proof]):
     equality: ch.Eq
     #prefix: str = ""
 
@@ -87,7 +87,7 @@ def prove_equality_interactive(equality: ch.Eq
     result_proof = yield from dp.interact(
         step=lambda prefix, _: 
             #ProveEqualityAtOnce(equality, prefix).using(dp.ambient_pp),
-            ProveEqualityAtOnce(equality, prefix).using(dp.ambient_pp),
+            ProveEqualityInteractive(equality, prefix).using(dp.ambient_pp),
 
         process=lambda proof, _: 
             check_equality(equality, proof).using(dp.just_compute)
