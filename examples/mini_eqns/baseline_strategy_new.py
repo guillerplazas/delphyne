@@ -16,7 +16,7 @@ import checker as ch  # assuming checker is available as ch
 @dataclass
 class ProveEqualityInteractive(dp.Query[ch.Proof]):
     equality: ch.Eq
-    prefix: str = dp.AnswerPrefix
+    prefix: dp.AnswerPrefix
 
     @override
     def parser(self) -> dp.Parser[ch.Proof]:
