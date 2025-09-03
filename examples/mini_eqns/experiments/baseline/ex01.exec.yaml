@@ -1,0 +1,259 @@
+# delphyne-command
+
+command: run_strategy
+args:
+  strategy: prove_equality_interactive
+  args:
+    equality: [sin(pi/2 + x), cos(x)]
+  policy: prove_equality_interactive_policy
+  policy_args:
+    model_name: gpt-4o
+    max_feedback_cycles: 10
+  num_generated: 1
+  budget:
+    num_requests: 10
+outcome:
+  status: completed
+  diagnostics: []
+  result:
+    success: false
+    values: []
+    spent_budget:
+      num_requests: 1
+      num_completions: 1
+      input_tokens: 672
+      output_tokens: 510
+      cached_input_tokens: 0
+      price: 0.0023174999999999997
+    raw_trace:
+      nodes:
+        "1": nested(0, $main)
+      queries:
+        - node: 1
+          space: cands
+          answers:
+            "1":
+              mode: null
+              content: |-
+                To prove the equality \( \sin(\frac{\pi}{2} + x) = \cos(x) \), we can use one of the provided trigonometric addition formulas, specifically the sine addition formula:
+
+                1. We start from the left-hand side of the presented equality \(\sin(\frac{\pi}{2} + x)\).
+
+                2. According to the sine addition formula, \(\sin(a + b) = \sin(a)\cos(b) + \cos(a)\sin(b)\), we can rewrite \(\sin(\frac{\pi}{2} + x)\) with \(a = \frac{\pi}{2}\) and \(b = x\):
+
+                   \[
+                   \sin\left(\frac{\pi}{2} + x\right) = \sin\left(\frac{\pi}{2}\right)\cos(x) + \cos\left(\frac{\pi}{2}\right)\sin(x)
+                   \]
+
+                3. Using the provided rules, we can substitute:
+                   - \(\sin(\frac{\pi}{2})\) with \(1\) (rule: `sin_halfpi`).
+                   - \(\cos(\frac{\pi}{2})\) with \(0\) (rule: `cos_halfpi`).
+
+                4. Substituting these values in, we have:
+
+                   \[
+                   \sin\left(\frac{\pi}{2} + x\right) = 1 \cdot \cos(x) + 0 \cdot \sin(x) = \cos(x)
+                   \]
+
+                5. Hence, we have demonstrated the required equality.
+
+                Now, we'll formalize this reasoning into a machine-checkable proof format using YAML:
+
+                ```yaml
+                - equality: "sin(pi/2 + x)"
+                  justification: {rule: sin_add, vars: {x: "pi/2", y: "x"}}
+                - equality: "sin(pi/2)*cos(x) + cos(pi/2)*sin(x)"
+                  justification: {step: 1}
+                - equality: "1*cos(x) + 0*sin(x)"
+                  justification: 
+                    rule: sin_halfpi
+                    vars: {x: "x"}
+                - equality: "cos(x)"
+                  justification: {step: 3}
+                ```
+
+                This proof uses the addition formula, then replaces the specific results of \(\sin(\frac{\pi}{2})\) and \(\cos(\frac{\pi}{2})\).
+              tool_calls: []
+              justification: null
+    log:
+      - message: llm_response
+        node: 1
+        space: cands
+        metadata:
+          request:
+            chat:
+              - role: system
+                content: |-
+                  ## Task Description
+
+                  The goal is to produce machine-checkable proofs of simple trigonometric equalities. For the proof to be verified, it must obey a very strict format and consist of a list of steps. Each step states an equality and is attached a justification for how the equality was obtained, which can be either:
+
+                  - Applying a predefined rewriting rule (see list below): `{rule: <rule_name>, vars: {<var_1>: "<value_1>", ..., <var_n>: "value_n"}}`.
+                  - Substituting a previously obtained equality: `{step: {prev_step_id}}`.
+                  - Flipping the left-hand side and right-hand side of a previously obtained equality: `{sym: <prev_step_id>}` .
+                  - Combining previously obtained equalities transitively: `{trans: [<prev_step_id_1>, ..., <prev_step_id_n>]}`.
+
+                  The last step of the proof must feature the target equality that you were tasked to prove.
+
+                  Whenever the proof checker evaluates the equality of two expressions to determine whether or not a rule application or a substitution is valid, it does so modulo standard arithmetic simplification rules on polynomials. Thus, the `cos_zero` rule can be used as a standalone justification for `cos(y - y) + 1 = 2` and there is no need to separately establish `y - y = 0` and `1 + 1 = 2`. However, **no** fact about trigonometry should be ever taken for granted.
+
+                  You should organize your answer in the following way. Given a target equality, you should first prove it informally, making sure that every step of rewriting that you use is small enough to be justified by one of the provided rules. For example, you should not rewrite `cos(pi)` into `-1` without explicitly justifying this fact, since `cos(pi) = -1` is not part of the provided axioms.
+
+                  Once you've done that, you should end your answer with a triple-quoted code block containing a valid YAML object that describes a machine-checkable proof formalizing your former reasoning. All expressions must be written as strings using Python syntax (and thus parsable using `sympy.sympyfy`). In particular, exponentiation is written `**`.
+
+                  **Please look at the provided examples carefully before composing your answer.**
+
+                  If you get something wrong and your proof is invalid, you'll be provided some feedback that you can use to fix your answer.
+
+                  ## List of allowed rewriting rules
+
+                  ```
+                  - cos_zero: `cos(0) = 1`
+                  - sin_zero: `sin(0) = 0`
+                  - sin_halfpi: `sin(pi/2) = 1`
+                  - cos_halfpi: `cos(pi/2) = 0`
+                  - sin_neg: `sin(-x) = -sin(x)`
+                  - cos_neg: `cos(-x) = cos(x)`
+                  - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+                  - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+                  ```
+              - role: user
+                content: "Prove the following equality: `sin(pi/2 + x) = cos(x)`."
+            num_completions: 1
+            options: {}
+            tools: []
+          response:
+            outputs:
+              - content: |-
+                  To prove the equality \( \sin(\frac{\pi}{2} + x) = \cos(x) \), we can use one of the provided trigonometric addition formulas, specifically the sine addition formula:
+
+                  1. We start from the left-hand side of the presented equality \(\sin(\frac{\pi}{2} + x)\).
+
+                  2. According to the sine addition formula, \(\sin(a + b) = \sin(a)\cos(b) + \cos(a)\sin(b)\), we can rewrite \(\sin(\frac{\pi}{2} + x)\) with \(a = \frac{\pi}{2}\) and \(b = x\):
+
+                     \[
+                     \sin\left(\frac{\pi}{2} + x\right) = \sin\left(\frac{\pi}{2}\right)\cos(x) + \cos\left(\frac{\pi}{2}\right)\sin(x)
+                     \]
+
+                  3. Using the provided rules, we can substitute:
+                     - \(\sin(\frac{\pi}{2})\) with \(1\) (rule: `sin_halfpi`).
+                     - \(\cos(\frac{\pi}{2})\) with \(0\) (rule: `cos_halfpi`).
+
+                  4. Substituting these values in, we have:
+
+                     \[
+                     \sin\left(\frac{\pi}{2} + x\right) = 1 \cdot \cos(x) + 0 \cdot \sin(x) = \cos(x)
+                     \]
+
+                  5. Hence, we have demonstrated the required equality.
+
+                  Now, we'll formalize this reasoning into a machine-checkable proof format using YAML:
+
+                  ```yaml
+                  - equality: "sin(pi/2 + x)"
+                    justification: {rule: sin_add, vars: {x: "pi/2", y: "x"}}
+                  - equality: "sin(pi/2)*cos(x) + cos(pi/2)*sin(x)"
+                    justification: {step: 1}
+                  - equality: "1*cos(x) + 0*sin(x)"
+                    justification: 
+                      rule: sin_halfpi
+                      vars: {x: "x"}
+                  - equality: "cos(x)"
+                    justification: {step: 3}
+                  ```
+
+                  This proof uses the addition formula, then replaces the specific results of \(\sin(\frac{\pi}{2})\) and \(\cos(\frac{\pi}{2})\).
+                tool_calls: []
+                finish_reason: stop
+            budget:
+              values:
+                num_requests: 1
+                num_completions: 1
+                input_tokens: 672
+                output_tokens: 510
+                cached_input_tokens: 0
+                price: 0.0023174999999999997
+            log_items: []
+            model_name: gpt-4o-2024-08-06
+            usage_info:
+              completion_tokens: 510
+              prompt_tokens: 672
+              total_tokens: 1182
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 0
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 0
+      - message: llm_usage
+        node: 1
+        space: cands
+        metadata:
+          model: gpt-4o-2024-08-06
+          usage:
+            completion_tokens: 510
+            prompt_tokens: 672
+            total_tokens: 1182
+            completion_tokens_details:
+              accepted_prediction_tokens: 0
+              audio_tokens: 0
+              reasoning_tokens: 0
+              rejected_prediction_tokens: 0
+            prompt_tokens_details:
+              audio_tokens: 0
+              cached_tokens: 0
+      - message: parse_error
+        node: 1
+        space: cands
+        metadata:
+          error:
+            label: parse_error
+            description: |-
+              1 validation error for dict[int,tuple[tuple[str, str], union[Sym,Trans,Rule,RewritePrev]]]
+                Input should be a valid dictionary [type=dict_type, input_value=[{'equality': 'sin(pi/2 +...fication': {'step': 3}}], input_type=list]
+                  For further information visit https://errors.pydantic.dev/2.11/v/dict_type
+            meta: null
+    browsable_trace:
+      nodes:
+        "1":
+          kind: Branch
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: ProveEqualityInteractive
+          tags: [ProveEqualityInteractive]
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - kind: query
+                name: ProveEqualityInteractive
+                args:
+                  equality: [sin(pi/2 + x), cos(x)]
+                  prefix: []
+                tags: [ProveEqualityInteractive]
+                answers:
+                  - id: 1
+                    hint: null
+                    value:
+                      short: |-
+                        parse_error
+
+                        1 validation error for dict[int,tuple[tuple[str, str], union[Sym,Trans,Rule,RewritePrev]]]
+                          Input should be a valid dictionary [type=dict_type, input_value=[{'equality': 'sin(pi/2 +...fication': {'step': 3}}], input_type=list]
+                            For further information visit https://errors.pydantic.dev/2.11/v/dict_type
+                      long: |-
+                        ParseError(label='parse_error',
+                                   description='1 validation error for dict[int,tuple[tuple[str, str], '
+                                               'union[Sym,Trans,Rule,RewritePrev]]]\n'
+                                               '  Input should be a valid dictionary [type=dict_type, '
+                                               "input_value=[{'equality': 'sin(pi/2 +...fication': "
+                                               "{'step': 3}}], input_type=list]\n"
+                                               '    For further information visit '
+                                               'https://errors.pydantic.dev/2.11/v/dict_type',
+                                   meta=None)
+                      json_provided: false
+                      json: null
+          actions: []
+          origin: root
