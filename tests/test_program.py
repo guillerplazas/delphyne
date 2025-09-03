@@ -11,15 +11,14 @@ import example_strategies as ex
 import pytest
 
 import delphyne as dp
-import delphyne.utils.caching as ca
 
 PROMPT_DIR = Path(__file__).parent / "prompts"
 CACHE_DIR = Path(__file__).parent / "cache"
 
 
-def _make_cache(name: str) -> dp.LLMCache:
-    cache_spec = ca.CacheSpec(ca.CacheYaml(CACHE_DIR / name))
-    return dp.LLMCache(cache_spec)
+def _load_cache(name: str):
+    file = CACHE_DIR / (name + ".yaml")
+    return dp.load_request_cache(file, mode="read_write")
 
 
 def test_query_properties():
@@ -37,7 +36,7 @@ def _eval_query(
     query: dp.Query[object],
     cache_name: str,
     budget: int = 1,
-    concurrent: int = 1,
+    num_completions: int = 1,
     model_name: dp.StandardModelName = "gpt-4.1-mini",
     model_options: dp.RequestOptions | None = None,
     model_class: str | None = None,
@@ -46,21 +45,20 @@ def _eval_query(
     env = dp.PolicyEnv(
         demonstration_files=(), prompt_dirs=(PROMPT_DIR,), data_dirs=()
     )
-    cache_spec = ca.CacheSpec(ca.CacheYaml(CACHE_DIR / cache_name))
-    cache = dp.LLMCache(cache_spec)
-    base_model = dp.standard_model(
-        model_name, options=model_options, model_class=model_class
-    )
-    model = dp.CachedModel(base_model, cache)
-    bl = dp.BudgetLimit({dp.NUM_REQUESTS: budget})
-    pp = dp.with_budget(bl) @ dp.few_shot(
-        model, num_concurrent=concurrent, mode=mode
-    )
-    stream = query.run_toplevel(env, pp)
-    res, _ = stream.collect()
-    log = list(env.tracer.export_log())
-    print(log)
-    return res, log
+    with _load_cache(cache_name) as cache:
+        base_model = dp.standard_model(
+            model_name, options=model_options, model_class=model_class
+        )
+        model = dp.CachedModel(base_model, cache)
+        bl = dp.BudgetLimit({dp.NUM_REQUESTS: budget})
+        pp = dp.with_budget(bl) @ dp.few_shot(
+            model, num_completions=num_completions, mode=mode
+        )
+        stream = query.run_toplevel(env, pp)
+        res, _ = stream.collect()
+        log = list(env.tracer.export_log())
+        print(log)
+        return res, log
 
 
 def _eval_strategy[N: dp.Node, P, T](
@@ -74,14 +72,14 @@ def _eval_strategy[N: dp.Node, P, T](
     env = dp.PolicyEnv(
         prompt_dirs=[PROMPT_DIR], demonstration_files=(), data_dirs=()
     )
-    cache = _make_cache(cache_name)
-    model = dp.CachedModel(dp.standard_model(model_name), cache)
-    stream = strategy.run_toplevel(env, policy(model))
-    budget = dp.BudgetLimit({dp.NUM_REQUESTS: max_requests})
-    ret, _spent = stream.collect(budget=budget, num_generated=max_res)
-    log = list(env.tracer.export_log())
-    log_str = "\n".join(e.message for e in log)
-    return ret, log_str
+    with _load_cache(cache_name) as cache:
+        model = dp.CachedModel(dp.standard_model(model_name), cache)
+        stream = strategy.run_toplevel(env, policy(model))
+        budget = dp.BudgetLimit({dp.NUM_REQUESTS: max_requests})
+        ret, _spent = stream.collect(budget=budget, num_generated=max_res)
+        log = list(env.tracer.export_log())
+        log_str = "\n".join(e.message for e in log)
+        return ret, log_str
 
 
 def test_concurrent():
@@ -89,7 +87,7 @@ def test_concurrent():
         ex.StructuredOutput(topic="Love"),
         "structured_output_concurrent",
         budget=4,
-        concurrent=2,
+        num_completions=2,
     )
     assert len(res) == 8  # 4 requests, 2 completions each time
 
@@ -98,15 +96,15 @@ def test_basic_llm_call():
     env = dp.PolicyEnv(
         demonstration_files=(), prompt_dirs=(PROMPT_DIR,), data_dirs=()
     )
-    cache = _make_cache("basic_llm_call")
-    model = dp.CachedModel(dp.openai_model("gpt-4.1-mini"), cache)
-    pp = dp.few_shot(model)
-    bl = dp.BudgetLimit({dp.NUM_REQUESTS: 1})
-    policy = dp.take(1) @ dp.with_budget(bl) @ dp.dfs() & ex.MakeSumIP(pp)
-    stream = ex.make_sum([1, 2, 3, 4], 7).run_toplevel(env, policy)
-    res, _ = stream.collect()
-    # print(list(env.tracer.export_log()))
-    assert res
+    with _load_cache("basic_llm_call") as cache:
+        model = dp.CachedModel(dp.openai_model("gpt-4.1-mini"), cache)
+        pp = dp.few_shot(model)
+        bl = dp.BudgetLimit({dp.NUM_REQUESTS: 1})
+        policy = dp.take(1) @ dp.with_budget(bl) @ dp.dfs() & ex.MakeSumIP(pp)
+        stream = ex.make_sum([1, 2, 3, 4], 7).run_toplevel(env, policy)
+        res, _ = stream.collect()
+        # print(list(env.tracer.export_log()))
+        assert res
 
 
 def test_structured_output():
@@ -137,15 +135,15 @@ def test_interact():
     env = dp.PolicyEnv(
         demonstration_files=(), prompt_dirs=(PROMPT_DIR,), data_dirs=()
     )
-    cache = _make_cache("interact")
-    model = dp.CachedModel(dp.openai_model("gpt-4.1-mini"), cache)
-    pp = dp.few_shot(model)
-    bl = dp.BudgetLimit({dp.NUM_REQUESTS: 2})
-    policy = dp.take(1) @ dp.with_budget(bl) @ dp.dfs() & pp
-    stream = ex.propose_article("Jonathan").run_toplevel(env, policy)
-    res, _ = stream.collect()
-    print(list(env.tracer.export_log()))
-    assert res
+    with _load_cache("interact") as cache:
+        model = dp.CachedModel(dp.openai_model("gpt-4.1-mini"), cache)
+        pp = dp.few_shot(model)
+        bl = dp.BudgetLimit({dp.NUM_REQUESTS: 2})
+        policy = dp.take(1) @ dp.with_budget(bl) @ dp.dfs() & pp
+        stream = ex.propose_article("Jonathan").run_toplevel(env, policy)
+        res, _ = stream.collect()
+        print(list(env.tracer.export_log()))
+        assert res
 
 
 def test_both_tool_call_and_structured_output():
@@ -184,18 +182,18 @@ def _eval_classifier_query(
     env = dp.PolicyEnv(
         demonstration_files=(), prompt_dirs=(PROMPT_DIR,), data_dirs=()
     )
-    cache = _make_cache(cache_name)
-    model = dp.CachedModel(dp.openai_model("gpt-4.1-mini"), cache)
-    bl = dp.BudgetLimit({dp.NUM_REQUESTS: 1})
-    pp = dp.with_budget(bl) @ dp.classify(
-        model, temperature=temperature, bias=bias
-    )
-    stream = query.run_toplevel(env, pp)
-    res, _ = stream.collect()
-    log = list(env.tracer.export_log())
-    print(log)
-    assert res
-    return res[0].meta
+    with _load_cache(cache_name) as cache:
+        model = dp.CachedModel(dp.openai_model("gpt-4.1-mini"), cache)
+        bl = dp.BudgetLimit({dp.NUM_REQUESTS: 1})
+        pp = dp.with_budget(bl) @ dp.classify(
+            model, temperature=temperature, bias=bias
+        )
+        stream = query.run_toplevel(env, pp)
+        res, _ = stream.collect()
+        log = list(env.tracer.export_log())
+        print(log)
+        assert res
+        return res[0].meta
 
 
 @pytest.mark.parametrize(
@@ -204,7 +202,7 @@ def _eval_classifier_query(
 )
 def test_classifiers(name: str, right: str, wrong: str):
     res = _eval_classifier_query(
-        ex.EvalNameRarity(name), "classify", temperature=1.0
+        ex.EvalNameRarity(name), f"classify_{right}", temperature=1.0
     )
     assert isinstance(res, dp.ProbInfo)
     D = {k.value: v for k, v in res.distr}
@@ -263,9 +261,10 @@ def test_apply_bias():
     "model,options,options_label",
     [
         ("mistral-small-2503", None, None),
-        ("deepseek-chat", None, None),
+        ("gemini-2.5-flash", None, None),
         ("gpt-5-mini", {"reasoning_effort": "minimal"}, "minimal_reasoning"),
         ("gpt-5-mini", {"reasoning_effort": "high"}, "high_reasoning"),
+        ("deepseek-chat", None, None),
         # ("deepseek-reasoner", None, None),  # long latency
     ],
 )
@@ -293,7 +292,7 @@ def test_provider(
     "model",
     [
         "mistral-small-2503",
-        "deepseek-chat",
+        # "deepseek-chat",  # TODO" test structured output with DeepSeek
     ],
 )
 def test_structured_output_provider(model: dp.StandardModelName):
@@ -332,7 +331,7 @@ def test_abduction():
         ex.MarketMember("R6", ["C"], "F"),
     ]
     strategy = ex.obtain_item(market, "F")
-    policy = partial(ex.obtain_item_policy, num_concurrent=1)
+    policy = partial(ex.obtain_item_policy, num_completions=1)
     cache_name = "abduction"
     res, log = _eval_strategy(
         strategy, policy, cache_name, max_requests=10, max_res=1
@@ -358,7 +357,7 @@ def test_sequence():
         return dp.sequence(
             [
                 one_req @ dp.dfs()
-                & ex.MakeSumIP(dp.few_shot(model, num_concurrent=k))
+                & ex.MakeSumIP(dp.few_shot(model, num_completions=k))
                 for k in [1, 2]
             ]
         )
@@ -465,3 +464,21 @@ def test_wrapped_parse_error(no_wrap: bool):
         assert not res
     else:
         assert res
+
+
+#####
+##### Univeresal Queries
+#####
+
+
+def test_make_sum_using_guess():
+    strategy = ex.make_sum_using_guess(allowed=[1, 2, 3, 4], goal=5)
+    res, _log = _eval_strategy(
+        strategy,
+        ex.make_sum_using_guess_policy,
+        cache_name="make_sum_using_guess",
+        max_requests=1,
+        max_res=1,
+        model_name="gpt-5-mini",
+    )
+    assert res

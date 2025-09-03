@@ -4,18 +4,16 @@ Definition of Opaque Spaces
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar, override
+from typing import Any, override
 
 import delphyne.core as dp
 from delphyne.core.trees import NestedTreeSpawner, QuerySpawner
+from delphyne.stdlib.environments import PolicyEnv
 from delphyne.stdlib.policies import Policy, PromptingPolicy, Stream
-
-T = TypeVar("T", covariant=True)
-P = TypeVar("P", contravariant=True)
 
 
 @dataclass(frozen=True)
-class OpaqueSpace(Generic[P, T], dp.Space[T]):
+class OpaqueSpace[P, T](dp.Space[T]):
     """
     A space defined by a mapping from the ambient inner policy to a
     search stream.
@@ -25,7 +23,7 @@ class OpaqueSpace(Generic[P, T], dp.Space[T]):
     method. Crucially, policies are unaware of how an opaque space was
     created, preserving abstraction.
 
-    Parameters:
+    Type Parameters:
         P: Type parameter for the ambient inner policy type.
         T: Type parameter for the element type.
 
@@ -33,7 +31,7 @@ class OpaqueSpace(Generic[P, T], dp.Space[T]):
         stream: Maps the ambient inner policy to a search stream.
     """
 
-    stream: Callable[[dp.PolicyEnv, P], Stream[T]]
+    stream: Callable[[PolicyEnv, P], Stream[T]]
     _source: dp.NestedTree[Any, Any, T] | dp.AttachedQuery[T]
     _tags: Sequence[dp.Tag]
 
@@ -87,7 +85,7 @@ class OpaqueSpace(Generic[P, T], dp.Space[T]):
         ) -> OpaqueSpace[P1, T1]:
             nested = spawner(strategy)
 
-            def stream(env: dp.PolicyEnv, policy: P1) -> Stream[T1]:
+            def stream(env: PolicyEnv, policy: P1) -> Stream[T1]:
                 tree = nested.spawn_tree()
                 sub = get_policy(policy, tags)
                 return sub.search(tree, env, sub.inner)

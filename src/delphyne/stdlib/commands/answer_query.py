@@ -8,6 +8,7 @@ from functools import partial
 
 import delphyne.analysis as analysis
 import delphyne.core as dp
+import delphyne.stdlib.environments as en
 import delphyne.stdlib.models as md
 import delphyne.stdlib.models as mo
 import delphyne.stdlib.queries as qu
@@ -16,7 +17,8 @@ import delphyne.stdlib.streams as st
 import delphyne.stdlib.tasks as ta
 import delphyne.utils.caching as ca
 from delphyne.core.streams import Barrier, Solution, Spent
-from delphyne.stdlib.commands.run_strategy import CacheFormat, with_cache_spec
+from delphyne.stdlib.commands.run_strategy import with_cache_spec
+from delphyne.stdlib.globals import stdlib_globals
 
 DEFAULT_MODEL_NAME = "gpt-4o"
 
@@ -36,10 +38,9 @@ class AnswerQueryArgs:
         iterative_mode: Whether to answer the query in iterative mode
             (see `few_shot` for details).
         budget: Budget limit (infinite for unspecified metrics).
-        cache_dir: Subdirectory of the global cache directory to use for
-            caching, or `None` to disable caching.
+        cache_file: File within the global cache directory to use for
+            request caching, or `None` to disable caching.
         cache_mode: Cache mode to use.
-        cache_format: Cache format to use.
     """
 
     query: str
@@ -49,9 +50,8 @@ class AnswerQueryArgs:
     num_answers: int = 1
     iterative_mode: bool = False
     budget: dict[str, float] | None = None
-    cache_dir: str | None = None
+    cache_file: str | None = None
     cache_mode: ca.CacheMode = "read_write"
-    cache_format: CacheFormat = "yaml"
 
 
 @dataclass
@@ -64,24 +64,21 @@ def answer_query_with_cache(
     task: ta.TaskContext[ta.CommandResult[AnswerQueryResponse]],
     exe: ta.CommandExecutionContext,
     cmd: AnswerQueryArgs,
-    cache_spec: ca.CacheSpec | None,
+    cache_spec: md.LLMCache | None,
 ):
-    # TODO: no examples for now. Also, we have to externalize this anyway.
-    loader = analysis.ObjectLoader(exe.base)
+    # TODO: no examples for now. Also, we have to externalize this
+    # anyway.
+    loader = analysis.ObjectLoader(exe.base, extra_objects=stdlib_globals())
     query = loader.load_query(cmd.query, cmd.args)
-    env = dp.PolicyEnv(
+    env = en.PolicyEnv(
         prompt_dirs=exe.prompt_dirs,
         data_dirs=exe.data_dirs,
         demonstration_files=exe.demo_files,
         do_not_match_identical_queries=True,
         cache=cache_spec,
-        make_cache=md.LLMCache,
     )
     attached = dp.spawn_standalone_query(query)
     model_name = cmd.model or DEFAULT_MODEL_NAME
-    assert stdm.is_standard_model_name(model_name), (
-        f"Unrecognized model name: {model_name}."
-    )
     model = stdm.standard_model(model_name)
     if cmd.prompt_only:
         model = mo.DummyModel()
@@ -133,7 +130,6 @@ def answer_query(
     with_cache_spec(
         partial(answer_query_with_cache, task, exe, cmd),
         cache_root=exe.cache_root,
-        cache_dir=cmd.cache_dir,
+        cache_file=cmd.cache_file,
         cache_mode=cmd.cache_mode,
-        cache_format=cmd.cache_format,
     )

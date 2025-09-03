@@ -12,13 +12,15 @@
 
 ::: delphyne.ParserDict
 
-::: delphyne.stdlib.queries.Response
+::: delphyne.Response
 
-::: delphyne.stdlib.queries.FinalAnswer
+::: delphyne.FinalAnswer
 
-::: delphyne.stdlib.queries.ToolRequests
+::: delphyne.ToolRequests
 
-::: delphyne.stdlib.queries.WrappedParseError
+::: delphyne.WrappedParseError
+
+::: delphyne.stdlib.queries.QueryTemplateArgs
 
 ## Standard Parsers
 
@@ -33,7 +35,6 @@
 ::: delphyne.last_code_block
 
 ::: delphyne.get_text
-
 
 ## Prompting Policies
 
@@ -81,6 +82,10 @@
 
 ::: delphyne.stdlib.models.LLMCache
 
+::: delphyne.stdlib.models.load_request_cache
+
+::: delphyne.utils.caching.CacheMode
+
 ::: delphyne.stdlib.models.Token
 
 ::: delphyne.stdlib.models.TokenInfo
@@ -107,3 +112,14 @@
 
 ::: delphyne.stdlib.models.DOLLAR_PRICE
 
+## Standard Models
+
+::: delphyne.standard_model
+
+::: delphyne.openai_model
+
+::: delphyne.mistral_model
+
+::: delphyne.deepseek_model
+
+::: delphyne.gemini_model

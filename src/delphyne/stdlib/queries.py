@@ -21,6 +21,7 @@ import delphyne.core.inspect as dpi
 import delphyne.stdlib.models as md
 import delphyne.stdlib.policies as pol
 from delphyne.core.refs import Answer
+from delphyne.stdlib.environments import Example, ExampleDatabase, PolicyEnv
 from delphyne.stdlib.opaque import Opaque, OpaqueSpace
 from delphyne.stdlib.policies import IPDict, log, prompting_policy
 from delphyne.stdlib.streams import SpendingDeclined, Stream, spend_on
@@ -147,6 +148,25 @@ class WrappedParseError:
 
 
 #####
+##### Formatting Metadata
+#####
+
+
+@dataclass
+class FormattingMetadata:
+    """
+    Metadata passed to prompt templates for generating formatting
+    instructions. Such metadata can be produced by parsers.
+    """
+
+    where: (
+        Literal["last_code_block", "full_answer", "tool_call"] | str | None
+    ) = None
+    what: Literal["yaml", "json", "text", "one_word"] | str | None = None
+    schema: md.Schema | None = None
+
+
+#####
 ##### Parsers
 #####
 
@@ -157,36 +177,70 @@ class Parser[A]:
     A parser specification.
 
     In addition to a mapping from answers to answer type `A`, a parser
-    also specifies query settings to be passed to oracles. Indeed, these
-    two components are typically tied and so specifying them together in
-    a single place is clearer.
+    also specifies query settings to be passed to oracles, along with
+    special formatting instructions to be rendered into the prompt.
+    Indeed, these components are typically tied and so specifying them
+    together in a single place is clearer.
 
     Attributes:
         settings: The query settings associated with the parser.
+        formatting: Formatting metadata.
         parse: The parsing function, which is allowed to raise
             the `ParseError` exception.
     """
 
     settings: dp.QuerySettings
+    formatting: FormattingMetadata
     parse: Callable[[dp.Answer], A]
 
-    def map[B](self, f: Callable[[A], B | dp.ParseError], /) -> "Parser[B]":
+    def update_formatting(
+        self, f: Callable[[FormattingMetadata], FormattingMetadata], /
+    ) -> "Parser[A]":
+        return replace(self, formatting=f(self.formatting))
+
+    def map[B](
+        self,
+        f: Callable[[A], B | dp.ParseError],
+        /,
+        *,
+        catch_exn: bool = False,
+    ) -> "Parser[B]":
         """
         Apply a function to the parser's output.
 
-        The function `f` is allowed to raise or return `ParseError`.
+        Arguments:
+            f: The function to apply, which is allowed to raise or
+                return `ParseError`.
+            catch_exn: If `True`, any other exception raised by `f` is
+                caught and wrapped into a `ParseError`.
         """
 
         def parse(ans: dp.Answer) -> B:
             res = self.parse(ans)
-            ret = f(res)
+            try:
+                ret = f(res)
+            except dp.ParseError as e:
+                raise e
+            except Exception as e:
+                if catch_exn:
+                    raise dp.ParseError(description=str(e))
+                else:
+                    raise e
             if isinstance(ret, dp.ParseError):
                 raise ret
             return ret
 
-        return Parser(settings=self.settings, parse=parse)
+        return Parser(
+            settings=self.settings, formatting=self.formatting, parse=parse
+        )
 
-    def validate(self, f: Callable[[A], dp.ParseError | None]) -> "Parser[A]":
+    def validate(
+        self,
+        f: Callable[[A], dp.ParseError | None],
+        /,
+        *,
+        catch_exn: bool = False,
+    ) -> "Parser[A]":
         """
         Check that the parser's output satisfies a given property.
 
@@ -196,11 +250,22 @@ class Parser[A]:
 
         def parse(ans: dp.Answer) -> A:
             res = self.parse(ans)
-            if err := f(res):
-                raise err
+            try:
+                opt_err = f(res)
+            except dp.ParseError as e:
+                raise e
+            except Exception as e:
+                if catch_exn:
+                    raise dp.ParseError(description=str(e))
+                else:
+                    raise e
+            if opt_err:
+                raise opt_err
             return res
 
-        return Parser(settings=self.settings, parse=parse)
+        return Parser(
+            settings=self.settings, formatting=self.formatting, parse=parse
+        )
 
     @property
     def wrap_errors(self) -> "Parser[A | WrappedParseError]":
@@ -214,7 +279,9 @@ class Parser[A]:
             except dp.ParseError as e:
                 return WrappedParseError(e)
 
-        return Parser(settings=self.settings, parse=parse)
+        return Parser(
+            settings=self.settings, formatting=self.formatting, parse=parse
+        )
 
     def response_with[T: md.AbstractTool[Any]](
         self, tools: TypeAnnot[T]
@@ -256,7 +323,9 @@ class Parser[A]:
                 parsed = self.parse(ans)
                 return Response[A, T](ans, FinalAnswer(parsed))
 
-        return Parser(settings=settings, parse=parse)
+        return Parser(
+            settings=settings, formatting=self.formatting, parse=parse
+        )
 
     @property
     def response(self) -> "GenericParser":
@@ -317,7 +386,11 @@ class Parser[A]:
             replaced with `TypeExpr` (incoming in Python 3.14).
         """
 
-        return self.map(partial(_parse_json_as, type))
+        _assert_not_response_type(type, where="json_as")
+        schema = md.Schema.make(type)
+        return self.map(partial(_parse_json_as, type)).update_formatting(
+            lambda f: replace(f, what="json", schema=schema)
+        )
 
     def yaml_as[U](self: "Parser[str]", type: TypeAnnot[U]) -> "Parser[U]":
         """
@@ -329,7 +402,11 @@ class Parser[A]:
             type of `U`. This should work better once `TypeAnnot` can be
             replaced with `TypeExpr` (incoming in Python 3.14).
         """
-        return self.map(partial(_parse_yaml_as, type))
+        _assert_not_response_type(type, where="yaml_as")
+        schema = md.Schema.make(type)
+        return self.map(partial(_parse_yaml_as, type)).update_formatting(
+            lambda f: replace(f, what="yaml", schema=schema)
+        )
 
 
 @dataclass(frozen=True)
@@ -414,13 +491,28 @@ class _GenericParserFn(Protocol):
 def structured_as[T](type: TypeAnnot[T], /) -> Parser[T]:
     """
     Parse an LLM structured answer into a given target type.
+
+    !!! warning
+        Only dataclass types are supported, since most LLM providers
+        only support structured output and tool calls for JSON objects.
     """
-    assert not (type is Response or typing.get_origin(type) is Response), (
-        f"Unexpected target type for `structured_as`: {type}.\n"
-        + "Did you forget to append `.response` to your parser definition?"
-    )
+    _assert_not_response_type(type, where="structured_as")
+    _check_valid_structured_output_type(type)
     settings = dp.QuerySettings(dp.StructuredOutputSettings(type))
-    return Parser(settings, lambda ans: _parse_structured_output(type, ans))
+    formatting = FormattingMetadata(
+        where="full_answer", what="json", schema=md.Schema.make(type)
+    )
+    return Parser(
+        settings, formatting, lambda ans: _parse_structured_output(type, ans)
+    )
+
+
+def _assert_not_response_type(annot: TypeAnnot[Any], *, where: str) -> None:
+    if annot is Response or typing.get_origin(annot) is Response:
+        raise ValueError(
+            f"Unexpected target type for `{where}`: {annot}.\n"
+            + "Did you forget to append `.response` to your parser definition?"
+        )
 
 
 def final_tool_call_as[T](annot: TypeAnnot[T], /) -> Parser[T]:
@@ -429,11 +521,19 @@ def final_tool_call_as[T](annot: TypeAnnot[T], /) -> Parser[T]:
     to oracles as a tool, which must be called to produce the final
     answer. This provides an alternative to "structured", which
     additionally allows a chain of thoughts to precede the final answer.
+
+    !!! warning
+        Only dataclass types are supported, since most LLM providers
+        only support structured output and tool calls for JSON objects.
     """
-    assert isinstance(annot, type)
+    _check_valid_structured_output_type(annot)
+    assert isinstance(annot, type)  # redundant with previous check
     tool = cast(type[Any], annot)
     tool_settings = dp.ToolSettings(tool_types=[tool], force_tool_call=True)
     settings = dp.QuerySettings(None, tool_settings)
+    formatting = FormattingMetadata(
+        where="tool_call", what="json", schema=md.Schema.make(annot)
+    )
 
     def parse(ans: dp.Answer) -> T:
         assert len(ans.tool_calls) == 1, (
@@ -441,7 +541,7 @@ def final_tool_call_as[T](annot: TypeAnnot[T], /) -> Parser[T]:
         )
         return _parse_or_raise(tool, ans.tool_calls[0].args)
 
-    return Parser(settings, parse)
+    return Parser(settings, formatting, parse)
 
 
 structured = GenericParser(structured_as)
@@ -463,7 +563,11 @@ def _get_text_answer(ans: Answer) -> str:
     return ans.content
 
 
-get_text = Parser[str](dp.QuerySettings(), _get_text_answer)
+get_text = Parser[str](
+    dp.QuerySettings(),
+    FormattingMetadata(where="full_answer", what="text"),
+    _get_text_answer,
+)
 """
 Parser that extracts the text content of an answer.
 
@@ -475,7 +579,7 @@ last_code_block: Parser[str] = get_text.map(
     lambda s: block
     if (block := extract_final_block(s)) is not None
     else dp.ParseError(description="No code block found.", meta={"source": s})
-)
+).update_formatting(lambda f: replace(f, where="last_code_block"))
 """
 Parser that extracts the last code block from a text answer.
 """
@@ -487,6 +591,18 @@ A mapping from answer modes to parser specifications.
 
 Can be used as a value for the `__parser__` class attribute of queries.
 """
+
+
+def _check_valid_structured_output_type(annot: TypeAnnot[Any]) -> None:
+    if orig := typing.get_origin(annot):
+        annot = orig
+    forbidden = [str, int, float, bool, dict, tuple]
+    if not isinstance(annot, type) or annot in forbidden:
+        raise ValueError(
+            f"Structured output not supported for type: {annot}.\n"
+            "Most LLM providers only support structured output for JSON "
+            "objects. Consider wrapping your output type in a custom class."
+        )
 
 
 ##### Parser Utilities
@@ -566,7 +682,9 @@ def _first_word[T](type: TypeAnnot[T]) -> Parser[T]:
         except Exception as e:
             raise dp.ParseError(description=str(e))
 
-    return get_text.map(partial(process, type))
+    return get_text.map(partial(process, type)).update_formatting(
+        lambda f: replace(f, what="one_word")
+    )
 
 
 first_word = GenericParser(_first_word)
@@ -574,6 +692,31 @@ first_word = GenericParser(_first_word)
 Parse the first word of the answer and turn it into an object of
 type `T = Literal[s1,...,sn]`.
 """
+
+
+class QueryTemplateArgs(typing.TypedDict):
+    """
+    Template arguments passed to all query templates.
+
+    For particular kinds of templates, additional arguments may be
+    provided (e.g., `feedback` for feedback prompts).
+
+    Attributes:
+        query: The query instance.
+        mode: The requested answer mode.
+        available_modes: The sequence of all available answer modes for
+            the query type.
+        params: The query hyperparameters (e.g., as passed to `few_shot`)
+        format: Formatting metadata.
+    """
+
+    # TODO: in future Python versions, use `extra_items=Any` (PEP 728)
+
+    query: "Query[Any]"
+    mode: dp.AnswerMode
+    available_modes: Sequence[dp.AnswerMode]
+    params: dict[str, Any]
+    format: FormattingMetadata
 
 
 #####
@@ -608,22 +751,20 @@ class Query[T](dp.AbstractQuery[T]):
     prompt and instance prompts are generated by simply serializing
     `MakeSum` instances into YAML.
 
+    All attributes of a query must be serializable by pydantic. They can
+    be builtin types (int, list, dict...), custom dataclasses...
+
     ## Customizing Prompts
 
     System and instance prompts can be specified via Jinja templates.
     The templates manager (`TemplatesManager`) looks for templates named
     "<QueryName>.<instance|system>.jinja". Templates can also be
-    provided by defining the `__system_prompt__` and/or `__instance_prompt__`
-    class attributes. If none of these are provided, the query's
-    docstring is used as a system prompt and `DEFAULT_INSTANCE_PROMPT`
-    is used as an instance prompt template.
-
-    The following arguments are usually made available to templates
-    (although specific prompting policies can add more):
-
-    - `query`: the query instance.
-    - `mode`: the requested answer mode.
-    - `params`: the query hyperparameters (e.g., as passed to `few_shot`)
+    provided by defining the `__system_prompt__` and/or
+    `__instance_prompt__` class attributes. If none of these are
+    provided, the query's docstring is used as a system prompt and
+    `DEFAULT_INSTANCE_PROMPT` is used as an instance prompt template.
+    All attributes from `QueryTemplateArgs` are made available to
+    templates, with possibly extra ones.
 
     ## Answer Modes and Configurations
 
@@ -642,7 +783,7 @@ class Query[T](dp.AbstractQuery[T]):
 
     A common pattern for interacting with LLMs is to have multi-message
     exchanges where the full conversation history is resent repeatedly.
-    LLMs are also often allowed to request tool call. This interaction
+    LLMs are also often allowed to request tool calls. This interaction
     pattern is implemented in the `interact` standard strategy. It is
     enabled by several features on the `Query` side.
 
@@ -764,14 +905,17 @@ class Query[T](dp.AbstractQuery[T]):
         mode: dp.AnswerMode,
         params: dict[str, object],
         extra_args: dict[str, object] | None = None,
-        env: dp.TemplatesManager | None = None,
+        env: dp.AbstractTemplatesManager | None = None,
     ) -> str:
         assert env is not None, _no_prompt_manager_error()
-        args: dict[str, object] = {
+        args_min: QueryTemplateArgs = {
             "query": self,
             "mode": mode,
+            "available_modes": self.query_modes(),
             "params": params,
+            "format": self._instantiated_parser_for(mode).formatting,
         }
+        args: dict[str, object] = {**args_min}
         if extra_args:
             args.update(extra_args)
         if (glob := self.globals()) is not None:
@@ -885,7 +1029,7 @@ class Query[T](dp.AbstractQuery[T]):
 
     def run_toplevel(
         self,
-        env: dp.PolicyEnv,
+        env: PolicyEnv,
         policy: pol.PromptingPolicy,
     ) -> Stream[T]:
         """
@@ -918,15 +1062,15 @@ def _match_string_literal_type(t: Any) -> Sequence[str] | None:
 #####
 
 
-type ExampleSelector = Callable[[Sequence[dp.Example]], Sequence[dp.Example]]
+type ExampleSelector = Callable[[Sequence[Example]], Sequence[Example]]
 """
 A function for selecting a subset of examples from a given sequence.
 """
 
 
 def select_all_examples(
-    examples: Sequence[dp.Example],
-) -> Sequence[dp.Example]:
+    examples: Sequence[Example],
+) -> Sequence[Example]:
     """
     Example selector that returns all available examples.
     """
@@ -942,8 +1086,8 @@ def select_random_examples(num_examples: int) -> ExampleSelector:
     """
 
     def select(
-        examples: Sequence[dp.Example],
-    ) -> Sequence[dp.Example]:
+        examples: Sequence[Example],
+    ) -> Sequence[Example]:
         if num_examples >= len(examples):
             return examples
         selected = random.sample(examples, num_examples)
@@ -959,8 +1103,8 @@ def select_with_either_tags(tags: Sequence[str]):
     """
 
     def select(
-        examples: Sequence[dp.Example],
-    ) -> Sequence[dp.Example]:
+        examples: Sequence[Example],
+    ) -> Sequence[Example]:
         return [ex for ex in examples if any(t in ex.tags for t in tags)]
 
     return select
@@ -972,7 +1116,7 @@ def select_with_either_tags(tags: Sequence[str]):
 
 
 def fetch_examples(
-    database: dp.ExampleDatabase,
+    database: ExampleDatabase,
     query: dp.AbstractQuery[Any],
     selectors: Sequence[ExampleSelector],
 ) -> Sequence[tuple[dp.AbstractQuery[Any], dp.Answer]]:
@@ -1003,7 +1147,7 @@ def _priming_split(prompt: str) -> tuple[str, str | None]:
 
 def _instance_prompt(
     query: dp.AbstractQuery[Any],
-    env: dp.TemplatesManager | None,
+    env: dp.AbstractTemplatesManager | None,
     params: dict[str, object],
     mode: dp.AnswerMode,
 ):
@@ -1042,7 +1186,7 @@ def create_prompt(
     examples: Sequence[tuple[dp.AbstractQuery[Any], dp.Answer]],
     params: dict[str, object],
     mode: dp.AnswerMode,
-    env: dp.TemplatesManager | None,
+    env: dp.AbstractTemplatesManager | None,
 ) -> md.Chat:
     msgs: list[md.ChatMessage] = []
     sys = query.generate_prompt(
@@ -1054,11 +1198,11 @@ def create_prompt(
         msgs.append(md.AssistantMessage(ans))
     # TODO: handle different modes
     msgs.extend(_instance_prompt(query, env, params, mode))
-    return msgs
+    return tuple(msgs)
 
 
 def log_oracle_response(
-    env: dp.PolicyEnv,
+    env: PolicyEnv,
     query: dp.AttachedQuery[Any],
     req: md.LLMRequest,
     resp: md.LLMResponse,
@@ -1115,7 +1259,7 @@ class ProbInfo(dp.SearchMeta):
 
 
 def _parse_or_log_and_raise[T](
-    answer: dp.Answer, query: dp.AttachedQuery[T], env: dp.PolicyEnv
+    answer: dp.Answer, query: dp.AttachedQuery[T], env: PolicyEnv
 ) -> dp.Tracked[T]:
     parsed = query.parse_answer(answer)
     if isinstance(parsed, dp.ParseError):
@@ -1124,18 +1268,12 @@ def _parse_or_log_and_raise[T](
     return parsed
 
 
-def get_request_cache(env: dp.PolicyEnv) -> md.LLMCache | None:
-    cache = env.requests_cache
-    assert cache is None or isinstance(cache, md.LLMCache)
-    return cache
-
-
 def _send_request(
-    model: md.LLM, req: md.LLMRequest, env: dp.PolicyEnv
+    model: md.LLM, req: md.LLMRequest, env: PolicyEnv
 ) -> dp.StreamContext[md.LLMResponse | SpendingDeclined]:
     res = yield from spend_on(
         lambda: (
-            resp := model.send_request(req, get_request_cache(env)),
+            resp := model.send_request(req, env.cache),
             resp.budget,
         ),
         estimate=model.estimate_budget(req),
@@ -1146,7 +1284,7 @@ def _send_request(
 @prompting_policy
 def classify[T](
     query: dp.AttachedQuery[T],
-    env: dp.PolicyEnv,
+    env: PolicyEnv,
     model: md.LLM,
     params: dict[str, object] | None = None,
     select_examples: Sequence[ExampleSelector] = (),
@@ -1279,7 +1417,7 @@ def _unwrap_parse_error[T](
 @prompting_policy
 def few_shot[T](
     query: dp.AttachedQuery[T],
-    env: dp.PolicyEnv,
+    env: PolicyEnv,
     model: md.LLM,
     *,
     params: dict[str, object] | None = None,
@@ -1287,7 +1425,7 @@ def few_shot[T](
     mode: dp.AnswerMode = None,
     enable_logging: bool = True,
     temperature: float | None = None,
-    num_concurrent: int = 1,
+    num_completions: int = 1,
     max_requests: int | None = None,
     no_wrap_parse_errors: bool = False,
     iterative_mode: bool = False,
@@ -1312,7 +1450,7 @@ def few_shot[T](
         enable_logging: Whether to log raw oracle responses.
         temperature: The temperature parameter to use with the LLM, as a
             number from 0 to 2.
-        num_concurrent: The number of completions to request for each
+        num_completions: The number of completions to request for each
             LLM call. Note that most LLM providers only bill input
             tokens once, regardless of the number of completions.
         max_requests: The maximum number of LLM requests to perform
@@ -1339,7 +1477,7 @@ def few_shot[T](
             implementing more advanced conversational agents, see
             the standard `interact` strategy.
     """
-    assert not iterative_mode or num_concurrent == 1
+    assert not iterative_mode or num_completions == 1
     assert max_requests is None or max_requests > 0
     env.tracer.trace_query(query.ref)
     examples = fetch_examples(env.examples, query.query, select_examples)
@@ -1365,9 +1503,9 @@ def few_shot[T](
         num_reqs += 1
         req = md.LLMRequest(
             prompt,
-            num_completions=num_concurrent,
+            num_completions=num_completions,
             options=options,
-            tools=tools,
+            tools=tuple(tools),
             structured_output=structured_output,
         )
         resp = yield from _send_request(model, req, env)
@@ -1433,7 +1571,7 @@ def few_shot[T](
 @prompting_policy
 def answer_with[T](
     query: dp.AttachedQuery[T],
-    env: dp.PolicyEnv,
+    env: PolicyEnv,
     answers: Sequence[str],
     probs: Sequence[float] | None = None,
     mode: dp.AnswerMode = None,

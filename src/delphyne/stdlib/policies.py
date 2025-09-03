@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from typing import Any, Generic, NoReturn, Protocol, TypeVar
 
 import delphyne.core as dp
-from delphyne.core import Node, PolicyEnv
+from delphyne.core import Node
+from delphyne.stdlib.environments import PolicyEnv
 from delphyne.stdlib.streams import Stream, StreamTransformer
 
 #####
@@ -20,11 +21,11 @@ P = TypeVar("P", covariant=True)
 
 
 @dataclass(frozen=True)
-class Policy(Generic[N, P], dp.AbstractPolicy[N, P]):
+class Policy(Generic[N, P], dp.AbstractPolicy[PolicyEnv, N, P]):
     """
     A pair of a search policy and of an inner policy.
 
-    More preciely, a policy for trees with effects `N` (contravariant)
+    More precisely, a policy for trees with effects `N` (contravariant)
     gathers a search policy handling `N` along with an inner policy
     object of type `P` (covariant).
 
@@ -50,7 +51,7 @@ class Policy(Generic[N, P], dp.AbstractPolicy[N, P]):
 
 
 @dataclass(frozen=True)
-class SearchPolicy[N: Node](dp.AbstractSearchPolicy[N]):
+class SearchPolicy[N: Node](dp.AbstractSearchPolicy[PolicyEnv, N]):
     """
     A search policy takes as arguments a tree with a given signature
     (covariant type parameter `N`), a global policy environment, and an
@@ -61,6 +62,9 @@ class SearchPolicy[N: Node](dp.AbstractSearchPolicy[N]):
     composition operator (for composing search policies with stream
     transformers and tree transformers) and the `&` operator for pairing
     a search policy with an inner policy.
+
+    Search policies can be conveniently defined using the
+    `search_policy` decorator. See `dfs` for an example.
     """
 
     _fn: "_SearchPolicyFn[N]"
@@ -92,7 +96,7 @@ class SearchPolicy[N: Node](dp.AbstractSearchPolicy[N]):
         trans: StreamTransformer,
     ) -> "SearchPolicy[N]":
         def policy[P, T](
-            tree: dp.Tree[N, P, T], env: dp.PolicyEnv, policy: P
+            tree: dp.Tree[N, P, T], env: PolicyEnv, policy: P
         ) -> dp.StreamGen[T]:
             return trans(self(tree, env, policy), env).gen()
 
@@ -161,7 +165,7 @@ def search_policy[N: Node, **A](
 
 
 @dataclass(frozen=True)
-class PromptingPolicy(dp.AbstractPromptingPolicy):
+class PromptingPolicy(dp.AbstractPromptingPolicy[PolicyEnv]):
     """
     A prompting policy takes as arguments a query (attached to a
     specific node) and a global policy environment, and returns a search
@@ -171,6 +175,10 @@ class PromptingPolicy(dp.AbstractPromptingPolicy):
     provides convenience features such as support for the `@`
     composition operator (for composing prompting policies with stream
     transformers).
+
+    Prompting policies can be conveniently defined using the
+    `prompting_policy` decorator. See the definition of `few_shot` for
+    an example.
     """
 
     _fn: "_PromptingPolicyFn"
@@ -285,10 +293,16 @@ class _ParametricContextualTreeTransformerFn[A: Node, B: Node, **C](Protocol):
 @dataclass
 class ContextualTreeTransformer[A: Node, B: Node]:
     """
-    Contextual tree transformer, which can be composed with search
-    policies to modify their accepted signature.
+    Wrapper for a function that maps trees to trees, possibly
+    changing their signature. Can depend on the global policy
+    environment (hence the *contextual* aspect).
 
-    Parameters:
+    Contextual tree transformers can be composed with search policies to
+    modify their accepted signature. They can be convniently defined
+    using the `contextual_tree_transformer` decorator. See
+    `elim_compute` and `elim_messages` for examples.
+
+    Type Parameters:
         A: The type of nodes that the transformer removes from search
             policy signature.
         B: The type of nodes that the transformer adds to search policy
@@ -414,7 +428,6 @@ def ensure_compatible[**A, N: Node, P](
     strategy argument.
     """
 
-    # TODO: this decorator does not seem to work with pyright.
     return lambda f: f
 
 
@@ -437,10 +450,12 @@ sub-policy, often in the form of an anonymous function:
 
 ```python
 @dataclass class MyInnerPolicy:
-    foo: PromptingPolicy # etc
+    foo: PromptingPolicy
+    # etc
 
 def my_strategy() -> Strategy[Branch, MyInnerPolicy, str]:
-    x = yield from branch(Foo().using(lambda p: p.foo)) # etc
+    x = yield from branch(Foo().using(lambda p: p.foo))
+    # etc
 ```
     
 As an alternative, one can have a strategy use an inner policy
@@ -448,7 +463,8 @@ dictionary, by passing ellipses (`...`) to the `using` method:
 
 ```python
 def my_strategy() -> Strategy[Branch, IPDict, str]:
-    x = yield from branch(Foo().using(...)) # etc
+    x = yield from branch(Foo().using(...))
+    # etc
 ```
 
 When doing so, a simple Python dictionary can be used as an inner

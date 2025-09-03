@@ -8,7 +8,7 @@ test the server (see `test_server`).
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, ClassVar, Literal, Never, Sequence, TypeAlias, cast
+from typing import Any, ClassVar, Literal, Never, Sequence, cast, override
 
 # Reexporting untyped strategies
 # ruff: noqa: F401
@@ -82,15 +82,21 @@ def make_sum_dict_ip_policy(model: dp.LLM):
 
 @dataclass(frozen=True)
 class Conjecture(dp.Node):
+    """
+    An example effect `Conjecture`. See `make_conjecture`.
+    """
+
     cands: dp.OpaqueSpace[Any, Any]
     disprove: Callable[[dp.Tracked[Any]], dp.OpaqueSpace[Any, None]]
     aggregate: Callable[
         [tuple[dp.Tracked[Any], ...]], dp.OpaqueSpace[Any, Sequence[Any]]
     ]
 
+    @override
     def navigate(self) -> dp.Navigation:
         return (yield self.cands)
 
+    @override
     def primary_space(self):
         return self.cands
 
@@ -101,6 +107,14 @@ def make_conjecture[P, T](
     aggregate: Callable[[tuple[T, ...]], dp.Opaque[P, Sequence[T]]],
     inner_policy_type: type[P] | None = None,
 ) -> Strategy[Conjecture, P, T]:
+    """
+    Triggering function for the `Conjecture` effect.
+
+    This acts like the `branch` function, except that an additional
+    function for disproving candidates is provided, as well as an
+    aggregation function that combines several candidates into a list of
+    candidates (e.g. removing semantic duplicates).
+    """
     cand = yield dp.spawn_node(
         Conjecture, cands=cands, disprove=disprove, aggregate=aggregate
     )
@@ -140,14 +154,12 @@ def one_pp(p: dp.PromptingPolicy) -> dp.PromptingPolicy:
 #####
 
 
-# Pydantic does not work with Python 3.12 `type` syntax here.
-# https://github.com/pydantic/pydantic/issues/8984
-Vars: TypeAlias = list[str]
-Expr: TypeAlias = str
-Fun: TypeAlias = tuple[Vars, Expr]
-IntFun: TypeAlias = Fun
-IntPred: TypeAlias = Fun
-State: TypeAlias = dict[str, int]
+type Vars = list[str]
+type Expr = str
+type Fun = tuple[Vars, Expr]
+type IntFun = Fun
+type IntPred = Fun
+type State = dict[str, int]
 
 
 @dataclass
@@ -707,9 +719,9 @@ def obtain_item(
     return exchanges
 
 
-def obtain_item_policy(model: dp.LLM, num_concurrent: int = 1):
-    pp = dp.take(num_concurrent) @ dp.few_shot(
-        model, num_concurrent=num_concurrent
+def obtain_item_policy(model: dp.LLM, num_completions: int = 1):
+    pp = dp.take(num_completions) @ dp.few_shot(
+        model, num_completions=num_completions
     )
     return dp.abduct_and_saturate(verbose=True) @ dp.elim_messages() & pp
 
@@ -917,3 +929,27 @@ def get_magic_number_policy(model: dp.LLM, no_wrap: bool):
     sp = dp.dfs()
     pp = dp.few_shot(model, no_wrap_parse_errors=no_wrap)
     return sp & pp
+
+
+#####
+##### Universal Queries
+#####
+
+
+@dp.strategy
+def make_sum_using_guess(
+    allowed: list[int], goal: int
+) -> Strategy[Branch | Fail, IPDict, list[int]]:
+    """
+    Given a list of numbers and a target number, return a sub-list whose
+    elements sum up to the target.
+    """
+    sub = yield from dp.guess(list[int], using=[allowed, goal])
+    yield from dp.ensure(all(x in allowed for x in sub), label="forbidden_num")
+    yield from dp.ensure(sum(sub) == goal, label="wrong_sum")
+    return sub
+
+
+@dp.ensure_compatible(make_sum_using_guess)
+def make_sum_using_guess_policy(model: dp.LLM):
+    return dp.dfs() & {"sub": dp.few_shot(model)}

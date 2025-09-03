@@ -20,7 +20,10 @@ DEMO_FILES = [Path(m) for m in MODULES]
 
 
 def make_experiment[C](
-    experiment: ExperimentFun[C], configs: Sequence[C], exp_file: str
+    experiment: ExperimentFun[C],
+    configs: Sequence[C],
+    output_dir: str,
+    exp_file: str,
 ) -> Experiment[C]:
     workspace_root = Path(exp_file).parent.parent
     exp_name = Path(exp_file).stem
@@ -32,7 +35,7 @@ def make_experiment[C](
         context=context,
         configs=configs,
         name=exp_name,
-        output_dir=workspace_root / "experiments" / "test-output" / exp_name,
+        output_dir=workspace_root / "experiments" / output_dir / exp_name,
     )
 
 
@@ -46,7 +49,7 @@ class AbductionConfig:
     bench_name: str
     model_cycle: Sequence[tuple[str, int]]
     temperature: float
-    num_concurrent: int
+    num_completions: int
     max_requests_per_attempt: int
     max_dollar_budget: float
     seed: int
@@ -60,7 +63,7 @@ def abduction_experiment(config: AbductionConfig):
         policy_args={
             "model_cycle": config.model_cycle,
             "temperature": config.temperature,
-            "num_concurrent": config.num_concurrent,
+            "num_completions": config.num_completions,
             "max_requests_per_attempt": config.max_requests_per_attempt,
         },
         num_generated=1,

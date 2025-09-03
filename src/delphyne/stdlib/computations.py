@@ -10,13 +10,11 @@ from typing import Any, Never, cast, override
 import yaml
 import yaml.parser
 
-import delphyne.core as dp
 import delphyne.core.inspect as insp
-import delphyne.stdlib.models as md
-import delphyne.stdlib.policies as pol
-import delphyne.stdlib.queries as dq
+import delphyne.core_and_base as dp
 import delphyne.utils.typing as ty
-from delphyne.stdlib.nodes import spawn_node
+from delphyne.core_and_base import PolicyEnv, spawn_node
+from delphyne.stdlib.queries import create_prompt
 from delphyne.utils.yaml import dump_yaml
 
 
@@ -43,7 +41,7 @@ class __Computation__(dp.AbstractQuery[object]):
         mode: dp.AnswerMode,
         params: dict[str, object],
         extra_args: dict[str, object] | None = None,
-        env: dp.TemplatesManager | None = None,
+        env: dp.AbstractTemplatesManager | None = None,
     ):
         return dump_yaml(Any, self.__dict__)
 
@@ -87,7 +85,8 @@ class Compute(dp.ComputationNode):
     interpreter in the form of *implicit answers*, allowing
     `__Computation__` queries to be automatically answered when running
     tests. Generated answers can be hardcoded in demonstrations **after**
-    the fact via proper editor support.
+    the fact via proper editor support (i.e. using the `Add Implicit
+    Answers` code action from Delphyne's VSCode extension).
     """
 
     query: dp.TransparentQuery[Any]
@@ -102,19 +101,19 @@ class Compute(dp.ComputationNode):
         serialized = dump_yaml(self._ret_type, ret)
         return serialized
 
-    def run_computation_with_cache(self, cache: md.LLMCache | None) -> str:
+    def run_computation_with_cache(self, cache: dp.LLMCache | None) -> str:
         """
         Run the computation using a fake oracle so that the LLM caching
         mechanism can be reused.
         """
-        chat = dq.create_prompt(
+        chat = create_prompt(
             self.query.attached.query,
             examples=[],
             params={},
             mode=None,
             env=None,
         )
-        req = md.LLMRequest(chat=chat, num_completions=1, options={})
+        req = dp.LLMRequest(chat=chat, num_completions=1, options={})
         model = ComputationOracle(self.run_computation)
         resp = model.send_request(req, cache)
         assert len(resp.outputs) == 1
@@ -151,7 +150,7 @@ def compute[**P, T](
 
 
 @dataclass
-class ComputationOracle(md.LLM):
+class ComputationOracle(dp.LLM):
     """
     A fake LLM that performs computations.
 
@@ -162,15 +161,15 @@ class ComputationOracle(md.LLM):
     computation: Callable[[], str]
 
     @override
-    def add_model_defaults(self, req: md.LLMRequest) -> md.LLMRequest:
+    def add_model_defaults(self, req: dp.LLMRequest) -> dp.LLMRequest:
         return req
 
     @override
-    def _send_final_request(self, req: md.LLMRequest) -> md.LLMResponse:
+    def _send_final_request(self, req: dp.LLMRequest) -> dp.LLMResponse:
         res = self.computation()
-        return md.LLMResponse(
+        return dp.LLMResponse(
             outputs=[
-                md.LLMOutput(content=res, tool_calls=[], finish_reason="stop")
+                dp.LLMOutput(content=res, tool_calls=[], finish_reason="stop")
             ],
             budget=dp.Budget({}),
             log_items=[],
@@ -179,12 +178,12 @@ class ComputationOracle(md.LLM):
         )
 
 
-@pol.contextual_tree_transformer
+@dp.contextual_tree_transformer
 def elim_compute(
-    env: dp.PolicyEnv,
+    env: PolicyEnv,
     policy: Any,
     force_bypass_cache: bool = False,
-) -> pol.PureTreeTransformerFn[Compute, Never]:
+) -> dp.PureTreeTransformerFn[Compute, Never]:
     """
     Eliminate the `Compute` effect by performing the computation when
     computing tree children (making the `child` function possibly
@@ -202,7 +201,7 @@ def elim_compute(
         if isinstance(tree.node, Compute):
             cache = None
             if not force_bypass_cache:
-                cache = dq.get_request_cache(env)
+                cache = env.cache
             answer = tree.node.run_computation_with_cache(cache)
             tracked = tree.node.query.attached.parse_answer(
                 dp.Answer(None, answer)

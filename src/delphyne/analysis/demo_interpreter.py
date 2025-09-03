@@ -251,7 +251,7 @@ class SerializedQuery:
 
     @staticmethod
     def make(query: dp.AbstractQuery[Any]) -> "SerializedQuery":
-        args = json.dumps(query.serialize_args())
+        args = json.dumps(query.serialize_args(), sort_keys=True)
         return SerializedQuery(query.query_name(), args)
 
 
@@ -456,11 +456,14 @@ def _interpret_test_select_step(
                 msg = f"Not a query: {space_ref_pretty}."
                 diagnostics.append(("error", msg))
                 return tree, "stop"
+            tracer.trace_query(source.ref)
             answer = hint_resolver(source, None, None)
             if answer is None:
                 msg = f"Query not answered: {space_ref_pretty}."
                 diagnostics.append(("error", msg))
                 return tree, "stop"
+            tracer.trace_answer(source.ref, answer)
+            hint_rev.answers[(source.ref, answer)] = None
             return tree, "continue"
         else:
             if not isinstance(source, dp.NestedTree):

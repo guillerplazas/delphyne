@@ -4,6 +4,8 @@
 
 ::: delphyne.interact
 
+::: delphyne.InteractStats
+
 ## Policies
 
 ::: delphyne.stdlib.search.dfs.dfs
@@ -29,6 +31,16 @@
 ::: delphyne.ambient_pp
 
 ::: delphyne.ambient
+
+## Universal Queries
+
+::: delphyne.UniversalQuery
+
+::: delphyne.guess
+
+## Best-First Search
+
+::: delphyne.best_first_search
 
 ## Abduction
 
