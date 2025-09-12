@@ -23,7 +23,7 @@ import delphyne.stdlib.policies as pol
 from delphyne.core.refs import Answer
 from delphyne.stdlib.environments import Example, ExampleDatabase, PolicyEnv
 from delphyne.stdlib.opaque import Opaque, OpaqueSpace
-from delphyne.stdlib.policies import IPDict, log, prompting_policy
+from delphyne.stdlib.policies import IPDict, prompting_policy
 from delphyne.stdlib.streams import SpendingDeclined, Stream, spend_on
 from delphyne.utils import typing as ty
 from delphyne.utils.typing import TypeAnnot, ValidationError
@@ -1201,29 +1201,6 @@ def create_prompt(
     return tuple(msgs)
 
 
-def log_oracle_response(
-    env: PolicyEnv,
-    query: dp.AttachedQuery[Any],
-    req: md.LLMRequest,
-    resp: md.LLMResponse,
-    *,
-    verbose: bool,
-):
-    with env.tracer.lock:  # to avoid interleaving logs with other threads
-        if verbose:
-            info = {
-                "request": ty.pydantic_dump(md.LLMRequest, req),
-                "response": ty.pydantic_dump(md.LLMResponse, resp),
-            }
-            log(env, "llm_response", info, loc=query)
-        # TODO: severity
-        for extra in resp.log_items:
-            log(env, extra.message, extra.metadata, loc=query)
-        if resp.usage_info is not None:
-            usage = {"model": resp.model_name, "usage": resp.usage_info}
-            log(env, "llm_usage", usage, loc=query)
-
-
 def _compute_value_distribution(
     values: Sequence[str], info: md.TokenInfo
 ) -> dict[str, float]:
@@ -1263,22 +1240,79 @@ def _parse_or_log_and_raise[T](
 ) -> dp.Tracked[T]:
     parsed = query.parse_answer(answer)
     if isinstance(parsed, dp.ParseError):
-        log(env, "parse_error", {"error": parsed}, loc=query)
+        env.info("parse_error", {"error": parsed}, loc=query)
         raise parsed
     return parsed
 
 
+type _RequestDigest = str
+
+
+def json_object_digest(obj: Any) -> str:
+    import hashlib
+    import json
+
+    obj_str = json.dumps(obj).encode("utf-8")
+    return hashlib.md5(obj_str).hexdigest()[:8]
+
+
+def _log_request(
+    env: PolicyEnv,
+    *,
+    query: dp.AttachedQuery[Any],
+    request: md.LLMRequest,
+):
+    req_json = ty.pydantic_dump(md.LLMRequest, request)
+    req_digest = json_object_digest(req_json)
+    info = {
+        "hash": req_digest,
+        "query": query.query.query_name(),
+        "request": req_json,
+    }
+    env.info("llm_request", info, loc=query)
+    return req_digest
+
+
+def _log_response(
+    env: PolicyEnv,
+    *,
+    query: dp.AttachedQuery[Any],
+    request: md.LLMRequest,
+    response: md.LLMResponse,
+):
+    req_json = ty.pydantic_dump(md.LLMRequest, request)
+    req_digest = json_object_digest(req_json)
+    info = {
+        "request": req_digest,
+        "response": ty.pydantic_dump(md.LLMResponse, response),
+    }
+    if response.usage_info is not None:
+        usage = {
+            "model": response.model_name,
+            "usage": response.usage_info,
+        }
+        info["usage"] = usage
+    env.info("llm_response", info, loc=query)
+    for extra in response.log_items:
+        meta = {"request": req_digest, "details": extra.metadata}
+        env.log(extra.level, extra.message, meta, loc=query)
+
+
 def _send_request(
-    model: md.LLM, req: md.LLMRequest, env: PolicyEnv
+    env: PolicyEnv,
+    *,
+    model: md.LLM,
+    query: dp.AttachedQuery[Any],
+    request: md.LLMRequest,
 ) -> dp.StreamContext[md.LLMResponse | SpendingDeclined]:
-    res = yield from spend_on(
-        lambda: (
-            resp := model.send_request(req, env.cache),
-            resp.budget,
-        ),
-        estimate=model.estimate_budget(req),
+    _log_request(env, query=query, request=request)
+    response = yield from spend_on(
+        lambda: (resp := model.send_request(request, env.cache), resp.budget),
+        estimate=model.estimate_budget(request),
     )
-    return res
+    if not isinstance(response, SpendingDeclined):
+        _log_response(env, query=query, request=request, response=response)
+    return response
 
 
 @prompting_policy
@@ -1289,7 +1323,6 @@ def classify[T](
     params: dict[str, object] | None = None,
     select_examples: Sequence[ExampleSelector] = (),
     mode: dp.AnswerMode = None,
-    enable_logging: bool = True,
     top_logprobs: int = 20,
     temperature: float = 1.0,
     bias: tuple[str, float] | None = None,
@@ -1305,7 +1338,6 @@ def classify[T](
         params: Prompt hyperparameters.
         select_examples: Example selector.
         mode: The answer mode to use for parsing the query answer.
-        enable_logging: Whether to log raw oracle responses.
         top_logprobs: The number of top logprobs to request from the
             LLM, putting an upper bound on the support size of the
             classifier's output distributions.
@@ -1342,10 +1374,9 @@ def classify[T](
         num_completions=1,
         options=options,
     )
-    resp = yield from _send_request(model, req, env)
+    resp = yield from _send_request(env, model=model, request=req, query=query)
     if isinstance(resp, SpendingDeclined):
         return
-    log_oracle_response(env, query, req, resp, verbose=enable_logging)
     if not resp.outputs:
         return
     output = resp.outputs[0]
@@ -1423,7 +1454,6 @@ def few_shot[T](
     params: dict[str, object] | None = None,
     select_examples: Sequence[ExampleSelector] = (),
     mode: dp.AnswerMode = None,
-    enable_logging: bool = True,
     temperature: float | None = None,
     num_completions: int = 1,
     max_requests: int | None = None,
@@ -1447,7 +1477,6 @@ def few_shot[T](
             be applied in sequence. By default, no filter is used and so
             all available examples are fetched.
         mode: The answer mode to use for parsing the query answer.
-        enable_logging: Whether to log raw oracle responses.
         temperature: The temperature parameter to use with the LLM, as a
             number from 0 to 2.
         num_completions: The number of completions to request for each
@@ -1508,12 +1537,13 @@ def few_shot[T](
             tools=tuple(tools),
             structured_output=structured_output,
         )
-        resp = yield from _send_request(model, req, env)
+        resp = yield from _send_request(
+            env, model=model, request=req, query=query
+        )
         if isinstance(resp, SpendingDeclined):
             return
-        log_oracle_response(env, query, req, resp, verbose=enable_logging)
         if not resp.outputs:
-            log(env, "llm_no_output", loc=query)
+            env.warn("llm_no_output", loc=query)
             continue
         elements: list[dp.Tracked[T] | dp.ParseError] = []
         answers: list[dp.Answer] = []
@@ -1525,7 +1555,7 @@ def few_shot[T](
                 element = _unwrap_parse_error(element)
             env.tracer.trace_answer(query.ref, answer)
             if isinstance(element, dp.ParseError):
-                log(env, "parse_error", {"error": element}, loc=query)
+                env.info("parse_error", {"error": element}, loc=query)
             elements.append(element)
         for element in elements:
             if not isinstance(element, dp.ParseError):

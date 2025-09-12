@@ -12,7 +12,7 @@ from delphyne.core.refs import drop_refs
 from delphyne.stdlib.environments import PolicyEnv
 from delphyne.stdlib.nodes import spawn_node
 from delphyne.stdlib.opaque import Opaque, OpaqueSpace
-from delphyne.stdlib.policies import log, search_policy
+from delphyne.stdlib.policies import search_policy
 
 # For readability of the `Abduction` node definition
 type _Fact = Any
@@ -195,6 +195,16 @@ def _argmax(seq: Iterable[float]) -> int:
     return max(enumerate(seq), key=lambda x: x[1])[0]
 
 
+@dataclass
+class _ToolStats:
+    prove_calls: int = 0
+    prove_time_in_seconds: float = 0.0
+    is_redundant_calls: int = 0
+    is_redundant_time_in_seconds: float = 0.0
+    search_equivalent_calls: int = 0
+    search_equivalent_time_in_seconds: float = 0.0
+
+
 @search_policy
 def abduct_and_saturate[P, Proof](
     tree: dp.Tree[Abduction, P, Proof],
@@ -202,7 +212,7 @@ def abduct_and_saturate[P, Proof](
     policy: P,
     max_rollout_depth: int = 3,
     scoring_function: ScoringFunction = _default_scoring_function,
-    verbose: bool = False,
+    log_steps: dp.LogLevel | None = None,
 ) -> dp.StreamGen[Proof]:
     """
     A standard, sequential policy to process abduction nodes.
@@ -214,6 +224,11 @@ def abduct_and_saturate[P, Proof](
     # we never clean up `proved`. For example, if `x > 0` is established
     # before the stronger `x >= 0`, the former won't be deleted from
     # `proved`.
+
+    # Initialize tool statistics tracking
+    import time
+
+    tool_stats = _ToolStats()
 
     # Invariant: `candidates`, `proved`, `disproved` and `redundant` are
     # disjoint. Together, they form the set of "canonical facts".
@@ -240,8 +255,11 @@ def abduct_and_saturate[P, Proof](
     node = tree.node
 
     def dbg(msg: str):
-        if verbose:
-            log(env, msg)
+        if log_steps:
+            env.log(log_steps, msg)
+
+    def log_tool_stats():
+        env.info("abduct_and_saturate_tool_stats", tool_stats)
 
     def all_canonical() -> Sequence[_EFact]:
         return [*candidates, *proved, *disproved, *redundant]
@@ -249,8 +267,11 @@ def abduct_and_saturate[P, Proof](
     def is_redundant(f: _EFact) -> dp.StreamContext[bool]:
         if f is None:
             return False
+        tool_stats.is_redundant_calls += 1
+        start_time = time.time()
         respace = node.redundant([tracked[o] for o in proved], tracked[f])
         res = yield from respace.stream(env, policy).first()
+        tool_stats.is_redundant_time_in_seconds += time.time() - start_time
         if res is None:
             raise _Abort()
         return res.tracked.value
@@ -267,9 +288,12 @@ def abduct_and_saturate[P, Proof](
             redundant.add(c)
             return
         # If not redundant, we try and prove it
+        tool_stats.prove_calls += 1
+        start_time = time.time()
         facts_list = [(tracked[f], p) for f, p in proved.items()]
         pstream = node.prove(facts_list, tracked[c]).stream(env, policy)
         res = yield from pstream.first()
+        tool_stats.prove_time_in_seconds += time.time() - start_time
         if res is None:
             raise _Abort()
         status, payload = res.tracked[0], res.tracked[1]
@@ -324,8 +348,13 @@ def abduct_and_saturate[P, Proof](
         if not prev:
             # First fact: no need to make equivalence call
             return f
+        tool_stats.search_equivalent_calls += 1
+        start_time = time.time()
         eqspace = node.search_equivalent(prev, tracked[f])
         res = yield from eqspace.stream(env, policy).first()
+        tool_stats.search_equivalent_time_in_seconds += (
+            time.time() - start_time
+        )
         if res is None:
             raise _Abort()
         res = res.tracked
@@ -335,7 +364,7 @@ def abduct_and_saturate[P, Proof](
             equivalent[f] = res.value
             return res.value
         else:
-            log(env, "invalid_equivalent_call")
+            env.error("invalid_equivalent_call")
             return f
 
     def get_raw_suggestions(c: _EFact) -> dp.StreamContext[Sequence[_EFact]]:
@@ -399,8 +428,10 @@ def abduct_and_saturate[P, Proof](
                 cur = list(suggs.keys())[best]
                 candidates[cur].num_visited += 1
     except _Abort:
+        log_tool_stats()
         return
     except _ProofFound:
+        log_tool_stats()
         action = proved[None]
         child = tree.child(action)
         assert isinstance(child.node, dp.Success)

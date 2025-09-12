@@ -3,24 +3,26 @@ A utility class for defining, launching and managing experiments.
 """
 
 import json
+import multiprocessing as mp
+import threading
 import uuid
 from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, replace
+from datetime import datetime
+from multiprocessing.managers import SyncManager
 from pathlib import Path
+from queue import Queue
 from typing import Any, Literal, Protocol, Self
 
 import fire  # type: ignore
 import pandas as pd  # type: ignore
 import yaml
 
+import delphyne.core as dp
 import delphyne.stdlib.commands as cmd
-import delphyne.stdlib.models as md
 from delphyne.stdlib.tasks import CommandExecutionContext, run_command
 from delphyne.utils.typing import NoTypeInfo, pydantic_dump, pydantic_load
-
-type _ModelWrapper = Callable[[md.LLM], md.LLM]
-
 
 EXPERIMENT_STATE_FILE = "experiment.yaml"
 STATUS_FILE = "statuses.txt"
@@ -29,6 +31,10 @@ LOG_FILE = "log.txt"
 EXCEPTION_FILE = "exception.txt"
 CACHE_FILE = "cache.yaml"
 RESULTS_SUMMARY = "results_summary.csv"
+SNAPSHOTS_DIR = "snapshots"
+SNAPSHOT_STATUS_SUFFIX = ".status.txt"
+SNAPSHOT_RESULT_SUFFIX = ".result.yaml"
+SNAPSHOT_INDEX_FILE = "index.md"
 
 
 @dataclass
@@ -40,10 +46,18 @@ class ConfigInfo[Config]:
     Attributes:
         params: The configuration.
         status: Status of the configuration.
+        start_time: Time at which the configuration execution started.
+        end_time: Time at which the configuration execution ended.
+        interruption_time: If the configuration execution was interrupted,
+            the time at which the interruption happened (the `status`
+            must then be `todo`).
     """
 
     params: Config
     status: Literal["todo", "done", "failed"]
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    interruption_time: datetime | None = None
 
 
 @dataclass
@@ -128,6 +142,8 @@ class Experiment[Config]:
             and expensive computations (see `Compute`). When this is
             done, the experiment can be reliably replicated, without
             issuing LLM calls.
+        log_level: If provided, overrides the `log_level` argument of
+            the command returned by the `experiment` function.
         export_raw_trace: Whether to export the raw trace for all
             configuration runs.
         export_log: Whether to export the log messages for all
@@ -136,6 +152,9 @@ class Experiment[Config]:
             all configuration runs, which can be visualized in the VSCode
             extension (see `delphyne.analysis.feedback.Trace`). However,
             such traces can be large.
+        verbose_snapshots: If `True`, when a snapshot is requested, all
+            result information (raw trace, log, browsable trace) is
+            dumped, regardless of other settings.
 
     ## Tips
 
@@ -153,9 +172,11 @@ class Experiment[Config]:
     description: str | None = None
     config_naming: Callable[[Config, uuid.UUID], str] | None = None
     cache_requests: bool = True
+    log_level: dp.LogLevel | None = None
     export_raw_trace: bool = True
     export_log: bool = True
     export_browsable_trace: bool = True
+    verbose_snapshots: bool = False
 
     def __post_init__(self):
         # We override the cache root directory.
@@ -241,7 +262,12 @@ class Experiment[Config]:
                 info.status = "todo"
         self._save_state(state)
 
-    def resume(self, max_workers: int = 1, log_progress: bool = True):
+    def resume(
+        self,
+        max_workers: int = 1,
+        log_progress: bool = True,
+        interactive: bool = False,
+    ):
         """
         Resume the experiment, running all configurations with state
         "todo". Every configuration run results in marking the
@@ -260,22 +286,150 @@ class Experiment[Config]:
         Attributes:
             max_workers: Number of parallel process workers to use.
             log_progress: Whether to show a progress bar in the console.
+            interactive: If `True`, pressing `Enter` at any point during
+                execution prints the current status of all workers and
+                dumps a snapshot of ongoing tasks on disk. This is
+                useful to investigate seemingly stuck tasks.
         """
+        with mp.Manager() as manager:
+            self._resume_with_manager(
+                manager,
+                max_workers=max_workers,
+                log_progress=log_progress,
+                interactive=interactive,
+            )
+
+    def _resume_with_manager(
+        self,
+        manager: SyncManager,
+        max_workers: int,
+        log_progress: bool,
+        interactive: bool,
+    ) -> None:
         state = self._load_state()
         assert state is not None
+        worker_send: Queue[_WorkerSent] = manager.Queue()
+        worker_receive: dict[str, Queue[_WorkerReceived]] = {}
+
+        # To avoid race conditions, we store start times and end times
+        # in a separate place and update the state on saving (see
+        # `save_state` local function below). The `ongoing` list
+        # contains all keys that are in `start_times` but not in
+        # `end_times`.
+
+        start_times: dict[str, datetime] = {}
+        end_times: dict[str, datetime] = {}
+        ongoing: list[str] = []
+
+        # Lock protecting `worker_receive`, `start_times`, `end_times`
+        # and `ongoing`.
+        lock: threading.Lock = threading.Lock()
+
+        def save_state():
+            now = datetime.now()
+            with lock:
+                for name, start in start_times.items():
+                    config = state.configs[name]
+                    config.start_time = start
+                    end = end_times.get(name, None)
+                    if end is not None:
+                        config.end_time = end
+                        config.interruption_time = None
+                    else:
+                        assert name in ongoing
+                        config.end_time = None
+                        config.interruption_time = now
+            self._save_state(state)
+
+        def make_snapshot():
+            # Print elapsed time for all ongoing tasks
+            print(f"Ongoing tasks: {len(ongoing)}.")
+            now = datetime.now()
+            durations = [(t, now - start_times[t]) for t in ongoing]
+            durations.sort(key=lambda x: x[1], reverse=True)
+            for name, dt in durations:
+                print(f"    {name}: {dt}")
+            # Generate snapshot directory
+            snapshot_name = str(datetime.now()).replace(" ", "_")
+            snapshot_name = snapshot_name.replace(":", "-")
+            snapshot_name = snapshot_name.replace(".", "_")
+            snapshot_dir = self.output_dir / SNAPSHOTS_DIR / snapshot_name
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            # Generate snapshot index
+            index: list[str] = []
+            for name, dt in durations:
+                index.append(f"- {name}:")
+                status_file = name + SNAPSHOT_STATUS_SUFFIX
+                result_file = name + SNAPSHOT_RESULT_SUFFIX
+                index.append(f"  - Running for: {dt}")
+                index.append(f"  - [Status](./{status_file})")
+                index.append(f"  - [Result](./{result_file})")
+            index_file = snapshot_dir / SNAPSHOT_INDEX_FILE
+            print(f"Creating snapshot: {index_file}")
+            with open(index_file, "w") as f:
+                f.write("# Snapshot\n\n")
+                f.write(f"Taken at {datetime.now()}\n\n")
+                f.write("\n".join(index) + "\n")
+            # Send snapshot queries
+            for name in ongoing:
+                ask = worker_receive.get(name, None)
+                if ask is None:
+                    continue
+                ask.put(_AskSnapshot(snapshot_dir))
+
+        def process_worker_messages():
+            while True:
+                msg = worker_send.get()
+                match msg:
+                    case _ConfigStarted():
+                        with lock:
+                            start_times[msg.config_name] = msg.time
+                            ongoing.append(msg.config_name)
+                            worker_receive[msg.config_name] = msg.respond
+                    case _ConfigSnapshot():
+                        status_file = msg.snapshot_dir / (
+                            msg.config_name + SNAPSHOT_STATUS_SUFFIX
+                        )
+                        result_file = msg.snapshot_dir / (
+                            msg.config_name + SNAPSHOT_RESULT_SUFFIX
+                        )
+                        with open(status_file, "w") as f:
+                            f.write(msg.status_messge or "")
+                        with open(result_file, "w") as f:
+                            f.write(msg.result or "")
+                    case "done":
+                        break
+
+        def monitor_input():
+            while True:
+                input()
+                with lock:
+                    make_snapshot()
+
+        threading.Thread(target=process_worker_messages).start()
+        if interactive:
+            # The thread must be a daemon thread so the call to `input`
+            # is interrupted when the main program exits.
+            threading.Thread(target=monitor_input, daemon=True).start()
+
+        # Launching and completing all tasks
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             futures = [
                 executor.submit(
                     _run_config,
                     context=self.context,
+                    worker_send=worker_send,
+                    worker_receive=manager.Queue(),
                     experiment=self.experiment,
                     config_name=name,
                     config_dir=self._config_dir(name),
                     config=info.params,
                     cache_requests=self.cache_requests,
+                    log_level=self.log_level,
                     export_raw_trace=self.export_raw_trace,
                     export_log=self.export_log,
                     export_browsable_trace=self.export_browsable_trace,
+                    verbose_snapshots=self.verbose_snapshots,
                 )
                 for name, info in state.configs.items()
                 if info.status == "todo"
@@ -288,9 +442,12 @@ class Experiment[Config]:
                     state.configs[name].status = (
                         "done" if success else "failed"
                     )
+                    with lock:
+                        end_times[name] = datetime.now()
+                        ongoing.remove(name)
                     if log_progress:
                         _print_progress(state)
-                self._save_state(state)
+                save_state()
                 all_successes = all(
                     info.status == "done" for info in state.configs.values()
                 )
@@ -303,8 +460,9 @@ class Experiment[Config]:
                     print("\nWarning: some configurations failed.")
             except KeyboardInterrupt:
                 print("\nExperiment interrupted. Saving state...")
-                self._save_state(state)
+                save_state()
                 print("State saved.")
+            worker_send.put("done")
 
     def replay_config_by_name(self, config_name: str) -> None:
         """
@@ -509,17 +667,83 @@ def _print_progress(state: ExperimentState[Any]) -> None:
     print(msg + 40 * " ", end="")
 
 
+type _WorkerReceived = _AskSnapshot | Literal["done"]
+
+
+type _WorkerSent = _ConfigStarted | _ConfigSnapshot | Literal["done"]
+
+
+@dataclass
+class _AskSnapshot:
+    snapshot_dir: Path
+
+
+@dataclass
+class _ConfigStarted:
+    config_name: str
+    respond: Queue[_WorkerReceived]
+    time: datetime
+
+
+@dataclass
+class _ConfigSnapshot:
+    snapshot_dir: Path
+    config_name: str
+    status_messge: str | None
+    result: str | None
+
+
 def _run_config[Config](
     context: CommandExecutionContext,
     experiment: ExperimentFun[Config],
+    worker_send: Queue[_WorkerSent],
+    worker_receive: Queue[_WorkerReceived],
     config_name: str,
     config_dir: Path,
     config: Config,
     cache_requests: bool,
+    log_level: dp.LogLevel | None,
     export_raw_trace: bool,
     export_log: bool,
     export_browsable_trace: bool,
+    verbose_snapshots: bool,
 ) -> tuple[str, bool]:
+    # Setup a monitor
+    started = _ConfigStarted(config_name, worker_receive, datetime.now())
+    worker_send.put(started)
+    pull_results: Callable[[], str] | None = None
+    pull_status: Callable[[], str | None] | None = None
+
+    def on_set_pull_result_str(pull: Callable[[], str]) -> None:
+        nonlocal pull_results
+        pull_results = pull
+
+    def on_set_pull_status(pull: Callable[[], str | None]) -> None:
+        nonlocal pull_status
+        pull_status = pull
+
+    def monitor():
+        while True:
+            msg = worker_receive.get()
+            if isinstance(msg, _AskSnapshot):
+                status_message = None
+                if pull_status is not None:
+                    status_message = pull_status()
+                result = pull_results() if pull_results is not None else None
+                snapshot = _ConfigSnapshot(
+                    msg.snapshot_dir,
+                    config_name,
+                    status_message,
+                    result,
+                )
+                worker_send.put(snapshot)
+            else:
+                assert msg == "done"
+                break
+
+    threading.Thread(target=monitor).start()
+
+    # Create and launch the main command
     cache_file = None
     if cache_requests:
         cache_file = config_dir / CACHE_FILE
@@ -537,6 +761,9 @@ def _run_config[Config](
     cmdargs.export_browsable_trace = export_browsable_trace
     cmdargs.export_log = export_log
     cmdargs.export_raw_trace = export_raw_trace
+    cmdargs.export_all_on_pull = verbose_snapshots
+    if log_level is not None:
+        cmdargs.log_level = log_level
     try:
         run_command(
             command=cmd.run_strategy,
@@ -545,6 +772,8 @@ def _run_config[Config](
             dump_statuses=config_dir / STATUS_FILE,
             dump_result=config_dir / RESULT_FILE,
             dump_log=config_dir / LOG_FILE,
+            on_set_pull_result_str=on_set_pull_result_str,
+            on_set_pull_status=on_set_pull_status,
             add_header=True,
         )
         success = True
@@ -555,6 +784,7 @@ def _run_config[Config](
 
             traceback.print_exc(file=f)
         success = False
+    worker_receive.put("done")
     return (config_name, success)
 
 
@@ -577,12 +807,6 @@ class ExperimentCLI:
     def __init__(self, experiment: Experiment[Any]):
         self.experiment = experiment
 
-    def __call__(self):
-        """
-        If no argument is provided, the `run` method is called.
-        """
-        self.run()
-
     def run(
         self,
         *,
@@ -590,6 +814,9 @@ class ExperimentCLI:
         retry_errors: bool = False,
         cache: bool = True,
         verbose_output: bool = False,
+        log_level: str | None = None,
+        interactive: bool = False,
+        verbose_snapshots: bool = False,
     ):
         """
         Start or resume the experiment.
@@ -602,16 +829,31 @@ class ExperimentCLI:
             verbose_output: Export raw traces and browsable traces in
                 result files, enabling inspection by the Delphyne VSCode
                 extension's tree view.
+            log_level: If provided, overrides the `log_level` argument of
+                the command returned by the `experiment` function.
+            interactive: If `True`, pressing `Enter` at any point during
+                execution prints the current status of all workers and
+                dumps a snapshot of ongoing tasks on disk.
+            verbose_snapshots: If `True`, snapshots are verbose regardless
+                of the `verbose_output` setting.
         """
         self.experiment.cache_requests = cache
         self.experiment.export_raw_trace = verbose_output
         self.experiment.export_browsable_trace = verbose_output
         self.experiment.export_log = True
+        self.experiment.verbose_snapshots = verbose_snapshots
+        if log_level is not None:
+            assert dp.valid_log_level(log_level), (
+                f"Invalid log level: {log_level}"
+            )
+            self.experiment.log_level = log_level
 
         self.experiment.load()
         if retry_errors:
             self.experiment.mark_errors_as_todos()
-        self.experiment.resume(max_workers=max_workers)
+        self.experiment.resume(
+            max_workers=max_workers, interactive=interactive
+        )
 
     def status(self):
         """

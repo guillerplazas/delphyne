@@ -65,12 +65,14 @@ from delphyne.core.traces import (
     ExportableLogMessage,
     ExportableTrace,
     Location,
+    LogLevel,
     LogMessage,
     QueryOrigin,
     Trace,
     Tracer,
     TraceReverseMap,
     tracer_hook,
+    valid_log_level,
 )
 from delphyne.core.trees import (
     AbstractTreeTransformer,

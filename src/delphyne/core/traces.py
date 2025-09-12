@@ -10,10 +10,12 @@ import threading
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Any
+from datetime import datetime
+from typing import Any, Literal, TypeGuard
 
 from delphyne.core import pprint, refs
 from delphyne.core.trees import Tree
+from delphyne.utils.typing import pydantic_dump
 
 
 @dataclass(frozen=True)
@@ -482,25 +484,42 @@ class TraceReverseMap:
 #####
 
 
-@dataclass(frozen=True)
+type LogLevel = Literal["trace", "debug", "info", "warn", "error"]
+
+
+def log_level_greater_or_equal(lhs: LogLevel, rhs: LogLevel) -> bool:
+    levels = ["trace", "debug", "info", "warn", "error"]
+    return levels.index(lhs) >= levels.index(rhs)
+
+
+def valid_log_level(level: str) -> TypeGuard[LogLevel]:
+    if level in ["trace", "debug", "info", "warn", "error"]:
+        return True
+    return False
+
+
+@dataclass(frozen=True, kw_only=True)
 class LogMessage:
     """
     A log message.
 
     Attributes:
         message: The message to log.
-        metadata: Optional metadata associated with the message, as a
-            dictionary mapping string keys to JSON values.
+        time: Time at which the message was produced
+        metadata: Optional metadata associated with the message, as an
+            object that can be serialized to JSON using Pydantic.
         location: An optional location in the strategy tree where the
             message was logged, if applicable.
     """
 
     message: str
-    metadata: dict[str, Any] | None = None
+    level: LogLevel
+    time: datetime
+    metadata: object | None = None
     location: ShortLocation | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ExportableLogMessage:
     """
     An exportable log message, as a dataclass whose fields are JSON
@@ -508,9 +527,11 @@ class ExportableLogMessage:
     """
 
     message: str
-    node: int | None
-    space: str | None
-    metadata: dict[str, Any] | None = None
+    level: LogLevel
+    time: datetime
+    node: int | None = None
+    space: str | None = None
+    metadata: object | None = None  # JSON value
 
 
 class Tracer:
@@ -526,13 +547,20 @@ class Tracer:
         lock: A reentrant lock protecting access to the trace and log.
             The lock is publicly exposed so that threads can log several
             successive messages without other threads interleaving new
-            messages in between (TODO: there are cleaner ways to achieve
-            this).
+            messages in between.
     """
 
-    def __init__(self):
+    # TODO: there are cleaner ways to achieve good message order beyong
+    # exposing the lock.
+
+    def __init__(self, log_level: LogLevel = "info"):
+        """
+        Parameters:
+            log_level: The minimum severity level of messages to log.
+        """
         self.trace = Trace()
         self.messages: list[LogMessage] = []
+        self.log_level: LogLevel = log_level
 
         # Different threads may be logging information or appending to
         # the trace in parallel.
@@ -568,19 +596,31 @@ class Tracer:
 
     def log(
         self,
+        level: LogLevel,
         message: str,
-        metadata: dict[str, Any] | None = None,
+        metadata: object | None = None,
         location: Location | None = None,
     ):
         """
         Log a message, with optional metadata and location information.
-        The metadata must be a dictionary of JSON values.
+        The metadata must be exportable to JSON using Pydantic.
         """
+        if not log_level_greater_or_equal(level, self.log_level):
+            return
+        time = datetime.now()
         with self.lock:
             short_location = None
             if location is not None:
                 short_location = self.trace.convert_location(location)
-            self.messages.append(LogMessage(message, metadata, short_location))
+            self.messages.append(
+                LogMessage(
+                    message=message,
+                    level=level,
+                    time=time,
+                    metadata=metadata,
+                    location=short_location,
+                )
+            )
 
     def export_log(self) -> Iterable[ExportableLogMessage]:
         """
@@ -594,7 +634,14 @@ class Tracer:
                     node = loc.node.id
                     if loc.space is not None:
                         space = pprint.space_ref(loc.space)
-                yield ExportableLogMessage(m.message, node, space, m.metadata)
+                yield ExportableLogMessage(
+                    message=m.message,
+                    level=m.level,
+                    time=m.time,
+                    node=node,
+                    space=space,
+                    metadata=pydantic_dump(object, m.metadata),
+                )
 
     def export_trace(self) -> ExportableTrace:
         """
