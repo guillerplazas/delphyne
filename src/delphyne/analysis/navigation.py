@@ -389,14 +389,3 @@ def _find_answer_in_finite_set(
     return None
 
 
-def _implicit_answer_with_compute(
-    node: dp.ComputationNode,
-) -> ImplicitAnswerResolver:
-    def run():
-        try:
-            answer = node.run_computation()
-        except Exception as e:
-            raise dp.StrategyException(e)
-        return ("computations", dp.Answer(None, answer))
-
-    return run
