@@ -37,7 +37,9 @@ from delphyne.core.demos import (
     QueryDemo,
     StrategyDemo,
 )
-from delphyne.core.errors import Error
+from delphyne.core.errors import (
+    Error,
+)
 from delphyne.core.policies import (
     AbstractPolicy,
     AbstractPromptingPolicy,
@@ -60,6 +62,7 @@ from delphyne.core.refs import (
     ToolCall,
     Tracked,
     Value,
+    drop_refs,
 )
 from delphyne.core.reification import (
     TreeCache,
@@ -94,7 +97,6 @@ from delphyne.core.trees import (
     AbstractTreeTransformer,
     AnyTree,
     AttachedQuery,
-    ComputationNode,
     EmbeddedTree,
     Navigation,
     NavigationContext,

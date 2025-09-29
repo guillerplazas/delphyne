@@ -397,7 +397,7 @@ def generate_pairs_policy(pp: dp.PromptingPolicy):
             return 1e-15 if num_prev >= 2 else 1e-2 if num_prev >= 1 else 1e-1
         assert False
 
-    bestfs = dp.best_first_search(child_prior)
+    bestfs = dp.best_first_search(child_confidence_prior=child_prior)
     return bestfs & pp
 
 
@@ -406,7 +406,11 @@ def generate_pairs_policy(pp: dp.PromptingPolicy):
 #####
 
 
-def expensive_computation(n: int) -> tuple[int, int]:
+def expensive_computation(
+    n: int, timeout: float | None = None
+) -> tuple[int, int]:
+    if timeout is not None:
+        print(f"Timeout set: {timeout}")
     return (n, n + 1)
 
 
@@ -414,9 +418,9 @@ def expensive_computation(n: int) -> tuple[int, int]:
 def test_cached_computations(
     n: int,
 ) -> Strategy[dp.Compute, object, int]:
-    a, b = yield from dp.compute(expensive_computation, n)
-    c, d = yield from dp.compute(expensive_computation, n)
-    e, f = yield from dp.compute(expensive_computation, n + 1)
+    a, b = yield from dp.compute(expensive_computation)(n)
+    c, d = yield from dp.compute(expensive_computation)(n)
+    e, f = yield from dp.compute(expensive_computation)(n + 1)
     return a * b + c * d + e * f
 
 
@@ -741,7 +745,7 @@ def recursive_joins(
 ]:
     if depth == 0:
         flag = yield from dp.get_flag(MethodFlag)
-        v, _ = yield from dp.compute(expensive_computation, 1)
+        v, _ = yield from dp.compute(expensive_computation)(1)
         return v if flag == "def" else 0
     else:
         yield from dp.message(f"Recursing at depth {depth}")
@@ -757,7 +761,7 @@ def recursive_joins_policy():
     sp = (
         dprs.recursive_search()
         @ dp.elim_messages()
-        @ dp.elim_compute()
+        @ dp.elim_compute(override_args={"timeout": 1.0})
         @ dp.elim_flag(MethodFlag, "def")
     )
     return sp & dprs.OneOfEachSequentially()
@@ -968,3 +972,52 @@ def make_sum_using_guess(
 @dp.ensure_compatible(make_sum_using_guess)
 def make_sum_using_guess_policy(model: dp.LLM):
     return dp.dfs() & {"sub": dp.few_shot(model)}
+
+
+#####
+##### Binarize Values, Iterative Mode for `few_shot`
+#####
+
+
+@dataclass
+class NumberOutput:
+    number: int
+
+
+@dataclass
+class GuessZeroAndThenOne(dp.Query[NumberOutput]):
+    __system_prompt__: ClassVar[str] = "Answer with a number."
+    __instance_prompt__: ClassVar[str] = "Start trying to answer `0`."
+    __more_prompt__: ClassVar[str] = "Now try to answer `1`."
+
+
+@dp.strategy
+def guess_zero_and_then_one() -> Strategy[
+    dp.Value | Branch, dp.PromptingPolicy, int
+]:
+    res = yield from dp.branch(GuessZeroAndThenOne().using(dp.ambient_pp))
+    num = res.number
+    yield from dp.value(dp.const_space(float(num == 1)), lambda _: lambda x: x)
+    return num
+
+
+@dp.ensure_compatible(guess_zero_and_then_one)
+def guess_zero_and_then_one_policy(model: dp.LLM):
+    sp = dp.dfs() @ dp.binarize_values(threshold=0.5)
+    return sp & dp.few_shot(model, iterative_mode=True)
+
+
+#####
+##### Data
+#####
+
+
+@dp.strategy
+def strategy_loading_data(key: str) -> dp.Strategy[dp.Data, None, str]:
+    articles = yield from dp.load_data([("articles", key)], type=Article)
+    return articles[0].title
+
+
+@dp.ensure_compatible(strategy_loading_data)
+def strategy_loading_data_policy():
+    return dp.dfs() @ dp.elim_data() & None

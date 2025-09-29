@@ -10,6 +10,8 @@ from delphyne.analysis.browsable_traces import (
 )
 from delphyne.analysis.demo_interpreter import (
     DemoExecutionContext,
+    ImplicitAnswerGenerator,
+    ImplicitAnswerGeneratorsLoader,
     ObjectLoader,
     ObjectNotFound,
     evaluate_demo,
@@ -19,6 +21,7 @@ from delphyne.analysis.demo_interpreter import (
 from delphyne.analysis.feedback import (
     DemoFeedback,
     Diagnostic,
+    ImplicitAnswerCategory,
     QueryDemoFeedback,
     StrategyDemoFeedback,
     TestFeedback,

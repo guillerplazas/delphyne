@@ -82,13 +82,29 @@ class Error:
     message: str
 
 
-def check_file(file: File, original: File | None) -> Outcome:
+def check_file(
+    file: File,
+    original: File | None,
+    *,
+    max_steps: int | None = None,
+    max_time_in_seconds: float | None = None,
+) -> Outcome:
+    if max_steps is None:
+        max_steps = why3py.DEFAULT_MAX_STEPS
+    if max_time_in_seconds is None:
+        max_time_in_seconds = why3py.DEFAULT_MAX_TIME_IN_SECONDS
     try:
         if original is not None:
             diff = why3py.answer(why3py.diff(original, file))
             if diff[0] == "Mismatch":
                 return Mismatch(kind="mismatch", loc=diff[1])
-        obligations = why3py.answer(why3py.prove(file))
+        obligations = why3py.answer(
+            why3py.prove(
+                file,
+                max_steps=max_steps,
+                max_time_in_secs=max_time_in_seconds,
+            )
+        )
         return Obligations.of_why3py(file, obligations)
     except why3py.Why3Error as e:
         return Error(kind="error", message=e.msg)

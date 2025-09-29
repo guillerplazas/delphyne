@@ -18,6 +18,7 @@ from delphyne.utils.yaml import dump_yaml
 
 STRATEGY_MODULE = "example_strategies"
 TESTS_FOLDER = Path(__file__).parent
+DATA_FOLDER = TESTS_FOLDER / "data"
 CONTEXT = analysis.DemoExecutionContext(
     strategy_dirs=[TESTS_FOLDER],
     modules=[STRATEGY_MODULE],
@@ -61,6 +62,9 @@ class DemoExpectTest(dp.StrategyDemo):
             ctx,
             extra_objects=dp.stdlib_globals(),
             answer_database_loader=dp.standard_answer_loader(TESTS_FOLDER),
+            load_implicit_answer_generators=(
+                dp.stdlib_implicit_answer_generators_loader((DATA_FOLDER,))
+            ),
         )
         if trace is not None:
             print(dump_yaml(dp.ExportableTrace, trace.export()))
@@ -107,6 +111,8 @@ def load_demo(demo_label: str) -> DemoExpectTest | dp.QueryDemo:
         "flags_global",
         "abduction",
         "trivial_untyped_strategy",
+        "loading_data",
+        "loading_bad_data",
     ],
 )
 def test_interpreter(demo_label: str):

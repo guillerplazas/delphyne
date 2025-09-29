@@ -19,6 +19,14 @@ from delphyne.stdlib.flags import (
 )
 from delphyne.stdlib.globals import (
     stdlib_globals,
+    stdlib_implicit_answer_generators_loader,
+)
+from delphyne.stdlib.data import (
+    Data,
+    DataRef,
+    load_data,
+    DataNotFound,
+    elim_data,
 )
 from delphyne.stdlib.misc import (
     ambient,
@@ -31,6 +39,7 @@ from delphyne.stdlib.misc import (
     nofail,
     or_else,
     sequence,
+    parallel,
 )
 from delphyne.stdlib.openai_api import (
     OpenAICompatibleModel,
@@ -38,15 +47,24 @@ from delphyne.stdlib.openai_api import (
 from delphyne.stdlib.search.abduction import (
     Abduction,
     AbductionStatus,
+    abduct_recursively,
     abduct_and_saturate,
     abduction,
 )
 from delphyne.stdlib.search.bestfs import (
     best_first_search,
 )
-from delphyne.stdlib.search.classification_based import sample_and_proceed
-from delphyne.stdlib.search.dfs import dfs, par_dfs
-from delphyne.stdlib.search.interactive import InteractStats, interact
+from delphyne.stdlib.search.classification_based import (
+    sample_and_proceed,
+)
+from delphyne.stdlib.search.dfs import (
+    dfs,
+    par_dfs,
+)
+from delphyne.stdlib.search.interactive import (
+    InteractStats,
+    interact,
+)
 from delphyne.stdlib.search.iteration import (
     iterate,
 )
@@ -70,4 +88,12 @@ from delphyne.stdlib.tasks import (
     command_result_type,
     run_command,
 )
-from delphyne.stdlib.universal_queries import UniversalQuery, guess
+from delphyne.stdlib.universal_queries import (
+    UniversalQuery,
+    guess,
+)
+
+from delphyne.stdlib.experiments.experiment_launcher import (
+    Experiment,
+    WorkersSetup,
+)

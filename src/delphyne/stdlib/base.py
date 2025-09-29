@@ -12,6 +12,7 @@ from delphyne.stdlib.answer_loaders import (
     standard_answer_loader,
 )
 from delphyne.stdlib.environments import (
+    DataManager,
     Example,
     ExampleDatabase,
     HindsightFeedback,
@@ -61,12 +62,15 @@ from delphyne.stdlib.nodes import (
     Branch,
     Factor,
     Fail,
+    FromPolicy,
     Join,
     Message,
     NodeMeta,
     Value,
+    binarize_values,
     branch,
     elim_messages,
+    elim_values,
     ensure,
     factor,
     fail,
@@ -75,7 +79,10 @@ from delphyne.stdlib.nodes import (
     spawn_node,
     value,
 )
-from delphyne.stdlib.opaque import Opaque, OpaqueSpace
+from delphyne.stdlib.opaque import (
+    Opaque,
+    OpaqueSpace,
+)
 from delphyne.stdlib.policies import (
     ContextualTreeTransformer,
     IPDict,

@@ -40,6 +40,10 @@
 
 ::: delphyne.stdlib.nodes.value
 
+::: delphyne.stdlib.nodes.elim_values
+
+::: delphyne.stdlib.nodes.binarize_values
+
 ## Join
 
 ::: delphyne.stdlib.nodes.Join
@@ -57,6 +61,18 @@
 ::: delphyne.stdlib.computations.elim_compute
 
 ::: delphyne.stdlib.computations.__Computation__
+
+## Data
+
+::: delphyne.Data
+
+::: delphyne.load_data
+
+::: delphyne.DataRef
+
+::: delphyne.DataNotFound
+
+::: delphyne.elim_data
 
 ## Flag
 

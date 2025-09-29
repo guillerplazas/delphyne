@@ -16,6 +16,8 @@
 
 ::: delphyne.sequence
 
+::: delphyne.parallel
+
 ::: delphyne.or_else
 
 ::: delphyne.nofail
@@ -47,6 +49,8 @@
 ::: delphyne.Abduction
 
 ::: delphyne.abduction
+
+::: delphyne.abduct_recursively
 
 ::: delphyne.abduct_and_saturate
 

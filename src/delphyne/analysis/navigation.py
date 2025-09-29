@@ -4,7 +4,7 @@ Resolving references within a trace.
 
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
 
@@ -55,11 +55,6 @@ class NavigationInfo:
     unused_hints: list[refs.Hint] = field(default_factory=list[refs.Hint])
 
 
-type ImplicitAnswerResolver = Callable[
-    [], tuple[fb.ImplicitAnswerCategory, refs.Answer] | None
-]
-
-
 class HintResolver(ABC):
     """
     An oracle for answering queries, with or without hints.
@@ -78,17 +73,16 @@ class HintResolver(ABC):
 
     @abstractmethod
     def answer_without_hint(
-        self,
-        query: dp.AttachedQuery[Any],
-        implicit_answer: ImplicitAnswerResolver | None,
+        self, query: dp.AttachedQuery[Any], tree: AnyTree
     ) -> refs.Answer | None:
         """
         Try and answer a query without a hint.
 
         Arguments:
             query: The query to answer.
-            implicit_answer: A function to call to try and generate
-                implicit answers in case no default is available.
+            tree: The tree that the query belongs to. This information
+                may be useful for generating implicit answers (see
+                `ImplicitAnswerGenerator`).
         """
         pass
 
@@ -262,10 +256,7 @@ class Navigator:
             encountered.space_tags[tag] += 1
         match source:
             case dp.AttachedQuery():
-                implicit = None
-                if isinstance(tree.node, dp.ComputationNode):
-                    implicit = _implicit_answer_with_compute(tree.node)
-                return self.answer_from_hints(tree, source, hints, implicit)
+                return self.answer_from_hints(tree, source, hints)
             case dp.NestedTree():
                 tree = source.spawn_tree()
                 # New selector
@@ -340,7 +331,6 @@ class Navigator:
         tree: AnyTree,
         query: dp.AttachedQuery[Any],
         hints: Sequence[refs.Hint],
-        implicit: ImplicitAnswerResolver | None,
     ) -> tuple[dp.Tracked[Any], Sequence[refs.Hint]]:
         assert self.hint_resolver is not None
         if self.tracer is not None:
@@ -370,7 +360,7 @@ class Navigator:
                 hints = hints[1:]
         # If we could not use a hint, we try with the default answer
         if answer is None:
-            answer = self.hint_resolver.answer_without_hint(query, implicit)
+            answer = self.hint_resolver.answer_without_hint(query, tree)
         # If we still cannot, resolve, maybe the query has a default answer
         if answer is None:
             if (defa := query.query.default_answer()) is not None:

@@ -7,7 +7,7 @@ import time
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, cast
+from typing import Any, Literal, Protocol, cast, override
 
 import delphyne.core as dp
 from delphyne.core.refs import drop_refs
@@ -55,6 +55,7 @@ class Abduction(dp.Node):
         OpaqueSpace[Any, bool],
     ]
 
+    @override
     def navigate(self) -> dp.Navigation:
         proved: list[tuple[_TrackedEFact, _TrackedProof]] = []
 
@@ -157,7 +158,105 @@ def abduction[Fact, Feedback, Proof, P](
 
 
 #####
-##### Policies
+##### Simple Policy
+#####
+
+
+class _Abort(Exception): ...
+
+
+@search_policy
+def abduct_recursively[P, Proof](
+    tree: dp.Tree[Abduction, P, Proof],
+    env: PolicyEnv,
+    policy: P,
+    *,
+    max_depth: int = 1,
+    max_suggestions: int | None = None,
+) -> dp.StreamGen[Proof]:
+    """
+    A simple policy for `Abduction` nodes that mimics the behavior of
+    the associated navigation function.
+
+    This policy does not use `search_equivalent` and `is_redundant`.
+
+    Arguments:
+        max_depth: The maximum recursive depth at which proof attempts
+            are performed. If equal to 0, `suggest` is never called and
+            the policy succeeds only if the top-level goal can be
+            proved straight away. If equal to 1, suggestions can be made
+            but they must all be provable straight away.
+        max_suggestions: The maximum of suggestions to consider.
+    """
+
+    proved: list[tuple[_TrackedEFact, _TrackedProof]] = []
+    assert isinstance(tree.node, Abduction)
+    node = tree.node
+
+    def prove(
+        fact: _TrackedEFact,
+    ) -> dp.StreamContext[dp.Tracked[AbductionStatus[_Feedback, _Proof]]]:
+        res = (
+            yield from node.prove(cast(Any, proved), fact)
+            .stream(env, policy)
+            .first()
+        )
+        if res is None:
+            raise _Abort()
+        return res.tracked
+
+    def suggest(
+        feedback: _TrackedFeedback,
+    ) -> dp.StreamContext[dp.Tracked[Sequence[_Fact]]]:
+        res = yield from node.suggest(feedback).stream(env, policy).first()
+        if res is None:
+            raise _Abort()
+        return res.tracked
+
+    def aux(fact: _TrackedEFact, depth: int) -> dp.StreamContext[None]:
+        if depth > max_depth:
+            return
+        # If `fact` is already proved, do nothing
+        if any(drop_refs(fact) == drop_refs(p) for p, _ in proved):
+            return
+        res = yield from prove(fact)
+        status, payload = res[0], res[1]
+        if status.value == "proved":
+            proved.append((fact, payload))
+            return
+        if status.value == "disproved":
+            return
+        assert status.value == "feedback"
+        # Obtain suggestions and try to prove them all recursively
+        feedback = payload
+        suggestions = [*(yield from suggest(feedback))]
+        if max_suggestions is not None:
+            suggestions = suggestions[:max_suggestions]
+        for s in suggestions:
+            yield from aux(s, depth + 1)
+        # Check again if `fact` is now proved
+        if any(drop_refs(fact) == drop_refs(p) for p, _ in proved):
+            return
+        # If not, try and prove it again with the suggestions
+        res = yield from prove(fact)
+        status, payload = res[0], res[1]
+        if status.value != "proved":
+            return
+        proved.append((fact, payload))
+
+    try:
+        yield from aux(None, depth=0)
+    except _Abort:
+        return
+    if proved and proved[-1][0] is None:
+        proof = proved[-1][1]
+        child = tree.child(proof)
+        assert isinstance(child.node, dp.Success)
+        yield dp.Solution(child.node.success)
+
+
+#####
+##### Advanced Saturation-Based Policy
 #####
 
 
@@ -166,9 +265,6 @@ class _CandInfo:
     feedback: dp.Tracked[_Feedback]
     num_proposed: float
     num_visited: float
-
-
-class _Abort(Exception): ...
 
 
 class _ProofFound(Exception): ...
@@ -231,12 +327,16 @@ def abduct_and_saturate[P, Proof](
     tree: dp.Tree[Abduction, P, Proof],
     env: PolicyEnv,
     policy: P,
+    *,
     max_rollout_depth: int = 3,
     scoring_function: ScoringFunction = _default_scoring_function,
     log_steps: dp.LogLevel | None = None,
     max_raw_suggestions_per_step: int | None = None,
     max_reattempted_candidates_per_propagation_step: int | None = None,
     max_consecutive_propagation_steps: int | None = None,
+    max_proved: int | None = None,
+    max_candidates: int | None = None,
+    remember_disproved: bool = True,
 ) -> dp.StreamGen[Proof]:
     """
     A saturation-based, sequential policy for abduction trees.
@@ -300,6 +400,20 @@ def abduct_and_saturate[P, Proof](
         max_consecutive_propagation_steps: Maximum number of propagation
             steps that are performed during a rollout step, or `None` if
             there is no limit.
+        max_proved: The maximum number of proved facts that can be
+            accumulated. Search fails if this number is exceeded without
+            the top-level goal being proved. In particular, setting such
+            a limit is useful for bounding the complexity of `prove`,
+            `search_equivalent` and `is_redundant`.
+        max_candidates: The maximum number of unproved fact candidates
+            that can be memorized. Once this number is met, new
+            suggestions are not memorized if they cannot be proved
+            straight away. In particular, setting such a limit is useful
+            for bounding the complexity of `search_equivalent`.
+        remember_disproved: Whether or not to remember disproved facts
+            so that one does not attempt to prove them again. In
+            particular, not remembering disproved facts is useful for
+            bounding the complexity of `search_equivalent`.
 
     !!! warning
         Facts must be hashable.
@@ -417,7 +531,8 @@ def abduct_and_saturate[P, Proof](
             raise _Abort()
         status, payload = res.tracked[0], res.tracked[1]
         if status.value == "disproved":
-            disproved.add(c)
+            if remember_disproved:
+                disproved.add(c)
             dbg(f"Disproved: {c}")
             if c is None:
                 raise _Abort()
@@ -426,7 +541,9 @@ def abduct_and_saturate[P, Proof](
             dbg(f"Proved: {c}")
             if c is None:
                 raise _ProofFound()
-        else:
+            if max_proved is not None and len(proved) > max_proved:
+                raise _Abort()
+        elif max_candidates is None or len(candidates) + 1 <= max_candidates:
             candidates[c] = _CandInfo(payload, 0, 0)
 
     def propagate() -> dp.StreamContext[Literal["updated", "not_updated"]]:

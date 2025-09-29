@@ -9,7 +9,6 @@ from functools import partial
 from typing import Any, Never, cast, override
 
 import yaml
-import yaml.parser
 
 import delphyne.core.inspect as insp
 import delphyne.core_and_base as dp
@@ -24,7 +23,7 @@ class __Computation__(dp.AbstractQuery[object]):
     """
     A special query that represents a computation.
 
-    Returns a parsed JSON result.
+    Returns a parsed JSON value.
 
     Attributes:
         fun: Name of the function to call.
@@ -43,7 +42,10 @@ class __Computation__(dp.AbstractQuery[object]):
         params: dict[str, object],
         extra_args: dict[str, object] | None = None,
         env: dp.AbstractTemplatesManager | None = None,
-    ):
+    ) -> str:
+        # The prompt is never sent to LLMs but it is important that it
+        # uniquely identifies the query instance since it is used for
+        # caching.
         return dump_yaml(Any, self.__dict__)
 
     @override
@@ -55,16 +57,18 @@ class __Computation__(dp.AbstractQuery[object]):
         return object
 
     @override
-    def parse_answer(self, answer: dp.Answer) -> object | dp.ParseError:
-        try:
-            assert isinstance(answer.content, str)
-            return yaml.safe_load(answer.content)
-        except yaml.parser.ParserError as e:
-            return dp.ParseError(description=str(e))
+    def parse_answer(self, answer: dp.Answer) -> object:
+        # We expect answers to feature a YAML serialization of the
+        # computation result, as a string. Also, we do not return
+        # `ParseError` when parsing fails since this is definitely a
+        # user error and not an LLM error.
+        # TODO: transition to using structured answers?
+        assert isinstance(answer.content, str)
+        return yaml.safe_load(answer.content)
 
 
 @dataclass
-class Compute(dp.ComputationNode):
+class Compute(dp.Node):
     """
     The standard `Compute` effect.
 
@@ -91,18 +95,28 @@ class Compute(dp.ComputationNode):
     """
 
     query: dp.TransparentQuery[Any]
-    _comp: Callable[[], Any]
+    override_args: dp.FromPolicy[dict[str, Any] | None] | None
+
+    # Takes as an argument a dict of overriden args
+    _comp: Callable[[dict[str, Any] | None], Any]
     _ret_type: ty.TypeAnnot[Any]
 
     def navigate(self) -> dp.Navigation:
         return (yield self.query)
 
-    def run_computation(self) -> str:
-        ret = self._comp()
+    def run_computation(
+        self, *, overriden_args: dict[str, Any] | None = None
+    ) -> str:
+        ret = self._comp(overriden_args)
         serialized = dump_yaml(self._ret_type, ret)
         return serialized
 
-    def run_computation_with_cache(self, cache: dp.LLMCache | None) -> str:
+    def run_computation_with_cache(
+        self,
+        *,
+        cache: dp.LLMCache | None,
+        overriden_args: dict[str, Any] | None = None,
+    ) -> str:
         """
         Run the computation using a fake oracle so that the LLM caching
         mechanism can be reused.
@@ -115,7 +129,9 @@ class Compute(dp.ComputationNode):
             env=None,
         )
         req = dp.LLMRequest(chat=chat, num_completions=1, options={})
-        model = ComputationOracle(self.run_computation)
+        model = ComputationOracle(
+            partial(self.run_computation, overriden_args=overriden_args)
+        )
         resp = model.send_request(req, cache)
         assert len(resp.outputs) == 1
         answer = resp.outputs[0].content
@@ -123,9 +139,12 @@ class Compute(dp.ComputationNode):
         return answer
 
 
-def compute[**P, T](
-    f: Callable[P, T], *args: P.args, **kwargs: P.kwargs
-) -> dp.Strategy[Compute, object, T]:
+def compute[**A, T, P](
+    f: Callable[A, T],
+    *,
+    override_args: Callable[[P], dict[str, Any] | None] | None = None,
+    inner_policy_type: type[P] | None = None,
+) -> Callable[A, dp.Strategy[Compute, P, T]]:
     """
     Triggering function for the `Compute` effect.
 
@@ -133,21 +152,39 @@ def compute[**P, T](
         f: Function performing an expensive computation. It must feature
             type annotations and its arguments must be
             JSON-serializable. It does not need to be deterministic.
-        *args: Positional arguments to pass to `f`.
-        **kwargs: Keyword arguments to pass to `f`.
+        override_args: Mapping from the ambient inner policy to a
+            dictionary overriding some of the function arguments. These
+            overrides are only visible on policy side and do not affect
+            the underlying `__Compute__` query. This is particularly
+            useful to override timeout parameters in policies.
+        inner_policy_type: Ambient inner policy type. This information
+            is not used at runtime but it can be provided to help type
+            inference when necessary.
     """
-    comp = partial(f, *args, **kwargs)
-    ret_type = insp.function_return_type(f)
-    assert not isinstance(ret_type, ty.NoTypeInfo)
-    fun_args = insp.function_args_dict(f, args, kwargs)
-    fun = insp.function_name(f)
-    assert fun is not None
-    query = dp.TransparentQuery.build(__Computation__(fun, fun_args))
-    unparsed = yield spawn_node(
-        Compute, query=query, _comp=comp, _ret_type=ret_type
-    )
-    ret = ty.pydantic_load(ret_type, unparsed)
-    return cast(T, ret)
+
+    def wrapped(
+        *args: A.args, **kwargs: A.kwargs
+    ) -> dp.Strategy[Compute, object, T]:
+        def comp(overriden_args: dict[str, Any] | None) -> Any:
+            return f(*args, **(kwargs | (overriden_args or {})))  # type: ignore
+
+        ret_type = insp.function_return_type(f)
+        assert not isinstance(ret_type, ty.NoTypeInfo)
+        fun_args = insp.function_args_dict(f, args, kwargs)
+        fun = insp.function_name(f)
+        assert fun is not None
+        query = dp.TransparentQuery.build(__Computation__(fun, fun_args))
+        unparsed = yield spawn_node(
+            Compute,
+            query=query,
+            override_args=override_args,
+            _comp=comp,
+            _ret_type=ret_type,
+        )
+        ret = ty.pydantic_load(ret_type, unparsed)
+        return cast(T, ret)
+
+    return wrapped
 
 
 @dataclass
@@ -183,9 +220,11 @@ class ComputationOracle(dp.LLM):
 def elim_compute(
     env: PolicyEnv,
     policy: Any,
+    *,
     force_bypass_cache: bool = False,
     log_computations: dp.LogLevel | None = None,
     log_long_computations: tuple[dp.LogLevel, float] | None = None,
+    override_args: dict[str, Any] | None = None,
 ) -> dp.PureTreeTransformerFn[Compute, Never]:
     """
     Eliminate the `Compute` effect by performing the computation when
@@ -193,15 +232,20 @@ def elim_compute(
     nondeterministic).
 
     Arguments:
-        force_bypass_cache: if set to `True`, do not cache computation
+        force_bypass_cache: If set to `True`, do not cache computation
             results, even if a cache is available in the global policy
             environment.
-        log_computations: if set, log every performed computation at the
+        log_computations: If set, log every performed computation at the
             given severity level.
-        log_long_computations: if set, log every computation taking more
+        log_long_computations: If set, log every computation taking more
             than the given number of seconds at the given severity
             level. When set to `None`, this setting can be overriden by
             `PolicyEnv.log_long_computations`.
+        override_args: Overriden argument values for all computations.
+            This is particularly useful for setting global timeouts.
+            Argument values specified this way have lower precedence
+            than those specified with the `override_args` argument of
+            `compute`.
     """
 
     if log_long_computations is None:
@@ -224,8 +268,15 @@ def elim_compute(
                     {"hash": digest, "details": query},
                     loc=tree,
                 )
+            overriden: dict[str, Any] = override_args or {}
+            if tree.node.override_args is not None:
+                overriden_local = tree.node.override_args(policy)
+                if overriden_local is not None:
+                    overriden = overriden | overriden_local
             start = time.time()
-            answer = tree.node.run_computation_with_cache(cache)
+            answer = tree.node.run_computation_with_cache(
+                cache=cache, overriden_args=overriden
+            )
             _elapsed = time.time() - start
             if log_computations:
                 env.log(
@@ -255,3 +306,14 @@ def elim_compute(
         return tree.transform(tree.node, transform)
 
     return transform
+
+
+def generate_implicit_answer(
+    tree: dp.AnyTree, query: dp.AttachedQuery[Any]
+) -> tuple[dp.ImplicitAnswerCategory, dp.Answer] | None:
+    if isinstance(tree.node, Compute):
+        try:
+            answer = tree.node.run_computation()
+        except Exception as e:
+            raise dp.StrategyException(e)
+        return ("computations", dp.Answer(None, answer))
