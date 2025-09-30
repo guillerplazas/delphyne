@@ -19,7 +19,7 @@ from delphyne.stdlib.experiments.experiment_launcher import (
 
 # Load benchmark equations
 BENCHMARKS_FOLDER = Path(__file__).parent.parent / "benchmark"
-EQUATIONS_FILE = BENCHMARKS_FOLDER / "equations.txt"
+EQUATIONS_FILE = BENCHMARKS_FOLDER / "some_htps.txt"
 
 
 def load_all_equations() -> dict[str, tuple[str, str]]:

@@ -40,9 +40,11 @@ configs = [
     # Use different models
     for model in [*SMALL_MODELS, *LARGE_MODELS]
     # Temperature variations (more for small models)
-    for temperature in ([0.7, 1.0, 1.5] if model in SMALL_MODELS else [0.7, 1.0])
+    #for temperature in ([0.7, 1.0, 1.5] if model in SMALL_MODELS else [0.7, 1.0])
+    for temperature in ([1.0] if model in SMALL_MODELS else [1.0]) # KEEP DEFAULT
     # Feedback cycle variations (more for large models)
-    for max_feedback_cycles in ([3] if model in SMALL_MODELS else [0, 1, 3])
+    #for max_feedback_cycles in ([3] if model in SMALL_MODELS else [0, 1, 3])
+    for max_feedback_cycles in ([3] if model in SMALL_MODELS else [3])
     # Multiple seeds for reproducibility
     for seed in range(3)
 ]
