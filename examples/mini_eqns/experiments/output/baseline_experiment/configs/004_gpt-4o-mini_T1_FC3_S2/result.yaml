@@ -5,8 +5,8 @@ args:
   strategy: prove_equality_interactive
   args:
     equality:
-      - sin(pi - x)
-      - sin(x)
+      - cos(2*x)
+      - 1 - 2*sin(x)**2
   policy: prove_equality_interactive_policy
   policy_args:
     model_name: gpt-4o-mini
@@ -25,35 +25,51 @@ outcome:
     success: true
     values:
       - 1:
-          - - sin(pi - x)
-            - sin(0)*cos(pi - x) + cos(0)*sin(pi - x)
-          - rule: sin_add
+          - - cos(2*x)
+            - cos(x)**2 - sin(x)**2
+          - rule: cos_add
             vars:
-              x: '0'
-              y: pi - x
+              x: x
+              y: x
         2:
-          - - sin(0)*cos(pi - x) + cos(0)*sin(pi - x)
-            - 0*cos(pi - x) + 1*sin(pi - x)
-          - rule: sin_zero
-        3:
-          - - 0*cos(pi - x) + 1*sin(pi - x)
-            - sin(x)
+          - - cos(x)**2 - sin(x)**2
+            - cos(x)**2 - (1 - cos(x)**2)
           - sym: 1
+        3:
+          - - cos(x)**2 - (1 - cos(x)**2)
+            - 2*cos(x)**2 - 1
+          - trans:
+              - 2
+        4:
+          - - 2*cos(x)**2 - 1
+            - 2*(1 - sin(x)**2) - 1
+          - sym: 3
+        5:
+          - - 2*(1 - sin(x)**2) - 1
+            - 1 - 2*sin(x)**2
+          - sym: 4
+        6:
+          - - cos(2*x)
+            - 1 - 2*sin(x)**2
+          - trans:
+              - 1
+              - 3
+              - 5
     spent_budget:
       num_requests: 1
       num_completions: 1
-      input_tokens: 1869
-      output_tokens: 379
+      input_tokens: 1875
+      output_tokens: 542
       cached_input_tokens: 1792
-      price: 0.001115175
+      price: 0.0011282999999999998
     log:
       - message: llm_request
         level: info
-        time: 2025-09-30 13:55:21.187885
+        time: 2025-09-30 15:05:45.569489
         node: 1
         space: cands
         metadata:
-          hash: 189f35a2
+          hash: 641361a5
           query: ProveEqualityInteractive
           request:
             chat:
@@ -212,48 +228,52 @@ outcome:
                       - {sym: 1}
                     ```
               - role: user
-                content: 'Prove the following equality: `sin(pi - x) = sin(x)`.'
+                content: 'Prove the following equality: `cos(2*x) = 1 - 2*sin(x)**2`.'
             num_completions: 1
             options:
               temperature: 1.0
       - message: llm_response
         level: info
-        time: 2025-09-30 13:55:27.246920
+        time: 2025-09-30 15:06:04.554605
         node: 1
         space: cands
         metadata:
-          request: 189f35a2
+          request: 641361a5
           response:
             outputs:
-              - content: "To prove the equality \\( \\sin(\\pi - x) = \\sin(x) \\), we can use the sine\
-                  \ addition formula. \n\n```\nsin(pi - x) \n= sin(0 + (pi - x))\n= sin(0)*cos(pi - x)\
-                  \ + cos(0)*sin(pi - x)\n= 0*cos(pi - x) + 1*sin(x) \n= sin(x)\n```\n\nHere is how we\
-                  \ can break it down into a formal proof:\n\n1. We use the angle addition formula for\
-                  \ sine to rewrite \\( \\sin(\\pi - x) \\).\n2. Then we apply the definitions of sine\
-                  \ and cosine for angles 0 and \\( \\pi \\).\n\nThe steps of the proof are as follows:\n\
-                  \n```yaml\n1:\n  - [\"sin(pi - x)\", \"sin(0)*cos(pi - x) + cos(0)*sin(pi - x)\"]\n\
-                  \  - {rule: sin_add, vars: {x: \"0\", y: \"pi - x\"}}\n2:\n  - [\"sin(0)*cos(pi - x)\
-                  \ + cos(0)*sin(pi - x)\", \"0*cos(pi - x) + 1*sin(pi - x)\"]\n  - {rule: sin_zero, vars:\
-                  \ {}}\n3:\n  - [\"0*cos(pi - x) + 1*sin(pi - x)\", \"sin(x)\"]\n  - {sym: 1}\n```\n\n\
-                  Note: In step 2, we utilize that \\( \\sin(0) = 0 \\) and \\( \\cos(0) = 1 \\). The\
-                  \ last step uses the fact that \\( \\sin(pi - x) = sin(x) \\) directly due to trigonometric\
-                  \ properties. \n\nThus, the final proof shows \\( \\sin(\\pi - x) = \\sin(x) \\)."
+              - content: "To prove the equality `cos(2*x) = 1 - 2*sin(x)**2`, I will start from the left-hand\
+                  \ side and utilize the cosine double angle formula.\n\nWe can express `cos(2*x)` using\
+                  \ the trigonometric identity:\n```\ncos(2*x) = cos(x)**2 - sin(x)**2\n```\nThen, we\
+                  \ can rewrite `sin(x)**2` in terms of `cos(x)**2` since we know that `sin(x)**2 + cos(x)**2\
+                  \ = 1`. Thus, `sin(x)**2 = 1 - cos(x)**2`.\n\nSubstituting this into the double angle\
+                  \ cosine formula gives:\n```\ncos(2*x) = cos(x)**2 - (1 - cos(x)**2)\n          = cos(x)**2\
+                  \ - 1 + cos(x)**2\n          = 2*cos(x)**2 - 1\n```\nNow, let's express `cos(x)**2`\
+                  \ in terms of `sin(x)**2` using the identity we mentioned earlier, `cos(x)**2 = 1 -\
+                  \ sin(x)**2`:\n```\ncos(2*x) = 2*(1 - sin(x)**2) - 1\n          = 2 - 2*sin(x)**2 -\
+                  \ 1\n          = 1 - 2*sin(x)**2\n```\nWe have now shown that `cos(2*x) = 1 - 2*sin(x)**2`.\
+                  \ \n\nLet’s present this justification in a formal proof format.\n\n```yaml\n1:\n  -\
+                  \ [\"cos(2*x)\", \"cos(x)**2 - sin(x)**2\"]\n  - {rule: cos_add, vars: {x: \"x\", y:\
+                  \ \"x\"}}\n2:\n  - [\"cos(x)**2 - sin(x)**2\", \"cos(x)**2 - (1 - cos(x)**2)\"]\n  -\
+                  \ {sym: 1}\n3:\n  - [\"cos(x)**2 - (1 - cos(x)**2)\", \"2*cos(x)**2 - 1\"]\n  - {trans:\
+                  \ [2]}\n4:\n  - [\"2*cos(x)**2 - 1\", \"2*(1 - sin(x)**2) - 1\"]\n  - {sym: 3}\n5:\n\
+                  \  - [\"2*(1 - sin(x)**2) - 1\", \"1 - 2*sin(x)**2\"]\n  - {sym: 4}\n6:\n  - [\"cos(2*x)\"\
+                  , \"1 - 2*sin(x)**2\"]\n  - {trans: [1, 3, 5]}\n```"
                 tool_calls: []
                 finish_reason: stop
             budget:
               values:
                 num_requests: 1
                 num_completions: 1
-                input_tokens: 1869
-                output_tokens: 379
+                input_tokens: 1875
+                output_tokens: 542
                 cached_input_tokens: 1792
-                price: 0.001115175
+                price: 0.0011282999999999998
             log_items: []
             model_name: gpt-4o-mini-2024-07-18
             usage_info:
-              completion_tokens: 379
-              prompt_tokens: 1869
-              total_tokens: 2248
+              completion_tokens: 542
+              prompt_tokens: 1875
+              total_tokens: 2417
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -265,9 +285,9 @@ outcome:
           usage:
             model: gpt-4o-mini-2024-07-18
             usage:
-              completion_tokens: 379
-              prompt_tokens: 1869
-              total_tokens: 2248
+              completion_tokens: 542
+              prompt_tokens: 1875
+              total_tokens: 2417
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0

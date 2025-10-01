@@ -164,7 +164,7 @@
             tool_calls: []
             justification: null
         - role: user
-          content: 'Prove the following equality: `cos(pi/2 - x) = sin(x)`.'
+          content: 'Prove the following equality: `cos(x - y) + cos(x + y) = 2*cos(x)*cos(y)`.'
       num_completions: 1
       options:
         model: gpt-4o
@@ -174,38 +174,40 @@
     iter: 1
   output:
     outputs:
-      - content: |
-          To prove the equality `cos(pi/2 - x) = sin(x)`, we can use the angle addition formula for cosine and some known values.
+      - content: |-
+          To prove the given trigonometric equality, we can use the angle addition and subtraction formulas for cosine.
 
-          Here's the detailed step-by-step derivation:
+          Starting with the left-hand side:
 
-          ```
-          cos(pi/2 - x)
-          = cos(pi/2) * cos(x) + sin(pi/2) * sin(x)
-          = 0 * cos(x) + 1 * sin(x)
-          = sin(x)
-          ```
+          1. \( \cos(x - y) = \cos(x)\cos(y) + \sin(x)\sin(y) \) (using the cosine subtraction rule).
+          2. \( \cos(x + y) = \cos(x)\cos(y) - \sin(x)\sin(y) \) (using the cosine addition rule).
 
-          The first step uses the cosine addition formula: \( \cos(a - b) = \cos(a)\cos(b) + \sin(a)\sin(b) \).
+          Adding these two expressions gives:
 
-          For this formal proof, we'll use the rules `cos_add`, `sin_halfpi`, and `cos_halfpi`.
+          3. \(\cos(x - y) + \cos(x + y) = \cos(x)\cos(y) + \sin(x)\sin(y) + \cos(x)\cos(y) - \sin(x)\sin(y)\).
+
+          Simplifying the sum:
+
+          4. \(\cos(x - y) + \cos(x + y) = 2\cos(x)\cos(y)\).
+
+          This matches the right-hand side of the equality. Let's formalize this reasoning as a machine-checkable proof:
 
           ```yaml
           1:
-            - ["cos(pi/2-x)", "cos(pi/2)*cos(x) + sin(pi/2)*sin(x)"]
-            - {rule: cos_add, vars: {x: "pi/2", y: "-x"}}
+            - ["cos(x - y)", "cos(x)*cos(y) + sin(x)*sin(y)"]
+            - {rule: cos_add, vars: {x: "x", y: "-y"}}
           2:
-            - ["cos(pi/2)*cos(x) + sin(pi/2)*sin(x)", "0*cos(x) + sin(pi/2)*sin(x)"]
-            - {rule: cos_halfpi, vars: {}}
+            - ["cos(x + y)", "cos(x)*cos(y) - sin(x)*sin(y)"]
+            - {rule: cos_add, vars: {x: "x", y: "y"}}
           3:
-            - ["0*cos(x) + sin(pi/2)*sin(x)", "sin(pi/2)*sin(x)"]
-            - {step: 2}
+            - ["cos(x - y) + cos(x + y)", "(cos(x)*cos(y) + sin(x)*sin(y)) + (cos(x)*cos(y) - sin(x)*sin(y))"]
+            - {step: 1}
           4:
-            - ["sin(pi/2)*sin(x)", "sin(x)"]
-            - {rule: sin_halfpi, vars: {}}
+            - ["(cos(x)*cos(y) + sin(x)*sin(y)) + (cos(x)*cos(y) - sin(x)*sin(y))", "2*cos(x)*cos(y)"]
+            - {step: 2}
           5:
-            - ["cos(pi/2-x)", "sin(x)"]
-            - {trans: [1, 3, 4]}
+            - ["cos(x - y) + cos(x + y)", "2*cos(x)*cos(y)"]
+            - {trans: [3, 4]}
           ```
         tool_calls: []
         finish_reason: stop
@@ -215,16 +217,16 @@
       values:
         num_requests: 1
         num_completions: 1
-        input_tokens: 1871
-        output_tokens: 353
+        input_tokens: 1880
+        output_tokens: 445
         cached_input_tokens: 1792
-        price: 0.01855875
+        price: 0.01869625
     log_items: []
     model_name: gpt-4o-2024-08-06
     usage_info:
-      completion_tokens: 353
-      prompt_tokens: 1871
-      total_tokens: 2224
+      completion_tokens: 445
+      prompt_tokens: 1880
+      total_tokens: 2325
       completion_tokens_details:
         accepted_prediction_tokens: 0
         audio_tokens: 0
@@ -241,35 +243,35 @@
             fun: check
             args:
               eq:
-                - cos(pi/2 - x)
-                - sin(x)
+                - cos(x - y) + cos(x + y)
+                - 2*cos(x)*cos(y)
               proof:
                 1:
-                  - - cos(pi/2-x)
-                    - cos(pi/2)*cos(x) + sin(pi/2)*sin(x)
+                  - - cos(x - y)
+                    - cos(x)*cos(y) + sin(x)*sin(y)
                   - rule: cos_add
                     vars:
-                      x: pi/2
-                      y: -x
+                      x: x
+                      y: -y
                 2:
-                  - - cos(pi/2)*cos(x) + sin(pi/2)*sin(x)
-                    - 0*cos(x) + sin(pi/2)*sin(x)
-                  - rule: cos_halfpi
-                    vars: {}
+                  - - cos(x + y)
+                    - cos(x)*cos(y) - sin(x)*sin(y)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: y
                 3:
-                  - - 0*cos(x) + sin(pi/2)*sin(x)
-                    - sin(pi/2)*sin(x)
-                  - step: 2
+                  - - cos(x - y) + cos(x + y)
+                    - (cos(x)*cos(y) + sin(x)*sin(y)) + (cos(x)*cos(y) - sin(x)*sin(y))
+                  - step: 1
                 4:
-                  - - sin(pi/2)*sin(x)
-                    - sin(x)
-                  - rule: sin_halfpi
-                    vars: {}
+                  - - (cos(x)*cos(y) + sin(x)*sin(y)) + (cos(x)*cos(y) - sin(x)*sin(y))
+                    - 2*cos(x)*cos(y)
+                  - step: 2
                 5:
-                  - - cos(pi/2-x)
-                    - sin(x)
+                  - - cos(x - y) + cos(x + y)
+                    - 2*cos(x)*cos(y)
                   - trans:
-                      - 1
                       - 3
                       - 4
               rules:
@@ -302,35 +304,35 @@
             fun: check
             args:
               eq:
-                - cos(pi/2 - x)
-                - sin(x)
+                - cos(x - y) + cos(x + y)
+                - 2*cos(x)*cos(y)
               proof:
                 1:
-                  - - cos(pi/2-x)
-                    - cos(pi/2)*cos(x) + sin(pi/2)*sin(x)
+                  - - cos(x - y)
+                    - cos(x)*cos(y) + sin(x)*sin(y)
                   - rule: cos_add
                     vars:
-                      x: pi/2
-                      y: -x
+                      x: x
+                      y: -y
                 2:
-                  - - cos(pi/2)*cos(x) + sin(pi/2)*sin(x)
-                    - 0*cos(x) + sin(pi/2)*sin(x)
-                  - rule: cos_halfpi
-                    vars: {}
+                  - - cos(x + y)
+                    - cos(x)*cos(y) - sin(x)*sin(y)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: y
                 3:
-                  - - 0*cos(x) + sin(pi/2)*sin(x)
-                    - sin(pi/2)*sin(x)
-                  - step: 2
+                  - - cos(x - y) + cos(x + y)
+                    - (cos(x)*cos(y) + sin(x)*sin(y)) + (cos(x)*cos(y) - sin(x)*sin(y))
+                  - step: 1
                 4:
-                  - - sin(pi/2)*sin(x)
-                    - sin(x)
-                  - rule: sin_halfpi
-                    vars: {}
+                  - - (cos(x)*cos(y) + sin(x)*sin(y)) + (cos(x)*cos(y) - sin(x)*sin(y))
+                    - 2*cos(x)*cos(y)
+                  - step: 2
                 5:
-                  - - cos(pi/2-x)
-                    - sin(x)
+                  - - cos(x - y) + cos(x + y)
+                    - 2*cos(x)*cos(y)
                   - trans:
-                      - 1
                       - 3
                       - 4
               rules:

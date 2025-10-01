@@ -42,6 +42,57 @@
           answer:
             mode: null
             content: |
+              The equality can be derived as follows:
+              ```
+              cos(pi/3)
+              = cos(pi/2-pi/6)
+              = sin(pi/6)
+              ```
+
+              However, the second step uses property `cos(pi/2-x) = sin(x)`, which is not part of the allowed set of rules. Thus, we provide a longer derivation that uses `cos_add`.
+
+              ```
+              cos(pi/2-pi/6)
+              = cos(pi/2+(-pi/6))
+              = cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              = -sin(-pi/6)
+              = sin(pi/6)
+              ```
+
+              The second step uses that `cos(pi/2) = 0` and `sin(pi/2)` = 1, which we can get via the `sin_halfpi` and `cos_halfpi` rules. The last step uses `sin_neg`, so we should be done. Let's formalize this reasoning as a proof.
+
+              ```yaml
+              # We start establishing `cos(pi/2-pi/6) = sin(pi/6)`
+              1:
+                - ["cos(pi/2-pi/6)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+              2:
+                - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                - {rule: cos_halfpi, vars: {}}
+              3:
+                - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                - {rule: sin_halfpi, vars: {}}
+              4:
+                - ["-sin(-pi/6)", "sin(pi/6)"]
+                - {rule: sin_neg, vars: {x: "pi/6"}}
+              5:
+                - ["cos(pi/2-pi/6)", "sin(pi/6)"]
+                - {trans: [1, 2, 3, 4]}
+
+              # We establish our main result.
+              # Step 5 applies directly since "cos(pi/3)" and "cos(pi/2-pi/6)" are treated as identical by the rule matcher, which performs simple simplification (as long as the required simplification does not require trigonometry).
+              6:
+                - ["cos(pi/3)", "sin(pi/6)"]
+                - {step: 5}
+              ```
+            tool_calls: []
+            justification: null
+        - role: user
+          content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+        - role: assistant
+          answer:
+            mode: null
+            content: |
               Let me just propose a simple proof:
 
               ```yaml
@@ -113,7 +164,7 @@
             tool_calls: []
             justification: null
         - role: user
-          content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+          content: 'Prove the following equality: `cos(2*x) = 2*cos(x)**2 - 1`.'
       num_completions: 1
       options:
         model: gpt-4o
@@ -124,54 +175,51 @@
   output:
     outputs:
       - content: |-
-          To prove the equality `cos(pi/3) = sin(pi/6)`, we need to use trigonometric identities and known values.
+          To prove the given equality `cos(2*x) = 2*cos(x)**2 - 1`, we can use the identity for the cosine of a sum.
 
-          First, let's verify the values of `cos(pi/3)` and `sin(pi/6)`:
+          1. Start with the double angle formula for cosine:
+             ```
+             cos(2*x) = cos(x + x)
+                      = cos(x)*cos(x) - sin(x)*sin(x)
+                      = cos(x)**2 - sin(x)**2
+             ```
 
-          1. We know from trigonometric tables that:
-             - `cos(pi/3) = 1/2`
-             - `sin(pi/6) = 1/2`
+          2. Use the Pythagorean identity for sine and cosine:
+             ```
+             sin(x)**2 = 1 - cos(x)**2
+             ```
 
-          Thus, both sides of the equation are equal. We will use trigonometric rules to formally verify this.
+          3. Substitute the Pythagorean identity into the equation:
+             ```
+             cos(x)**2 - sin(x)**2 = cos(x)**2 - (1 - cos(x)**2)
+                                  = cos(x)**2 - 1 + cos(x)**2
+                                  = 2*cos(x)**2 - 1
+             ```
 
-          ### Formal Proof Steps
-
-          1. Rewrite `cos(pi/3)` as `cos(pi/2 - pi/6)` and apply the cosine addition formula.
-          2. Use known values of trigonometric functions for specific angles, such as `sin(pi/2)` and `cos(pi/2)`.
-          3. Use the identity `sin(-x) = -sin(x)` and `cos(-x) = cos(x)`.
+          Now we will structure this into a formal proof using the allowed rules.
 
           ```yaml
           1:
-            - ["cos(pi/3)", "cos(pi/2 - pi/6)"]
-            - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+            - ["cos(2*x)", "cos(x + x)"]
+            - {rule: cos_add, vars: {x: "x", y: "x"}}
           2:
-            - ["cos(pi/2 - pi/6)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
-            - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+            - ["cos(x + x)", "cos(x)*cos(x) - sin(x)*sin(x)"]
+            - {rule: cos_add, vars: {x: "x", y: "x"}}
           3:
-            - ["cos(pi/2)*cos(-pi/6)", "0"]
-            - {rule: cos_halfpi, vars: {}}
+            - ["cos(x)*cos(x) - sin(x)*sin(x)", "cos(x)**2 - sin(x)**2"]
+            - {rule: "cos(x)*cos(x)", vars: {}}
           4:
-            - ["sin(pi/2)", "1"]
-            - {rule: sin_halfpi, vars: {}}
+            - ["cos(x)**2 - sin(x)**2", "cos(x)**2 - (1 - cos(x)**2)"]
+            - {"rule": "sin(x)**2 = 1 - cos(x)**2", vars: {}}
           5:
-            - ["sin(-pi/6)", "-sin(pi/6)"]
-            - {rule: sin_neg, vars: {x: "pi/6"}}
+            - ["cos(x)**2 - (1 - cos(x)**2)", "2*cos(x)**2 - 1"]
+            - {rule: "cos(x)**2 - 1 + cos(x)**2", vars: {}}
           6:
-            - ["0 - 1 * -sin(pi/6)", "sin(pi/6)"]
-            - {step: 5}
-          7:
-            - ["cos(pi/3)", "sin(pi/6)"]
-            - {trans: [1, 2, 3, 4, 6]}
+            - ["cos(2*x)", "2*cos(x)**2 - 1"]
+            - {trans: [1, 2, 3, 4, 5]}
           ```
 
-          In the above formal proof:
-          - Step 1 rewrites `cos(pi/3)` in terms of `cos(pi/2 - pi/6)`.
-          - Step 2 applies the cosine addition rule.
-          - Step 3 uses the known value of `cos(pi/2)`.
-          - Step 4 uses the known value of `sin(pi/2)`.
-          - Step 5 applies the identity for `sin(-x)`.
-          - Step 6 simplifies the expression to `sin(pi/6)`.
-          - Step 7 combines all these steps to prove the original equality.
+          In this proof, we utilized different expressions for cosine and used a Pythagorean identity to derive the required equality.
         tool_calls: []
         finish_reason: stop
         logprobs: null
@@ -180,16 +228,16 @@
       values:
         num_requests: 1
         num_completions: 1
-        input_tokens: 1293
-        output_tokens: 596
-        cached_input_tokens: 1280
-        price: 0.013577499999999998
+        input_tokens: 1875
+        output_tokens: 509
+        cached_input_tokens: 1792
+        price: 0.01876375
     log_items: []
     model_name: gpt-4o-2024-08-06
     usage_info:
-      completion_tokens: 596
-      prompt_tokens: 1293
-      total_tokens: 1889
+      completion_tokens: 509
+      prompt_tokens: 1875
+      total_tokens: 2384
       completion_tokens_details:
         accepted_prediction_tokens: 0
         audio_tokens: 0
@@ -197,7 +245,7 @@
         rejected_prediction_tokens: 0
       prompt_tokens_details:
         audio_tokens: 0
-        cached_tokens: 1280
+        cached_tokens: 1792
 - input:
     request:
       chat:
@@ -206,52 +254,47 @@
             fun: check
             args:
               eq:
-                - cos(pi/3)
-                - sin(pi/6)
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
               proof:
                 1:
-                  - - cos(pi/3)
-                    - cos(pi/2 - pi/6)
+                  - - cos(2*x)
+                    - cos(x + x)
                   - rule: cos_add
                     vars:
-                      x: pi/2
-                      y: -pi/6
+                      x: x
+                      y: x
                 2:
-                  - - cos(pi/2 - pi/6)
-                    - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                  - - cos(x + x)
+                    - cos(x)*cos(x) - sin(x)*sin(x)
                   - rule: cos_add
                     vars:
-                      x: pi/2
-                      y: -pi/6
+                      x: x
+                      y: x
                 3:
-                  - - cos(pi/2)*cos(-pi/6)
-                    - '0'
-                  - rule: cos_halfpi
+                  - - cos(x)*cos(x) - sin(x)*sin(x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos(x)*cos(x)
                     vars: {}
                 4:
-                  - - sin(pi/2)
-                    - '1'
-                  - rule: sin_halfpi
+                  - - cos(x)**2 - sin(x)**2
+                    - cos(x)**2 - (1 - cos(x)**2)
+                  - rule: sin(x)**2 = 1 - cos(x)**2
                     vars: {}
                 5:
-                  - - sin(-pi/6)
-                    - -sin(pi/6)
-                  - rule: sin_neg
-                    vars:
-                      x: pi/6
+                  - - cos(x)**2 - (1 - cos(x)**2)
+                    - 2*cos(x)**2 - 1
+                  - rule: cos(x)**2 - 1 + cos(x)**2
+                    vars: {}
                 6:
-                  - - 0 - 1 * -sin(pi/6)
-                    - sin(pi/6)
-                  - step: 5
-                7:
-                  - - cos(pi/3)
-                    - sin(pi/6)
+                  - - cos(2*x)
+                    - 2*cos(x)**2 - 1
                   - trans:
                       - 1
                       - 2
                       - 3
                       - 4
-                      - 6
+                      - 5
               rules:
                 cos_zero:
                   - cos(0)
@@ -282,52 +325,47 @@
             fun: check
             args:
               eq:
-                - cos(pi/3)
-                - sin(pi/6)
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
               proof:
                 1:
-                  - - cos(pi/3)
-                    - cos(pi/2 - pi/6)
+                  - - cos(2*x)
+                    - cos(x + x)
                   - rule: cos_add
                     vars:
-                      x: pi/2
-                      y: -pi/6
+                      x: x
+                      y: x
                 2:
-                  - - cos(pi/2 - pi/6)
-                    - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                  - - cos(x + x)
+                    - cos(x)*cos(x) - sin(x)*sin(x)
                   - rule: cos_add
                     vars:
-                      x: pi/2
-                      y: -pi/6
+                      x: x
+                      y: x
                 3:
-                  - - cos(pi/2)*cos(-pi/6)
-                    - '0'
-                  - rule: cos_halfpi
+                  - - cos(x)*cos(x) - sin(x)*sin(x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos(x)*cos(x)
                     vars: {}
                 4:
-                  - - sin(pi/2)
-                    - '1'
-                  - rule: sin_halfpi
+                  - - cos(x)**2 - sin(x)**2
+                    - cos(x)**2 - (1 - cos(x)**2)
+                  - rule: sin(x)**2 = 1 - cos(x)**2
                     vars: {}
                 5:
-                  - - sin(-pi/6)
-                    - -sin(pi/6)
-                  - rule: sin_neg
-                    vars:
-                      x: pi/6
+                  - - cos(x)**2 - (1 - cos(x)**2)
+                    - 2*cos(x)**2 - 1
+                  - rule: cos(x)**2 - 1 + cos(x)**2
+                    vars: {}
                 6:
-                  - - 0 - 1 * -sin(pi/6)
-                    - sin(pi/6)
-                  - step: 5
-                7:
-                  - - cos(pi/3)
-                    - sin(pi/6)
+                  - - cos(2*x)
+                    - 2*cos(x)**2 - 1
                   - trans:
                       - 1
                       - 2
                       - 3
                       - 4
-                      - 6
+                      - 5
               rules:
                 cos_zero:
                   - cos(0)

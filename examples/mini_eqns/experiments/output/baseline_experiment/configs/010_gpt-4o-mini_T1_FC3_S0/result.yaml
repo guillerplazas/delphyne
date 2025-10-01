@@ -5,8 +5,8 @@ args:
   strategy: prove_equality_interactive
   args:
     equality:
-      - cos(x)**2 + sin(x)**2
-      - '1'
+      - sin(3*x)
+      - 3*sin(x) - 4*sin(x)**3
   policy: prove_equality_interactive_policy
   policy_args:
     model_name: gpt-4o-mini
@@ -25,24 +25,68 @@ outcome:
     success: true
     values:
       - 1:
-          - - cos(x)**2 + sin(x)**2
-            - '1'
-          - rule: cos_zero
+          - - sin(3*x)
+            - sin(2*x + x)
+          - rule: sin_add
+            vars:
+              x: 2*x
+              y: x
+        2:
+          - - sin(2*x + x)
+            - sin(2*x)*cos(x) + cos(2*x)*sin(x)
+          - rule: sin_add
+            vars:
+              x: 2*x
+              y: x
+        3:
+          - - sin(2*x)
+            - 2*sin(x)*cos(x)
+          - rule: sin_add
+            vars:
+              x: x
+        4:
+          - - cos(2*x)
+            - 1 - 2*sin(x)**2
+          - rule: cos_add
+            vars:
+              x: x
+        5:
+          - - sin(2*x)*cos(x) + cos(2*x)*sin(x)
+            - 2*sin(x)*cos(x)*cos(x) + (1 - 2*sin(x)**2)*sin(x)
+          - trans:
+              - 3
+              - 4
+        6:
+          - - 2*sin(x)*cos(x)*cos(x) + (1 - 2*sin(x)**2)*sin(x)
+            - 2*sin(x)*cos(x)**2 + sin(x) - 2*sin(x)**3
+          - trans:
+              - 5
+              - 1
+        7:
+          - - 2*sin(x)*cos(x)**2 + sin(x) - 2*sin(x)**3
+            - 3*sin(x) - 4*sin(x)**3
+          - trans:
+              - 6
+              - 1
+        8:
+          - - sin(3*x)
+            - 3*sin(x) - 4*sin(x)**3
+          - step: 7
     spent_budget:
-      num_requests: 1
-      num_completions: 1
-      input_tokens: 1872
-      output_tokens: 137
-      cached_input_tokens: 1792
-      price: 0.0010974749999999999
+      num_requests: 2
+      num_completions: 2
+      input_tokens: 4478
+      output_tokens: 1290
+      cached_input_tokens: 4224
+      price: 0.0026692499999999997
     log:
       - message: llm_request
         level: info
-        time: 2025-09-30 13:56:36.737325
+        time: 2025-09-30 15:08:15.567435
         node: 1
         space: cands
         metadata:
-          hash: 5346e0ce
+          hash: aa38cf1f
           query: ProveEqualityInteractive
           request:
             chat:
@@ -201,51 +245,56 @@ outcome:
                       - {sym: 1}
                     ```
               - role: user
-                content: 'Prove the following equality: `cos(x)**2 + sin(x)**2 = 1`.'
+                content: 'Prove the following equality: `sin(3*x) = 3*sin(x) - 4*sin(x)**3`.'
             num_completions: 1
             options:
               temperature: 1.0
       - message: llm_response
         level: info
-        time: 2025-09-30 13:56:39.249608
+        time: 2025-09-30 15:08:31.899989
         node: 1
         space: cands
         metadata:
-          request: 5346e0ce
+          request: aa38cf1f
           response:
             outputs:
-              - content: |-
-                  To prove the equality \( \cos(x)^2 + \sin(x)^2 = 1 \), we can start from the left-hand side and use the Pythagorean identity, which is a fundamental property in trigonometry.
-
-                  Here, we'll directly establish the equality using the fact that it is a standard identity without needing to reference specific simplifications:
-                  ```
-                  cos(x)**2 + sin(x)**2
-                  = 1
-                  ```
-
-                  To formalize this reasoning in a machine-checkable proof format:
-
-                  ```yaml
-                  1:
-                    - ["cos(x)**2 + sin(x)**2", "1"]
-                    - {rule: cos_zero, vars: {}}
-                  ```
+              - content: "To prove the equality `sin(3*x) = 3*sin(x) - 4*sin(x)**3`, we can make use of\
+                  \ the sine addition formula to express `sin(3*x)` in terms of `sin(x)`.\n\n1. **Using\
+                  \ the sine addition formula**: \n   - We can express `sin(3*x)` as `sin(2*x + x)`.\n\
+                  \   - Then apply the addition formula: \n     `sin(a + b) = sin(a)*cos(b) + cos(a)*sin(b)`.\n\
+                  \n2. **Breaking it down**:\n   - First, calculate `sin(2*x)` and `cos(2*x)` using the\
+                  \ double angle formulas.\n   - The sine double angle formula is: `sin(2*a) = 2*sin(a)*cos(a)`.\n\
+                  \   - The cosine double angle formula can be expressed in terms of sine as: `cos(2*a)\
+                  \ = 1 - 2*sin(a)**2`.\n\nUsing these steps, we can justify the transformation:\n\n```\n\
+                  sin(3*x) \n= sin(2*x + x)\n= sin(2*x)*cos(x) + cos(2*x)*sin(x)\n= (2*sin(x)*cos(x))*cos(x)\
+                  \ + (1 - 2*sin(x)**2)*sin(x)\n= 2*sin(x)*cos(x)**2 + sin(x) - 2*sin(x)**3\n= 3*sin(x)\
+                  \ - 4*sin(x)**3\n```\n\nNow let's formalize this reasoning in YAML format:\n\n```yaml\n\
+                  1:\n  - [\"sin(3*x)\", \"sin(2*x + x)\"]\n  - {rule: sin_add, vars: {x: \"2*x\", y:\
+                  \ \"x\"}}\n2:\n  - [\"sin(2*x + x)\", \"sin(2*x)*cos(x) + cos(2*x)*sin(x)\"]\n  - {rule:\
+                  \ sin_add, vars: {x: \"2*x\", y: \"x\"}}\n3:\n  - [\"sin(2*x)\", \"2*sin(x)*cos(x)\"\
+                  ]\n  - {rule: sin_add, vars: {x: \"x\"}}\n4:\n  - [\"cos(2*x)\", \"1 - 2*sin(x)**2\"\
+                  ]\n  - {rule: cos_add, vars: {x: \"x\"}}\n5:\n  - [\"sin(2*x)*cos(x) + cos(2*x)*sin(x)\"\
+                  , \"2*sin(x)*cos(x)*cos(x) + (1 - 2*sin(x)**2)*sin(x)\"]\n  - {trans: [3, 4]}\n6:\n\
+                  \  - [\"2*sin(x)*cos(x)*cos(x) + (1 - 2*sin(x)**2)*sin(x)\", \"2*sin(x)*cos(x)**2 +\
+                  \ sin(x) - 2*sin(x)**3\"]\n  - {trans: [5, 1]}\n7:\n  - [\"2*sin(x)*cos(x)**2 + sin(x)\
+                  \ - 2*sin(x)**3\", \"3*sin(x) - 4*sin(x)**3\"]\n  - {trans: [6, 1]}\n```\n\nThis proof\
+                  \ shows the required equality using the defined rearrangements and trigonometric identities."
                 tool_calls: []
                 finish_reason: stop
             budget:
               values:
                 num_requests: 1
                 num_completions: 1
-                input_tokens: 1872
-                output_tokens: 137
+                input_tokens: 1878
+                output_tokens: 680
                 cached_input_tokens: 1792
-                price: 0.0010974749999999999
+                price: 0.0011390999999999999
             log_items: []
             model_name: gpt-4o-mini-2024-07-18
             usage_info:
-              completion_tokens: 137
-              prompt_tokens: 1872
-              total_tokens: 2009
+              completion_tokens: 680
+              prompt_tokens: 1878
+              total_tokens: 2558
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -257,9 +306,9 @@ outcome:
           usage:
             model: gpt-4o-mini-2024-07-18
             usage:
-              completion_tokens: 137
-              prompt_tokens: 1872
-              total_tokens: 2009
+              completion_tokens: 680
+              prompt_tokens: 1878
+              total_tokens: 2558
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -268,3 +317,294 @@ outcome:
               prompt_tokens_details:
                 audio_tokens: 0
                 cached_tokens: 1792
+      - message: llm_request
+        level: info
+        time: 2025-09-30 15:08:31.925291
+        node: 5
+        space: cands
+        metadata:
+          hash: 558ba5e3
+          query: ProveEqualityInteractive
+          request:
+            chat:
+              - role: system
+                content: |-
+                  ## Task Description
+
+                  The goal is to produce machine-checkable proofs of simple trigonometric equalities. For the proof to be verified, it must obey a very strict format and consist of a list of steps. Each step states an equality and is attached a justification for how the equality was obtained, which can be either:
+
+                  - Applying a predefined rewriting rule (see list below): `{rule: <rule_name>, vars: {<var_1>: "<value_1>", ..., <var_n>: "value_n"}}`.
+                  - Substituting a previously obtained equality: `{step: {prev_step_id}}`.
+                  - Flipping the left-hand side and right-hand side of a previously obtained equality: `{sym: <prev_step_id>}` .
+                  - Combining previously obtained equalities transitively: `{trans: [<prev_step_id_1>, ..., <prev_step_id_n>]}`.
+
+                  The last step of the proof must feature the target equality that you were tasked to prove.
+
+                  Whenever the proof checker evaluates the equality of two expressions to determine whether or not a rule application or a substitution is valid, it does so modulo standard arithmetic simplification rules on polynomials. Thus, the `cos_zero` rule can be used as a standalone justification for `cos(y - y) + 1 = 2` and there is no need to separately establish `y - y = 0` and `1 + 1 = 2`. However, **no** fact about trigonometry should be ever taken for granted.
+
+                  You should organize your answer in the following way. Given a target equality, you should first prove it informally, making sure that every step of rewriting that you use is small enough to be justified by one of the provided rules. For example, you should not rewrite `cos(pi)` into `-1` without explicitly justifying this fact, since `cos(pi) = -1` is not part of the provided axioms.
+
+                  Once you've done that, you should end your answer with a triple-quoted code block containing a valid YAML object that describes a machine-checkable proof formalizing your former reasoning. All expressions must be written as strings using Python syntax (and thus parsable using `sympy.sympyfy`). In particular, exponentiation is written `**`.
+
+                  **Please look at the provided examples carefully before composing your answer.**
+
+                  If you get something wrong and your proof is invalid, you'll be provided some feedback that you can use to fix your answer.
+
+                  ## List of allowed rewriting rules
+
+                  ```
+                  - cos_zero: `cos(0) = 1`
+                  - sin_zero: `sin(0) = 0`
+                  - sin_halfpi: `sin(pi/2) = 1`
+                  - cos_halfpi: `cos(pi/2) = 0`
+                  - sin_neg: `sin(-x) = -sin(x)`
+                  - cos_neg: `cos(-x) = cos(x)`
+                  - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+                  - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+                  ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    The equality can be derived as follows:
+                    ```
+                    cos(pi/3)
+                    = cos(pi/2-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    However, the second step uses property `cos(pi/2-x) = sin(x)`, which is not part of the allowed set of rules. Thus, we provide a longer derivation that uses `cos_add`.
+
+                    ```
+                    cos(pi/2-pi/6)
+                    = cos(pi/2+(-pi/6))
+                    = cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                    = -sin(-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    The second step uses that `cos(pi/2) = 0` and `sin(pi/2)` = 1, which we can get via the `sin_halfpi` and `cos_halfpi` rules. The last step uses `sin_neg`, so we should be done. Let's formalize this reasoning as a proof.
+
+                    ```yaml
+                    # We start establishing `cos(pi/2-pi/6) = sin(pi/6)`
+                    1:
+                      - ["cos(pi/2-pi/6)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/2-pi/6)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+
+                    # We establish our main result.
+                    # Step 5 applies directly since "cos(pi/3)" and "cos(pi/2-pi/6)" are treated as identical by the rule matcher, which performs simple simplification (as long as the required simplification does not require trigonometry).
+                    6:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {step: 5}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    Let me just propose a simple proof:
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    ```
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  None
+                  ```
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    I see the error. The `cos_halfpi` rule says `cos(pi/2) = 0`, but I'm trying to prove `cos(pi/3) = sin(pi/6)`. Let me fix this by using the correct approach.
+
+                    Since `pi/3 = pi/2 - pi/6`, I can rewrite `cos(pi/3)` as `cos(pi/2 - pi/6)` and use the angle addition formula.
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `2*sin(x/2)*cos(x/2) = sin(x)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |-
+                    It is easier to start with the right-hand side here:
+
+                    ```
+                    sin(x)
+                    = sin(x/2+x/2)
+                    = sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                    = 2*sin(x/2)*cos(x/2)
+                    ```
+
+                    The first and last steps are just elementary simplifications so the only real rule to apply here is `sin_add`.
+
+                    ```yaml
+                    1:
+                      - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                      - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+                    2:
+                      - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                      - {sym: 1}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `sin(3*x) = 3*sin(x) - 4*sin(x)**3`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: "To prove the equality `sin(3*x) = 3*sin(x) - 4*sin(x)**3`, we can make use\
+                    \ of the sine addition formula to express `sin(3*x)` in terms of `sin(x)`.\n\n1. **Using\
+                    \ the sine addition formula**: \n   - We can express `sin(3*x)` as `sin(2*x + x)`.\n\
+                    \   - Then apply the addition formula: \n     `sin(a + b) = sin(a)*cos(b) + cos(a)*sin(b)`.\n\
+                    \n2. **Breaking it down**:\n   - First, calculate `sin(2*x)` and `cos(2*x)` using\
+                    \ the double angle formulas.\n   - The sine double angle formula is: `sin(2*a) = 2*sin(a)*cos(a)`.\n\
+                    \   - The cosine double angle formula can be expressed in terms of sine as: `cos(2*a)\
+                    \ = 1 - 2*sin(a)**2`.\n\nUsing these steps, we can justify the transformation:\n\n\
+                    ```\nsin(3*x) \n= sin(2*x + x)\n= sin(2*x)*cos(x) + cos(2*x)*sin(x)\n= (2*sin(x)*cos(x))*cos(x)\
+                    \ + (1 - 2*sin(x)**2)*sin(x)\n= 2*sin(x)*cos(x)**2 + sin(x) - 2*sin(x)**3\n= 3*sin(x)\
+                    \ - 4*sin(x)**3\n```\n\nNow let's formalize this reasoning in YAML format:\n\n```yaml\n\
+                    1:\n  - [\"sin(3*x)\", \"sin(2*x + x)\"]\n  - {rule: sin_add, vars: {x: \"2*x\", y:\
+                    \ \"x\"}}\n2:\n  - [\"sin(2*x + x)\", \"sin(2*x)*cos(x) + cos(2*x)*sin(x)\"]\n  -\
+                    \ {rule: sin_add, vars: {x: \"2*x\", y: \"x\"}}\n3:\n  - [\"sin(2*x)\", \"2*sin(x)*cos(x)\"\
+                    ]\n  - {rule: sin_add, vars: {x: \"x\"}}\n4:\n  - [\"cos(2*x)\", \"1 - 2*sin(x)**2\"\
+                    ]\n  - {rule: cos_add, vars: {x: \"x\"}}\n5:\n  - [\"sin(2*x)*cos(x) + cos(2*x)*sin(x)\"\
+                    , \"2*sin(x)*cos(x)*cos(x) + (1 - 2*sin(x)**2)*sin(x)\"]\n  - {trans: [3, 4]}\n6:\n\
+                    \  - [\"2*sin(x)*cos(x)*cos(x) + (1 - 2*sin(x)**2)*sin(x)\", \"2*sin(x)*cos(x)**2\
+                    \ + sin(x) - 2*sin(x)**3\"]\n  - {trans: [5, 1]}\n7:\n  - [\"2*sin(x)*cos(x)**2 +\
+                    \ sin(x) - 2*sin(x)**3\", \"3*sin(x) - 4*sin(x)**3\"]\n  - {trans: [6, 1]}\n```\n\n\
+                    This proof shows the required equality using the defined rearrangements and trigonometric\
+                    \ identities."
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  The proof does not end with the equation to be proved.
+                  ```
+            num_completions: 1
+            options:
+              temperature: 1.0
+      - message: llm_response
+        level: info
+        time: 2025-09-30 15:08:50.723020
+        node: 5
+        space: cands
+        metadata:
+          request: 558ba5e3
+          response:
+            outputs:
+              - content: |-
+                  Let’s correct the proof format to ensure it concludes with the target equality `sin(3*x) = 3*sin(x) - 4*sin(x)**3`.
+
+                  Here's the step-by-step derivation:
+
+                  1. Start with `sin(3*x)` and express it using `sin(2*x + x)` which is valid via the sine addition formula.
+                  2. Apply the sine addition formula: `sin(a + b) = sin(a)*cos(b) + cos(a)*sin(b)`.
+                  3. For `sin(2*x)`, use the double-angle formula: `sin(2*x) = 2*sin(x)*cos(x)`.
+                  4. For `cos(2*x)`, use the double angle identity: `cos(2*x) = 1 - 2*sin(x)**2`.
+                  5. Substitute the computed values into the addition formula.
+                  6. Simplify the expression.
+                  7. Establish the final equality.
+
+                  Let's formalize this in a step-by-step YAML format:
+
+                  ```yaml
+                  1:
+                    - ["sin(3*x)", "sin(2*x + x)"]
+                    - {rule: sin_add, vars: {x: "2*x", y: "x"}}
+                  2:
+                    - ["sin(2*x + x)", "sin(2*x)*cos(x) + cos(2*x)*sin(x)"]
+                    - {rule: sin_add, vars: {x: "2*x", y: "x"}}
+                  3:
+                    - ["sin(2*x)", "2*sin(x)*cos(x)"]
+                    - {rule: sin_add, vars: {x: "x"}}
+                  4:
+                    - ["cos(2*x)", "1 - 2*sin(x)**2"]
+                    - {rule: cos_add, vars: {x: "x"}}
+                  5:
+                    - ["sin(2*x)*cos(x) + cos(2*x)*sin(x)", "2*sin(x)*cos(x)*cos(x) + (1 - 2*sin(x)**2)*sin(x)"]
+                    - {trans: [3, 4]}
+                  6:
+                    - ["2*sin(x)*cos(x)*cos(x) + (1 - 2*sin(x)**2)*sin(x)", "2*sin(x)*cos(x)**2 + sin(x) - 2*sin(x)**3"]
+                    - {trans: [5, 1]}
+                  7:
+                    - ["2*sin(x)*cos(x)**2 + sin(x) - 2*sin(x)**3", "3*sin(x) - 4*sin(x)**3"]
+                    - {trans: [6, 1]}
+                  8:
+                    - ["sin(3*x)", "3*sin(x) - 4*sin(x)**3"]
+                    - {step: 7}
+                  ```
+
+                  In this proof, we conclude with the target equality at step 8. Each stage is based on justifiable steps according to the trigonometric identities allowed.
+                tool_calls: []
+                finish_reason: stop
+            budget:
+              values:
+                num_requests: 1
+                num_completions: 1
+                input_tokens: 2600
+                output_tokens: 610
+                cached_input_tokens: 2432
+                price: 0.0015301499999999999
+            log_items: []
+            model_name: gpt-4o-mini-2024-07-18
+            usage_info:
+              completion_tokens: 610
+              prompt_tokens: 2600
+              total_tokens: 3210
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 0
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 2432
+          usage:
+            model: gpt-4o-mini-2024-07-18
+            usage:
+              completion_tokens: 610
+              prompt_tokens: 2600
+              total_tokens: 3210
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 0
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 2432

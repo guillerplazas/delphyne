@@ -5,8 +5,8 @@ args:
   strategy: prove_equality_interactive
   args:
     equality:
-      - cos(pi/2 - x)
-      - sin(x)
+      - cos(x - y) + cos(x + y)
+      - 2*cos(x)*cos(y)
   policy: prove_equality_interactive_policy
   policy_args:
     model_name: gpt-4o
@@ -25,49 +25,50 @@ outcome:
     success: true
     values:
       - 1:
-          - - cos(pi/2 - x)
-            - cos(pi/2)*cos(-x) - sin(pi/2)*sin(-x)
+          - - cos(x - y)
+            - cos(x)*cos(y) + sin(x)*sin(y)
           - rule: cos_add
             vars:
-              x: pi/2
-              y: -x
+              x: x
+              y: -y
         2:
-          - - cos(pi/2)*cos(-x) - sin(pi/2)*sin(-x)
-            - 0*cos(-x) - 1*sin(-x)
-          - rule: cos_halfpi
-        3:
-          - - 0*cos(-x) - 1*sin(-x)
-            - -sin(-x)
-          - rule: sin_halfpi
-        4:
-          - - -sin(-x)
-            - sin(x)
-          - rule: sin_neg
+          - - cos(x + y)
+            - cos(x)*cos(y) - sin(x)*sin(y)
+          - rule: cos_add
             vars:
               x: x
-        5:
-          - - cos(pi/2 - x)
-            - sin(x)
+              y: y
+        3:
+          - - cos(x - y) + cos(x + y)
+            - (cos(x)*cos(y) + sin(x)*sin(y)) + (cos(x)*cos(y) - sin(x)*sin(y))
           - trans:
               - 1
               - 2
+        4:
+          - - (cos(x)*cos(y) + sin(x)*sin(y)) + (cos(x)*cos(y) - sin(x)*sin(y))
+            - 2*cos(x)*cos(y)
+          - step: 2
+        5:
+          - - cos(x - y) + cos(x + y)
+            - 2*cos(x)*cos(y)
+          - trans:
               - 3
               - 4
     spent_budget:
       num_requests: 1
       num_completions: 1
-      input_tokens: 1871
-      output_tokens: 423
+      input_tokens: 1880
+      output_tokens: 480
       cached_input_tokens: 1792
-      price: 0.01864625
+      price: 0.01874
     log:
       - message: llm_request
         level: info
-        time: 2025-09-30 13:55:02.119998
+        time: 2025-09-30 15:05:16.029345
         node: 1
         space: cands
         metadata:
-          hash: 18f389e1
+          hash: 51922d84
           query: ProveEqualityInteractive
           request:
             chat:
@@ -226,77 +227,76 @@ outcome:
                       - {sym: 1}
                     ```
               - role: user
-                content: 'Prove the following equality: `cos(pi/2 - x) = sin(x)`.'
+                content: 'Prove the following equality: `cos(x - y) + cos(x + y) = 2*cos(x)*cos(y)`.'
             num_completions: 1
             options:
               temperature: 1.0
       - message: llm_response
         level: info
-        time: 2025-09-30 13:55:08.779183
+        time: 2025-09-30 15:05:23.722499
         node: 1
         space: cands
         metadata:
-          request: 18f389e1
+          request: 51922d84
           response:
             outputs:
               - content: |-
-                  To prove the equality `cos(pi/2 - x) = sin(x)`, we will use the angle addition formula for cosine.
+                  To prove the equality \( \cos(x - y) + \cos(x + y) = 2\cos(x)\cos(y) \), we will use the angle addition formula for cosine.
 
-                  Starting with the left-hand side:
-                  ```
-                  cos(pi/2 - x)
-                  = cos(pi/2 + (-x))
-                  = cos(pi/2)*cos(-x) - sin(pi/2)*sin(-x)
-                  ```
+                  First, we express \( \cos(x - y) \) and \( \cos(x + y) \) using the cosine addition rule:
 
-                  Using the rewriting rules:
-                  - We know from the `cos_halfpi` rule that `cos(pi/2) = 0`.
-                  - We know from the `sin_halfpi` rule that `sin(pi/2) = 1`.
-                  - From the `cos_neg` rule, `cos(-x) = cos(x)`.
-                  - From the `sin_neg` rule, `sin(-x) = -sin(x)`.
+                  1. \( \cos(x - y) = \cos(x)\cos(y) + \sin(x)\sin(y) \)
+                  2. \( \cos(x + y) = \cos(x)\cos(y) - \sin(x)\sin(y) \)
 
-                  Substituting these into the equation:
-                  ```
-                  = 0 * cos(-x) - 1 * sin(-x)
-                  = -(-sin(x))
-                  = sin(x)
-                  ```
+                  Adding these two identities gives:
 
-                  We can now formalize this reasoning as a proof:
+                  \[
+                  \cos(x - y) + \cos(x + y) = (\cos(x)\cos(y) + \sin(x)\sin(y)) + (\cos(x)\cos(y) - \sin(x)\sin(y))
+                  \]
+
+                  This simplifies to:
+
+                  \[
+                  \cos(x - y) + \cos(x + y) = 2\cos(x)\cos(y)
+                  \]
+
+                  Let's formalize this in a machine-checkable proof:
 
                   ```yaml
                   1:
-                    - ["cos(pi/2 - x)", "cos(pi/2)*cos(-x) - sin(pi/2)*sin(-x)"]
-                    - {rule: cos_add, vars: {x: 'pi/2', y: '-x'}}
+                    - ["cos(x - y)", "cos(x)*cos(y) + sin(x)*sin(y)"]
+                    - {rule: cos_add, vars: {x: "x", y: "-y"}}
                   2:
-                    - ["cos(pi/2)*cos(-x) - sin(pi/2)*sin(-x)", "0*cos(-x) - 1*sin(-x)"]
-                    - {rule: cos_halfpi, vars: {}}
+                    - ["cos(x + y)", "cos(x)*cos(y) - sin(x)*sin(y)"]
+                    - {rule: cos_add, vars: {x: "x", y: "y"}}
                   3:
-                    - ["0*cos(-x) - 1*sin(-x)", "-sin(-x)"]
-                    - {rule: sin_halfpi, vars: {}}
+                    - ["cos(x - y) + cos(x + y)", "(cos(x)*cos(y) + sin(x)*sin(y)) + (cos(x)*cos(y) - sin(x)*sin(y))"]
+                    - {trans: [1, 2]}
                   4:
-                    - ["-sin(-x)", "sin(x)"]
-                    - {rule: sin_neg, vars: {x: 'x'}}
+                    - ["(cos(x)*cos(y) + sin(x)*sin(y)) + (cos(x)*cos(y) - sin(x)*sin(y))", "2*cos(x)*cos(y)"]
+                    - {step: 2}
                   5:
-                    - ["cos(pi/2 - x)", "sin(x)"]
-                    - {trans: [1, 2, 3, 4]}
+                    - ["cos(x - y) + cos(x + y)", "2*cos(x)*cos(y)"]
+                    - {trans: [3, 4]}
                   ```
+
+                  This should correctly prove the trigonometric identity using the provided rules and format.
                 tool_calls: []
                 finish_reason: stop
             budget:
               values:
                 num_requests: 1
                 num_completions: 1
-                input_tokens: 1871
-                output_tokens: 423
+                input_tokens: 1880
+                output_tokens: 480
                 cached_input_tokens: 1792
-                price: 0.01864625
+                price: 0.01874
             log_items: []
             model_name: gpt-4o-2024-08-06
             usage_info:
-              completion_tokens: 423
-              prompt_tokens: 1871
-              total_tokens: 2294
+              completion_tokens: 480
+              prompt_tokens: 1880
+              total_tokens: 2360
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -308,9 +308,9 @@ outcome:
           usage:
             model: gpt-4o-2024-08-06
             usage:
-              completion_tokens: 423
-              prompt_tokens: 1871
-              total_tokens: 2294
+              completion_tokens: 480
+              prompt_tokens: 1880
+              total_tokens: 2360
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0

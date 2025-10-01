@@ -5,8 +5,8 @@ args:
   strategy: prove_equality_interactive
   args:
     equality:
-      - cos(pi/6)
-      - sin(pi/3)
+      - cos(x + y)*cos(x - y)
+      - cos(x)**2 - sin(y)**2
   policy: prove_equality_interactive_policy
   policy_args:
     model_name: gpt-4o-mini
@@ -25,40 +25,36 @@ outcome:
     success: true
     values:
       - 1:
-          - - sin(pi/3)
-            - cos(pi/2 - pi/3)
-          - rule: sin_add
-            vars:
-              x: pi/2
-              y: -pi/3
-        2:
-          - - cos(pi/2 - pi/3)
-            - cos(pi/6)
+          - - cos(x+y) * cos(x-y)
+            - 0.5 * (cos(2*x) + cos(2*y))
           - rule: cos_add
             vars:
-              x: pi/2
-              y: -pi/3
-        3:
-          - - cos(pi/6)
-            - sin(pi/3)
+              x: x+y
+              y: x-y
+        2:
+          - - 0.5 * (cos(2*x) + cos(2*y))
+            - cos(x)**2 - sin(y)**2
           - trans:
               - 1
-              - 2
+        3:
+          - - cos(x+y) * cos(x-y)
+            - cos(x)**2 - sin(y)**2
+          - step: 2
     spent_budget:
-      num_requests: 2
-      num_completions: 2
-      input_tokens: 4116
-      output_tokens: 819
-      cached_input_tokens: 3968
-      price: 0.0024644249999999997
+      num_requests: 1
+      num_completions: 1
+      input_tokens: 1880
+      output_tokens: 376
+      cached_input_tokens: 1792
+      price: 0.0011166
     log:
       - message: llm_request
         level: info
-        time: 2025-09-30 13:55:52.572618
+        time: 2025-09-30 15:06:57.715265
         node: 1
         space: cands
         metadata:
-          hash: 06dca03a
+          hash: c055b443
           query: ProveEqualityInteractive
           request:
             chat:
@@ -217,47 +213,47 @@ outcome:
                       - {sym: 1}
                     ```
               - role: user
-                content: 'Prove the following equality: `cos(pi/6) = sin(pi/3)`.'
+                content: 'Prove the following equality: `cos(x + y)*cos(x - y) = cos(x)**2 - sin(y)**2`.'
             num_completions: 1
             options:
               temperature: 1.0
       - message: llm_response
         level: info
-        time: 2025-09-30 13:55:57.567635
+        time: 2025-09-30 15:07:06.616710
         node: 1
         space: cands
         metadata:
-          request: 06dca03a
+          request: c055b443
           response:
             outputs:
-              - content: "To prove the equality `cos(pi/6) = sin(pi/3)`, we can utilize the complementary\
-                  \ angle identity for sine and cosine. Notably,\n\n```\nsin(pi/3) = cos(pi/2 - pi/3)\n\
-                  \          = cos(pi/6)\n```\n\nThis establishes the equality through the use of the\
-                  \ cosine angle subtraction identity.\n\nHere's a step-by-step breakdown of the proof:\n\
-                  \n1. We recognize that `sin(pi/3)` can be expressed in terms of cosine:\n   - `sin(pi/3)\
-                  \ = cos(pi/2 - pi/3)`\n\n2. We now apply the cosine subtraction identity:\n   - `cos(pi/2\
-                  \ - pi/3) = cos(pi/6)`\n\nThus, combining these, we achieve:\n\n- `sin(pi/3) = cos(pi/6)`\n\
-                  \nNow let’s formalize this as a machine-checkable proof.\n\n```yaml\n1:\n  - [\"sin(pi/3)\"\
-                  , \"cos(pi/2 - pi/3)\"]\n  - {rule: sin_add, vars: {x: \"pi/3\", y: \"pi/3\"}}\n2:\n\
-                  \  - [\"cos(pi/2 - pi/3)\", \"cos(pi/6)\"]\n  - {rule: cos_add, vars: {x: \"pi/2\",\
-                  \ y: \"-pi/3\"}}\n3:\n  - [\"sin(pi/3)\", \"cos(pi/6)\"]\n  - {trans: [1, 2]}\n``` \n\
-                  \nThis proof shows that `sin(pi/3)` is indeed equal to `cos(pi/6)`."
+              - content: "To prove the equality `cos(x + y)*cos(x - y) = cos(x)**2 - sin(y)**2`, we can\
+                  \ use the cosine addition formulas. \n\nWe start with the left-hand side and apply the\
+                  \ rules.\n\n```\ncos(x + y) * cos(x - y)\n= 0.5 * (cos((x+y) + (x-y)) + cos((x+y) -\
+                  \ (x-y)))\n= 0.5 * (cos(2x) + cos(2y))\n```\n\nNow we know that `cos(2x) = cos(x)**2\
+                  \ - sin(x)**2` using the double angle identity, and we can write `cos(2y)` as `cos(y)**2\
+                  \ - sin(y)**2`. \n\nThus,\n\n```\ncos(x + y) * cos(x - y) \n= 0.5 * (cos(x)**2 - sin(x)**2\
+                  \ + cos(y)**2 - sin(y)**2)\n= cos(x)**2 - sin(y)**2  (because the other terms cancel\
+                  \ out)\n```\n\nNow, let's put this reasoning into a formal machine-checkable proof:\n\
+                  \n```yaml\n1:\n  - [\"cos(x+y) * cos(x-y)\", \"0.5 * (cos(2*x) + cos(2*y))\"]\n  - {rule:\
+                  \ cos_add, vars: {x: \"x+y\", y: \"x-y\"}}\n2:\n  - [\"0.5 * (cos(2*x) + cos(2*y))\"\
+                  , \"cos(x)**2 - sin(y)**2\"]\n  - {trans: [1]}\n3:\n  - [\"cos(x+y) * cos(x-y)\", \"\
+                  cos(x)**2 - sin(y)**2\"]\n  - {step: 2}\n``` \n\nThis completes the proof!"
                 tool_calls: []
                 finish_reason: stop
             budget:
               values:
                 num_requests: 1
                 num_completions: 1
-                input_tokens: 1871
-                output_tokens: 332
+                input_tokens: 1880
+                output_tokens: 376
                 cached_input_tokens: 1792
-                price: 0.00111195
+                price: 0.0011166
             log_items: []
             model_name: gpt-4o-mini-2024-07-18
             usage_info:
-              completion_tokens: 332
-              prompt_tokens: 1871
-              total_tokens: 2203
+              completion_tokens: 376
+              prompt_tokens: 1880
+              total_tokens: 2256
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -269,9 +265,9 @@ outcome:
           usage:
             model: gpt-4o-mini-2024-07-18
             usage:
-              completion_tokens: 332
-              prompt_tokens: 1871
-              total_tokens: 2203
+              completion_tokens: 376
+              prompt_tokens: 1880
+              total_tokens: 2256
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -280,259 +276,3 @@ outcome:
               prompt_tokens_details:
                 audio_tokens: 0
                 cached_tokens: 1792
-      - message: llm_request
-        level: info
-        time: 2025-09-30 13:55:57.589085
-        node: 5
-        space: cands
-        metadata:
-          hash: ac3e27bf
-          query: ProveEqualityInteractive
-          request:
-            chat:
-              - role: system
-                content: |-
-                  ## Task Description
-
-                  The goal is to produce machine-checkable proofs of simple trigonometric equalities. For the proof to be verified, it must obey a very strict format and consist of a list of steps. Each step states an equality and is attached a justification for how the equality was obtained, which can be either:
-
-                  - Applying a predefined rewriting rule (see list below): `{rule: <rule_name>, vars: {<var_1>: "<value_1>", ..., <var_n>: "value_n"}}`.
-                  - Substituting a previously obtained equality: `{step: {prev_step_id}}`.
-                  - Flipping the left-hand side and right-hand side of a previously obtained equality: `{sym: <prev_step_id>}` .
-                  - Combining previously obtained equalities transitively: `{trans: [<prev_step_id_1>, ..., <prev_step_id_n>]}`.
-
-                  The last step of the proof must feature the target equality that you were tasked to prove.
-
-                  Whenever the proof checker evaluates the equality of two expressions to determine whether or not a rule application or a substitution is valid, it does so modulo standard arithmetic simplification rules on polynomials. Thus, the `cos_zero` rule can be used as a standalone justification for `cos(y - y) + 1 = 2` and there is no need to separately establish `y - y = 0` and `1 + 1 = 2`. However, **no** fact about trigonometry should be ever taken for granted.
-
-                  You should organize your answer in the following way. Given a target equality, you should first prove it informally, making sure that every step of rewriting that you use is small enough to be justified by one of the provided rules. For example, you should not rewrite `cos(pi)` into `-1` without explicitly justifying this fact, since `cos(pi) = -1` is not part of the provided axioms.
-
-                  Once you've done that, you should end your answer with a triple-quoted code block containing a valid YAML object that describes a machine-checkable proof formalizing your former reasoning. All expressions must be written as strings using Python syntax (and thus parsable using `sympy.sympyfy`). In particular, exponentiation is written `**`.
-
-                  **Please look at the provided examples carefully before composing your answer.**
-
-                  If you get something wrong and your proof is invalid, you'll be provided some feedback that you can use to fix your answer.
-
-                  ## List of allowed rewriting rules
-
-                  ```
-                  - cos_zero: `cos(0) = 1`
-                  - sin_zero: `sin(0) = 0`
-                  - sin_halfpi: `sin(pi/2) = 1`
-                  - cos_halfpi: `cos(pi/2) = 0`
-                  - sin_neg: `sin(-x) = -sin(x)`
-                  - cos_neg: `cos(-x) = cos(x)`
-                  - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
-                  - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
-                  ```
-              - role: user
-                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
-              - role: assistant
-                answer:
-                  mode: null
-                  content: |
-                    The equality can be derived as follows:
-                    ```
-                    cos(pi/3)
-                    = cos(pi/2-pi/6)
-                    = sin(pi/6)
-                    ```
-
-                    However, the second step uses property `cos(pi/2-x) = sin(x)`, which is not part of the allowed set of rules. Thus, we provide a longer derivation that uses `cos_add`.
-
-                    ```
-                    cos(pi/2-pi/6)
-                    = cos(pi/2+(-pi/6))
-                    = cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
-                    = -sin(-pi/6)
-                    = sin(pi/6)
-                    ```
-
-                    The second step uses that `cos(pi/2) = 0` and `sin(pi/2)` = 1, which we can get via the `sin_halfpi` and `cos_halfpi` rules. The last step uses `sin_neg`, so we should be done. Let's formalize this reasoning as a proof.
-
-                    ```yaml
-                    # We start establishing `cos(pi/2-pi/6) = sin(pi/6)`
-                    1:
-                      - ["cos(pi/2-pi/6)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
-                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
-                    2:
-                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
-                      - {rule: cos_halfpi, vars: {}}
-                    3:
-                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
-                      - {rule: sin_halfpi, vars: {}}
-                    4:
-                      - ["-sin(-pi/6)", "sin(pi/6)"]
-                      - {rule: sin_neg, vars: {x: "pi/6"}}
-                    5:
-                      - ["cos(pi/2-pi/6)", "sin(pi/6)"]
-                      - {trans: [1, 2, 3, 4]}
-
-                    # We establish our main result.
-                    # Step 5 applies directly since "cos(pi/3)" and "cos(pi/2-pi/6)" are treated as identical by the rule matcher, which performs simple simplification (as long as the required simplification does not require trigonometry).
-                    6:
-                      - ["cos(pi/3)", "sin(pi/6)"]
-                      - {step: 5}
-                    ```
-              - role: user
-                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
-              - role: assistant
-                answer:
-                  mode: null
-                  content: |
-                    Let me just propose a simple proof:
-
-                    ```yaml
-                    1:
-                      - ["cos(pi/3)", "sin(pi/6)"]
-                      - {rule: cos_halfpi, vars: {}}
-                    ```
-              - role: user
-                content: |-
-                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
-
-                  ```
-                  None
-                  ```
-              - role: assistant
-                answer:
-                  mode: null
-                  content: |
-                    I see the error. The `cos_halfpi` rule says `cos(pi/2) = 0`, but I'm trying to prove `cos(pi/3) = sin(pi/6)`. Let me fix this by using the correct approach.
-
-                    Since `pi/3 = pi/2 - pi/6`, I can rewrite `cos(pi/3)` as `cos(pi/2 - pi/6)` and use the angle addition formula.
-
-                    ```yaml
-                    1:
-                      - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
-                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
-                    2:
-                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
-                      - {rule: cos_halfpi, vars: {}}
-                    3:
-                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
-                      - {rule: sin_halfpi, vars: {}}
-                    4:
-                      - ["-sin(-pi/6)", "sin(pi/6)"]
-                      - {rule: sin_neg, vars: {x: "pi/6"}}
-                    5:
-                      - ["cos(pi/3)", "sin(pi/6)"]
-                      - {trans: [1, 2, 3, 4]}
-                    ```
-              - role: user
-                content: 'Prove the following equality: `2*sin(x/2)*cos(x/2) = sin(x)`.'
-              - role: assistant
-                answer:
-                  mode: null
-                  content: |-
-                    It is easier to start with the right-hand side here:
-
-                    ```
-                    sin(x)
-                    = sin(x/2+x/2)
-                    = sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
-                    = 2*sin(x/2)*cos(x/2)
-                    ```
-
-                    The first and last steps are just elementary simplifications so the only real rule to apply here is `sin_add`.
-
-                    ```yaml
-                    1:
-                      - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
-                      - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
-                    2:
-                      - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
-                      - {sym: 1}
-                    ```
-              - role: user
-                content: 'Prove the following equality: `cos(pi/6) = sin(pi/3)`.'
-              - role: assistant
-                answer:
-                  mode: null
-                  content: "To prove the equality `cos(pi/6) = sin(pi/3)`, we can utilize the complementary\
-                    \ angle identity for sine and cosine. Notably,\n\n```\nsin(pi/3) = cos(pi/2 - pi/3)\n\
-                    \          = cos(pi/6)\n```\n\nThis establishes the equality through the use of the\
-                    \ cosine angle subtraction identity.\n\nHere's a step-by-step breakdown of the proof:\n\
-                    \n1. We recognize that `sin(pi/3)` can be expressed in terms of cosine:\n   - `sin(pi/3)\
-                    \ = cos(pi/2 - pi/3)`\n\n2. We now apply the cosine subtraction identity:\n   - `cos(pi/2\
-                    \ - pi/3) = cos(pi/6)`\n\nThus, combining these, we achieve:\n\n- `sin(pi/3) = cos(pi/6)`\n\
-                    \nNow let’s formalize this as a machine-checkable proof.\n\n```yaml\n1:\n  - [\"sin(pi/3)\"\
-                    , \"cos(pi/2 - pi/3)\"]\n  - {rule: sin_add, vars: {x: \"pi/3\", y: \"pi/3\"}}\n2:\n\
-                    \  - [\"cos(pi/2 - pi/3)\", \"cos(pi/6)\"]\n  - {rule: cos_add, vars: {x: \"pi/2\"\
-                    , y: \"-pi/3\"}}\n3:\n  - [\"sin(pi/3)\", \"cos(pi/6)\"]\n  - {trans: [1, 2]}\n```\
-                    \ \n\nThis proof shows that `sin(pi/3)` is indeed equal to `cos(pi/6)`."
-              - role: user
-                content: |-
-                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
-
-                  ```
-                  The proof does not end with the equation to be proved.
-                  ```
-            num_completions: 1
-            options:
-              temperature: 1.0
-      - message: llm_response
-        level: info
-        time: 2025-09-30 13:56:04.499108
-        node: 5
-        space: cands
-        metadata:
-          request: ac3e27bf
-          response:
-            outputs:
-              - content: "Thank you for your feedback. I see that the final proof step must explicitly\
-                  \ state the target equality we need to show, which is `cos(pi/6) = sin(pi/3)`. \n\n\
-                  Let’s go through the proof again while ensuring we end with the required equation. \n\
-                  \nWe can start with the left-hand side, `cos(pi/6)`, and relate it to `sin(pi/3)` using\
-                  \ the sine and cosine properties:\n\n1. `sin(pi/3)` can be expressed as `cos(pi/2 -\
-                  \ pi/3)`.\n2. Then, we can apply the cosine subtraction identity to show that this is\
-                  \ equal to `cos(pi/6)`.\n\nHere's how the proof unfolds:\n\n1. Start with `sin(pi/3)`\
-                  \ and rewrite it using the cosine of the complementary angle: \n   - `sin(pi/3) = cos(pi/2\
-                  \ - pi/3)`\n   \n2. Apply the cosine subtraction rule:\n   - `cos(pi/2 - pi/3) = cos(pi/2)\
-                  \ * cos(-pi/3) + sin(pi/2) * sin(-pi/3)`\n   - Since `cos(pi/2) = 0` and `sin(pi/2)\
-                  \ = 1`, this simplifies to:\n   - `0 * cos(-pi/3) + 1 * (-sin(pi/3))`, which reevaluates\
-                  \ down to `sin(pi/3)`.\n3. Finally state that `sin(pi/3) = cos(pi/6)` directly.\n\n\
-                  Now compiling this into the proof format:\n\n```yaml\n1:\n  - [\"sin(pi/3)\", \"cos(pi/2\
-                  \ - pi/3)\"]\n  - {rule: sin_add, vars: {x: \"pi/2\", y: \"-pi/3\"}}\n2:\n  - [\"cos(pi/2\
-                  \ - pi/3)\", \"cos(pi/6)\"]\n  - {rule: cos_add, vars: {x: \"pi/2\", y: \"-pi/3\"}}\
-                  \ \n3:\n  - [\"cos(pi/6)\", \"sin(pi/3)\"]\n  - {trans: [1, 2]}\n```\n\nThis proof starts\
-                  \ from `sin(pi/3)`, makes the appropriate substitutions, and ends with the statement\
-                  \ that matches the target equality `cos(pi/6) = sin(pi/3)`."
-                tool_calls: []
-                finish_reason: stop
-            budget:
-              values:
-                num_requests: 1
-                num_completions: 1
-                input_tokens: 2245
-                output_tokens: 487
-                cached_input_tokens: 2176
-                price: 0.0013524749999999997
-            log_items: []
-            model_name: gpt-4o-mini-2024-07-18
-            usage_info:
-              completion_tokens: 487
-              prompt_tokens: 2245
-              total_tokens: 2732
-              completion_tokens_details:
-                accepted_prediction_tokens: 0
-                audio_tokens: 0
-                reasoning_tokens: 0
-                rejected_prediction_tokens: 0
-              prompt_tokens_details:
-                audio_tokens: 0
-                cached_tokens: 2176
-          usage:
-            model: gpt-4o-mini-2024-07-18
-            usage:
-              completion_tokens: 487
-              prompt_tokens: 2245
-              total_tokens: 2732
-              completion_tokens_details:
-                accepted_prediction_tokens: 0
-                audio_tokens: 0
-                reasoning_tokens: 0
-                rejected_prediction_tokens: 0
-              prompt_tokens_details:
-                audio_tokens: 0
-                cached_tokens: 2176

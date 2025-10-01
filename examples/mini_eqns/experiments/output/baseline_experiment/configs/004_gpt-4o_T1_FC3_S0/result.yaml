@@ -5,8 +5,8 @@ args:
   strategy: prove_equality_interactive
   args:
     equality:
-      - sin(pi - x)
-      - sin(x)
+      - cos(2*x)
+      - 1 - 2*sin(x)**2
   policy: prove_equality_interactive_policy
   policy_args:
     model_name: gpt-4o
@@ -25,44 +25,55 @@ outcome:
     success: true
     values:
       - 1:
-          - - sin(pi - x)
-            - sin(pi)*cos(x) + cos(pi)*sin(x)
-          - rule: sin_add
+          - - cos(2*x)
+            - cos(x + x)
+          - rule: cos_add
             vars:
-              x: pi
-              y: -x
+              x: x
+              y: x
         2:
-          - - sin(pi)*cos(x)
-            - '0'
-          - rule: sin_zero
-        3:
-          - - cos(pi)*sin(x)
-            - -sin(x)
-          - rule: cos_neg
+          - - cos(x + x)
+            - cos(x)*cos(x) - sin(x)*sin(x)
+          - rule: cos_add
             vars:
-              x: pi
+              x: x
+              y: x
+        3:
+          - - cos(x)*cos(x) - sin(x)*sin(x)
+            - cos(x)**2 - sin(x)**2
+          - step: 2
         4:
-          - - sin(pi - x)
-            - sin(x)
+          - - cos(x)**2 - sin(x)**2
+            - (1 - sin(x)**2) - sin(x)**2
+          - step: 3
+        5:
+          - - (1 - sin(x)**2) - sin(x)**2
+            - 1 - 2*sin(x)**2
+          - step: 4
+        6:
+          - - cos(2*x)
+            - 1 - 2*sin(x)**2
           - trans:
               - 1
               - 2
               - 3
+              - 4
+              - 5
     spent_budget:
       num_requests: 1
       num_completions: 1
-      input_tokens: 1869
-      output_tokens: 621
+      input_tokens: 1875
+      output_tokens: 591
       cached_input_tokens: 1792
-      price: 0.01888875
+      price: 0.018866249999999998
     log:
       - message: llm_request
         level: info
-        time: 2025-09-30 13:55:23.091085
+        time: 2025-09-30 15:05:46.350215
         node: 1
         space: cands
         metadata:
-          hash: 189f35a2
+          hash: 641361a5
           query: ProveEqualityInteractive
           request:
             chat:
@@ -221,61 +232,55 @@ outcome:
                       - {sym: 1}
                     ```
               - role: user
-                content: 'Prove the following equality: `sin(pi - x) = sin(x)`.'
+                content: 'Prove the following equality: `cos(2*x) = 1 - 2*sin(x)**2`.'
             num_completions: 1
             options:
               temperature: 1.0
       - message: llm_response
         level: info
-        time: 2025-09-30 13:55:39.626606
+        time: 2025-09-30 15:05:59.977016
         node: 1
         space: cands
         metadata:
-          request: 189f35a2
+          request: 641361a5
           response:
             outputs:
-              - content: "To prove the equality `sin(pi - x) = sin(x)`, we'll use the sine angle addition\
-                  \ formula and properties about the trigonometric functions.\n\nHere's the informal proof:\n\
-                  \nStart with the left-hand side:\n```\nsin(pi - x) \n= sin(pi) * cos(x) - cos(pi) *\
-                  \ sin(x)\n= 0 * cos(x) - (-1) * sin(x)\n= sin(x)\n```\n\nNow let's translate this reasoning\
-                  \ into a formal, machine-verifiable proof using the allowed rules.\n\n```yaml\n1:\n\
-                  \  - [\"sin(pi - x)\", \"sin(pi)*cos(x) - cos(pi)*sin(x)\"]\n  - {rule: sin_add, vars:\
-                  \ {x: \"pi\", y: \"-x\"}}\n2:\n  - [\"sin(pi)*cos(x) - cos(pi)*sin(x)\", \"0*cos(x)\
-                  \ - (-1)*sin(x)\"]\n  - {rule: sin_zero, vars: {}}\n3:\n  - [\"0*cos(x) - (-1)*sin(x)\"\
-                  , \"sin(x)\"]\n  - {rule: cos_halfpi, vars: {}}\n4:\n  - [\"sin(pi - x)\", \"sin(x)\"\
-                  ]\n  - {trans: [1, 2, 3]}\n```\n\nLet me double-check and provide the correct rule for\
-                  \ step 3. `cos(pi)` isn't simply `cos_halfpi`. Let's fix that and rethink the proof.\n\
-                  \n### Correct Proof Steps\n\nI apologize for the previous oversight. Here’s a correct\
-                  \ breakdown using valid justifications.\n\nWe need to re-examine `cos(pi)`:\n\n- Start\
-                  \ with the identity: `cos(pi) = cos(pi - 0) = -cos(0)` from angle subtraction.\n  \n\
-                  We don't actually have a rule for `cos(pi)` directly, but rather, start with:\n  \n\
-                  ```yaml\n1:\n  - [\"sin(pi - x)\", \"sin(pi)*cos(x) + cos(pi)*sin(x)\"]\n  - {rule:\
-                  \ sin_add, vars: {x: \"pi\", y: \"-x\"}}\n2:\n  - [\"sin(pi)*cos(x)\", \"0\"]\n  - {rule:\
-                  \ sin_zero, vars: {}}\n3:\n  - [\"cos(pi)*sin(x)\", \"-sin(x)\"]\n  - {rule: cos_neg,\
-                  \ vars: {x: \"pi\"}}\n4:\n  - [\"sin(pi - x)\", \"sin(x)\"]\n  - {trans: [1, 2, 3]}\n\
-                  ```\n\nBy combining the rules correctly, we apply known values and identities for trigonometric\
-                  \ functions around key angles like `pi` while not treating any property of `cos(pi)`\
-                  \ without justification of known components. \n\nLet me rethink further to ensure correctness\
-                  \ in each prior expression, but obtaining `cos(pi)=-1` directly streams from known symmetry\
-                  \ `-x` for `cos`.\n\nUltimately, transforming to proofs around compositions without\
-                  \ ambiguity perfectly suitable for stepping with symmetric equivalence for negatives\
-                  \ while `sin_zero/pi` distincts."
+              - content: "To prove the equality `cos(2*x) = 1 - 2*sin(x)**2`, we can start by using the\
+                  \ double-angle formula for cosine. Here's a step-by-step breakdown of the proof:\n\n\
+                  1. Start with the double-angle formula for cosine:\n   ```\n   cos(2*x) = cos(x + x)\n\
+                  \   ```\n\n2. Use the angle addition formula for cosine:\n   ```\n   cos(x + x) = cos(x)*cos(x)\
+                  \ - sin(x)*sin(x)\n   ```\n\n3. Simplify the expression:\n   ```\n   cos(x)*cos(x) -\
+                  \ sin(x)*sin(x) = cos(x)**2 - sin(x)**2\n   ```\n\n4. Recognize that `cos(x)**2 = 1\
+                  \ - sin(x)**2`.\n   Therefore:\n   ```\n   cos(x)**2 - sin(x)**2 = (1 - sin(x)**2) -\
+                  \ sin(x)**2 = 1 - 2*sin(x)**2\n   ```\n\nLet's translate these steps into a formal,\
+                  \ machine-checkable proof:\n\n```yaml\n1:\n  - [\"cos(2*x)\", \"cos(x + x)\"]\n  - {rule:\
+                  \ cos_add, vars: {x: \"x\", y: \"x\"}}  \n2:\n  - [\"cos(x + x)\", \"cos(x)*cos(x) -\
+                  \ sin(x)*sin(x)\"]\n  - {rule: cos_add, vars: {x: \"x\", y: \"x\"}}\n3:\n  - [\"cos(x)*cos(x)\
+                  \ - sin(x)*sin(x)\", \"cos(x)**2 - sin(x)**2\"]\n  - {step: 2}\n4:\n  - [\"cos(x)**2\
+                  \ - sin(x)**2\", \"(1 - sin(x)**2) - sin(x)**2\"]\n  - {step: 3}\n5:\n  - [\"(1 - sin(x)**2)\
+                  \ - sin(x)**2\", \"1 - 2*sin(x)**2\"]\n  - {step: 4}\n6:\n  - [\"cos(2*x)\", \"1 - 2*sin(x)**2\"\
+                  ]\n  - {trans: [1, 2, 3, 4, 5]}\n```\n\nIn this proof:\n\n- We start by rewriting `cos(2*x)`\
+                  \ as `cos(x + x)` using the fact that `2*x = x + x`.\n- Then, we apply the angle addition\
+                  \ formula for cosine to get `cos(x)*cos(x) - sin(x)*sin(x)`.\n- We simplify that expression\
+                  \ to `cos(x)**2 - sin(x)**2`.\n- Recognize that `cos(x)**2 = 1 - sin(x)**2`, rearrange\
+                  \ terms to obtain `1 - 2*sin(x)**2`.\n- Finally, we solve our original equation via\
+                  \ transitive combination of equalities from prior steps."
                 tool_calls: []
                 finish_reason: stop
             budget:
               values:
                 num_requests: 1
                 num_completions: 1
-                input_tokens: 1869
-                output_tokens: 621
+                input_tokens: 1875
+                output_tokens: 591
                 cached_input_tokens: 1792
-                price: 0.01888875
+                price: 0.018866249999999998
             log_items: []
             model_name: gpt-4o-2024-08-06
             usage_info:
-              completion_tokens: 621
-              prompt_tokens: 1869
-              total_tokens: 2490
+              completion_tokens: 591
+              prompt_tokens: 1875
+              total_tokens: 2466
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -287,9 +292,9 @@ outcome:
           usage:
             model: gpt-4o-2024-08-06
             usage:
-              completion_tokens: 621
-              prompt_tokens: 1869
-              total_tokens: 2490
+              completion_tokens: 591
+              prompt_tokens: 1875
+              total_tokens: 2466
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0

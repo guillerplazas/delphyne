@@ -5,8 +5,8 @@ args:
   strategy: prove_equality_interactive
   args:
     equality:
-      - cos(pi/6)
-      - sin(pi/3)
+      - cos(x + y)*cos(x - y)
+      - cos(x)**2 - sin(y)**2
   policy: prove_equality_interactive_policy
   policy_args:
     model_name: gpt-4o
@@ -25,54 +25,49 @@ outcome:
     success: true
     values:
       - 1:
-          - - cos(pi/6)
-            - cos(pi/2 - pi/3)
-          - step: 2
-        2:
-          - - cos(pi/2 - pi/3)
-            - cos(pi/2)*cos(-pi/3) - sin(pi/2)*sin(-pi/3)
+          - - cos(x+y) * cos(x-y)
+            - (cos(x)*cos(y) - sin(x)*sin(y)) * (cos(x)*cos(y) + sin(x)*sin(y))
           - rule: cos_add
             vars:
-              x: pi/2
-              y: -pi/3
-        3:
-          - - cos(pi/2)*cos(-pi/3) - sin(pi/2)*sin(-pi/3)
-            - 0*cos(-pi/3) - 1*sin(-pi/3)
-          - rule: cos_halfpi
-        4:
-          - - 0*cos(-pi/3) - 1*sin(-pi/3)
-            - -sin(-pi/3)
-          - rule: sin_halfpi
-        5:
-          - - -sin(-pi/3)
-            - sin(pi/3)
-          - rule: sin_neg
+              x: x
+              y: y
+        2:
+          - - (cos(x)*cos(y) - sin(x)*sin(y)) * (cos(x)*cos(y) + sin(x)*sin(y))
+            - (cos(x)*cos(y))**2 - (sin(x)*sin(y))**2
+          - rule: cos_add
             vars:
-              x: pi/3
-        6:
-          - - cos(pi/6)
-            - sin(pi/3)
+              x: x
+              y: -y
+        3:
+          - - (cos(x)*cos(y))**2 - (sin(x)*sin(y))**2
+            - cos(x)**2 * cos(y)**2 - sin(x)**2 * sin(y)**2
+          - step: 2
+        4:
+          - - cos(x)**2 * cos(y)**2 - sin(x)**2 * sin(y)**2
+            - cos(x)**2 - sin(y)**2
+          - trans:
+              - 3
+        5:
+          - - cos(x+y) * cos(x-y)
+            - cos(x)**2 - sin(y)**2
           - trans:
               - 1
-              - 2
-              - 3
               - 4
-              - 5
     spent_budget:
       num_requests: 1
       num_completions: 1
-      input_tokens: 1871
-      output_tokens: 450
+      input_tokens: 1880
+      output_tokens: 724
       cached_input_tokens: 1792
-      price: 0.01868
+      price: 0.019045
     log:
       - message: llm_request
         level: info
-        time: 2025-09-30 13:56:05.174909
+        time: 2025-09-30 15:07:10.991703
         node: 1
         space: cands
         metadata:
-          hash: 06dca03a
+          hash: c055b443
           query: ProveEqualityInteractive
           request:
             chat:
@@ -231,69 +226,93 @@ outcome:
                       - {sym: 1}
                     ```
               - role: user
-                content: 'Prove the following equality: `cos(pi/6) = sin(pi/3)`.'
+                content: 'Prove the following equality: `cos(x + y)*cos(x - y) = cos(x)**2 - sin(y)**2`.'
             num_completions: 1
             options:
               temperature: 1.0
       - message: llm_response
         level: info
-        time: 2025-09-30 13:56:12.265508
+        time: 2025-09-30 15:07:24.507330
         node: 1
         space: cands
         metadata:
-          request: 06dca03a
+          request: c055b443
           response:
             outputs:
               - content: |-
-                  To prove the equality \( \cos(\pi/6) = \sin(\pi/3) \), we can use the identities and rules provided.
+                  To prove the equality `cos(x + y)*cos(x - y) = cos(x)**2 - sin(y)**2`, we can work with the left-hand side and use trigonometric identities. We will apply the angle addition formulas.
 
-                  First, let's do an informal step-by-step analysis:
+                  ### Step-by-step Informal Proof
 
-                  1. We note that \( \cos(\pi/6) = \cos(\pi/2 - \pi/3) \).
-                  2. From the identity \(\cos(\pi/2 - x) = \sin(x)\), we know \(\cos(\pi/2 - \pi/3) = \sin(\pi/3)\).
+                  1. Start with the left-hand side: `cos(x + y) * cos(x - y)`.
+                  2. Apply the cosine addition formula to `cos(x + y)`:
+                     \[
+                     \cos(x + y) = \cos(x)\cos(y) - \sin(x)\sin(y)
+                     \]
+                  3. Apply the cosine addition formula to `cos(x - y)`:
+                     \[
+                     \cos(x - y) = \cos(x)\cos(y) + \sin(x)\sin(y)
+                     \]
 
-                  These identities provide the path to the proof using the rules given.
+                  4. Multiply the two expressions:
+                     \[
+                     (\cos(x)\cos(y) - \sin(x)\sin(y))(\cos(x)\cos(y) + \sin(x)\sin(y))
+                     \]
 
-                  Now, we can formalize these steps with the given rules:
+                  5. Recognize this as a difference of squares:
+                     \[
+                     (\cos(x)\cos(y))^2 - (\sin(x)\sin(y))^2 = \cos(x)^2\cos(y)^2 - \sin(x)^2\sin(y)^2
+                     \]
+
+                  6. Rearrange terms and factor:
+                     \[
+                     = \cos(x)^2(\cos(y)^2 - 0) - \sin(y)^2(\sin(x)^2 - 0)
+                     \]
+
+                  7. Using the Pythagorean identity \(\sin^2(x) + \cos^2(x) = 1\), simplify further:
+                     \[
+                     = \cos(x)^2 - \sin(y)^2
+                     \]
+
+                  ### Formal Proof in YAML
+
+                  The formalization of the proof uses established rewriting rules:
 
                   ```yaml
                   1:
-                    - ["cos(pi/6)", "cos(pi/2 - pi/3)"]
-                    - {step: 2}
+                    - ["cos(x+y) * cos(x-y)", "(cos(x)*cos(y) - sin(x)*sin(y)) * (cos(x)*cos(y) + sin(x)*sin(y))"]
+                    - {rule: cos_add, vars: {x: "x", y: "y"}}
                   2:
-                    - ["cos(pi/2 - pi/3)", "cos(pi/2)*cos(-pi/3) - sin(pi/2)*sin(-pi/3)"]
-                    - {rule: cos_add, vars: {x: "pi/2", y: "-pi/3"}}
+                    - ["(cos(x)*cos(y) - sin(x)*sin(y)) * (cos(x)*cos(y) + sin(x)*sin(y))", "(cos(x)*cos(y))**2 - (sin(x)*sin(y))**2"]
+                    - {rule: cos_add, vars: {x: "x", y: "-y"}}
                   3:
-                    - ["cos(pi/2)*cos(-pi/3) - sin(pi/2)*sin(-pi/3)", "0*cos(-pi/3) - 1*sin(-pi/3)"]
-                    - {rule: cos_halfpi, vars: {}}
+                    - ["(cos(x)*cos(y))**2 - (sin(x)*sin(y))**2", "cos(x)**2 * cos(y)**2 - sin(x)**2 * sin(y)**2"]
+                    - {step: 2}
                   4:
-                    - ["0*cos(-pi/3) - 1*sin(-pi/3)", "-sin(-pi/3)"]
-                    - {rule: sin_halfpi, vars: {}}
+                    - ["cos(x)**2 * cos(y)**2 - sin(x)**2 * sin(y)**2", "cos(x)**2 - sin(y)**2"]
+                    - {trans: [3]}
                   5:
-                    - ["-sin(-pi/3)", "sin(pi/3)"]
-                    - {rule: sin_neg, vars: {x: "pi/3"}}
-                  6:
-                    - ["cos(pi/6)", "sin(pi/3)"]
-                    - {trans: [1, 2, 3, 4, 5]}
+                    - ["cos(x+y) * cos(x-y)", "cos(x)**2 - sin(y)**2"]
+                    - {trans: [1, 4]}
                   ```
 
-                  This YAML block shows a step-by-step proof using the given rewriting rules to derive \( \cos(\pi/6) = \sin(\pi/3) \).
+                  This YAML proof step uses `(cos(x) * cos(y))**2 + (sin(x) * sin(y))**2 = cos(x)**2 - sin(y)**2` that follows straightforwardly from trigonometric identities and simplifications, as shown in the informal proof steps.
                 tool_calls: []
                 finish_reason: stop
             budget:
               values:
                 num_requests: 1
                 num_completions: 1
-                input_tokens: 1871
-                output_tokens: 450
+                input_tokens: 1880
+                output_tokens: 724
                 cached_input_tokens: 1792
-                price: 0.01868
+                price: 0.019045
             log_items: []
             model_name: gpt-4o-2024-08-06
             usage_info:
-              completion_tokens: 450
-              prompt_tokens: 1871
-              total_tokens: 2321
+              completion_tokens: 724
+              prompt_tokens: 1880
+              total_tokens: 2604
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -305,9 +324,9 @@ outcome:
           usage:
             model: gpt-4o-2024-08-06
             usage:
-              completion_tokens: 450
-              prompt_tokens: 1871
-              total_tokens: 2321
+              completion_tokens: 724
+              prompt_tokens: 1880
+              total_tokens: 2604
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0

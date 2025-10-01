@@ -5,8 +5,8 @@ args:
   strategy: prove_equality_interactive
   args:
     equality:
-      - sin(pi/2 + x)
-      - cos(x)
+      - sin(x + y) - sin(x - y)
+      - 2*cos(x)*sin(y)
   policy: prove_equality_interactive_policy
   policy_args:
     model_name: gpt-4o
@@ -25,42 +25,50 @@ outcome:
     success: true
     values:
       - 1:
-          - - sin(pi/2 + x)
-            - sin(pi/2)*cos(x) + cos(pi/2)*sin(x)
+          - - sin(x + y)
+            - sin(x)*cos(y) + cos(x)*sin(y)
           - rule: sin_add
             vars:
-              x: pi/2
-              y: x
+              x: x
+              y: y
         2:
-          - - sin(pi/2)*cos(x) + cos(pi/2)*sin(x)
-            - 1*cos(x) + 0*sin(x)
-          - rule: sin_halfpi
+          - - sin(x - y)
+            - sin(x)*cos(y) - cos(x)*sin(y)
+          - rule: sin_add
+            vars:
+              x: x
+              y: -y
         3:
-          - - 1*cos(x) + 0*sin(x)
-            - cos(x)
-          - rule: cos_halfpi
-        4:
-          - - sin(pi/2 + x)
-            - cos(x)
+          - - sin(x + y) - sin(x - y)
+            - (sin(x)*cos(y) + cos(x)*sin(y)) - (sin(x)*cos(y) - cos(x)*sin(y))
           - trans:
               - 1
               - 2
+        4:
+          - - (sin(x)*cos(y) + cos(x)*sin(y)) - (sin(x)*cos(y) - cos(x)*sin(y))
+            - 2*cos(x)*sin(y)
+          - step: 3
+        5:
+          - - sin(x + y) - sin(x - y)
+            - 2*cos(x)*sin(y)
+          - trans:
               - 3
+              - 4
     spent_budget:
       num_requests: 1
       num_completions: 1
-      input_tokens: 1871
-      output_tokens: 409
-      cached_input_tokens: 1792
-      price: 0.01862875
+      input_tokens: 1880
+      output_tokens: 555
+      cached_input_tokens: 0
+      price: 0.005393749999999999
     log:
       - message: llm_request
         level: info
-        time: 2025-09-30 13:54:42.776799
+        time: 2025-09-30 15:04:40.106093
         node: 1
         space: cands
         metadata:
-          hash: 6349e78d
+          hash: 8a1defd5
           query: ProveEqualityInteractive
           request:
             chat:
@@ -219,49 +227,54 @@ outcome:
                       - {sym: 1}
                     ```
               - role: user
-                content: 'Prove the following equality: `sin(pi/2 + x) = cos(x)`.'
+                content: 'Prove the following equality: `sin(x + y) - sin(x - y) = 2*cos(x)*sin(y)`.'
             num_completions: 1
             options:
               temperature: 1.0
       - message: llm_response
         level: info
-        time: 2025-09-30 13:54:51.269759
+        time: 2025-09-30 15:04:52.983927
         node: 1
         space: cands
         metadata:
-          request: 6349e78d
+          request: 8a1defd5
           response:
             outputs:
-              - content: "To prove the equality `sin(pi/2 + x) = cos(x)`, we can use the `sin_add` rule\
-                  \ to expand `sin(pi/2 + x)` and then simplify it using basic trigonometric identities\
-                  \ that are allowed by the rules.\n\nWe start with:\n\n1. Use the angle addition formula\
-                  \ for sine, which is `sin_add`: `sin(a + b) = sin(a)*cos(b) + cos(a)*sin(b)`. \n\nApply\
-                  \ it to `sin(pi/2 + x)`:\n\n```\nsin(pi/2 + x) = sin(pi/2)*cos(x) + cos(pi/2)*sin(x)\n\
-                  ```\n\n2. Use the rule `sin_halfpi` which states `sin(pi/2) = 1`.\n3. Use the rule `cos_halfpi`\
-                  \ which states `cos(pi/2) = 0`.\n\nTherefore, we have:\n\n```\nsin(pi/2 + x) = 1*cos(x)\
-                  \ + 0*sin(x) = cos(x)\n```\n\nLet me now formalize this reasoning into a proof:\n\n\
-                  ```yaml\n1:\n  - [\"sin(pi/2 + x)\", \"sin(pi/2)*cos(x) + cos(pi/2)*sin(x)\"]\n  - {rule:\
-                  \ sin_add, vars: {x: \"pi/2\", y: \"x\"}}\n2:\n  - [\"sin(pi/2)*cos(x) + cos(pi/2)*sin(x)\"\
-                  , \"1*cos(x) + 0*sin(x)\"]\n  - {rule: sin_halfpi, vars: {}}\n3:\n  - [\"1*cos(x) +\
-                  \ 0*sin(x)\", \"cos(x)\"]\n  - {rule: cos_halfpi, vars: {}}\n4:\n  - [\"sin(pi/2 + x)\"\
-                  , \"cos(x)\"]\n  - {trans: [1, 2, 3]}\n```\n\nThis proof uses the rules correctly to\
-                  \ demonstrate the given trigonometric identity."
+              - content: "To prove the given equality, let's manipulate the left-hand side to arrive at\
+                  \ the right-hand side using the permitted trigonometric identities.\n\nWe start with:\n\
+                  \n\\[ \n\\sin(x + y) - \\sin(x - y) \n\\]\n\nBy applying the angle addition and subtraction\
+                  \ formulas:\n\n\\[\n\\sin(x + y) = \\sin(x)\\cos(y) + \\cos(x)\\sin(y)\n\\]\n\n\\[\n\
+                  \\sin(x - y) = \\sin(x)\\cos(y) - \\cos(x)\\sin(y)\n\\]\n\nSubtracting these gives:\n\
+                  \n\\[\n\\sin(x + y) - \\sin(x - y) = (\\sin(x)\\cos(y) + \\cos(x)\\sin(y)) - (\\sin(x)\\\
+                  cos(y) - \\cos(x)\\sin(y))\n\\]\n\nSimplifying by combining like terms, we get:\n\n\\\
+                  [\n\\sin(x + y) - \\sin(x - y) = \\sin(x)\\cos(y) + \\cos(x)\\sin(y) - \\sin(x)\\cos(y)\
+                  \ + \\cos(x)\\sin(y)\n\\]\n\n\\[\n= 2 \\cos(x) \\sin(y)\n\\]\n\nThus, we have shown:\n\
+                  \n\\[\n\\sin(x + y) - \\sin(x - y) = 2 \\cos(x) \\sin(y)\n\\]\n\nNow, let's formalize\
+                  \ this proof in a machine-checkable format using the provided rewriting rules.\n\n```yaml\n\
+                  1:\n  - [\"sin(x + y)\", \"sin(x)*cos(y) + cos(x)*sin(y)\"]\n  - {rule: sin_add, vars:\
+                  \ {x: \"x\", y: \"y\"}}\n2:\n  - [\"sin(x - y)\", \"sin(x)*cos(y) - cos(x)*sin(y)\"\
+                  ]\n  - {rule: sin_add, vars: {x: \"x\", y: \"-y\"}}\n3:\n  - [\"sin(x + y) - sin(x -\
+                  \ y)\", \"(sin(x)*cos(y) + cos(x)*sin(y)) - (sin(x)*cos(y) - cos(x)*sin(y))\"]\n  -\
+                  \ {trans: [1, 2]}\n4:\n  - [\"(sin(x)*cos(y) + cos(x)*sin(y)) - (sin(x)*cos(y) - cos(x)*sin(y))\"\
+                  , \"2*cos(x)*sin(y)\"]\n  - {step: 3}\n5:\n  - [\"sin(x + y) - sin(x - y)\", \"2*cos(x)*sin(y)\"\
+                  ]\n  - {trans: [3, 4]}\n``` \n\nIn the proof, we applied angle addition formulas and\
+                  \ simplified algebraically to arrive at the required equality."
                 tool_calls: []
                 finish_reason: stop
             budget:
               values:
                 num_requests: 1
                 num_completions: 1
-                input_tokens: 1871
-                output_tokens: 409
-                cached_input_tokens: 1792
-                price: 0.01862875
+                input_tokens: 1880
+                output_tokens: 555
+                cached_input_tokens: 0
+                price: 0.005393749999999999
             log_items: []
             model_name: gpt-4o-2024-08-06
             usage_info:
-              completion_tokens: 409
-              prompt_tokens: 1871
-              total_tokens: 2280
+              completion_tokens: 555
+              prompt_tokens: 1880
+              total_tokens: 2435
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -269,13 +282,13 @@ outcome:
                 rejected_prediction_tokens: 0
               prompt_tokens_details:
                 audio_tokens: 0
-                cached_tokens: 1792
+                cached_tokens: 0
           usage:
             model: gpt-4o-2024-08-06
             usage:
-              completion_tokens: 409
-              prompt_tokens: 1871
-              total_tokens: 2280
+              completion_tokens: 555
+              prompt_tokens: 1880
+              total_tokens: 2435
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -283,4 +296,4 @@ outcome:
                 rejected_prediction_tokens: 0
               prompt_tokens_details:
                 audio_tokens: 0
-                cached_tokens: 1792
+                cached_tokens: 0
