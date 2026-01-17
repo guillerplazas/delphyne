@@ -18,6 +18,7 @@ To check status:
     python experiments/baseline_experiment.py status
 """
 
+import delphyne as dp
 import mini_eqns_experiments as meq
 
 # Model configurations
@@ -50,9 +51,9 @@ configs = [
 ]
 
 if __name__ == "__main__":
-    meq.make_experiment(
-        meq.baseline_experiment,
-        configs,
-        "output",
-        __file__
+    dp.Experiment(
+        config_class=meq.BaselineConfig,
+        context=dp.workspace_execution_context(__file__),
+        configs=configs,
+        output_dir=f"experiments/output/{dp.path_stem(__file__)}",
     ).run_cli()

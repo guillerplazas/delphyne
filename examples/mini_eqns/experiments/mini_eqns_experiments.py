@@ -5,16 +5,10 @@ Shared utilities for running experiments on trigonometric equation proofs.
 Based on the structure from find_invariants/experiments/code2inv_experiments.py
 """
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 import delphyne as dp
-import delphyne.stdlib.commands as cmd
-from delphyne.stdlib.experiments.experiment_launcher import (
-    Experiment,
-    ExperimentFun,
-)
 
 
 # Load benchmark equations
@@ -51,60 +45,6 @@ def load_all_equations() -> dict[str, tuple[str, str]]:
 
 
 BENCHS = load_all_equations()
-MODULES = ["baseline_interactive", "checker"]
-DEMO_FILES = ["baseline_interactive"]  # String names, not Path objects
-
-
-def make_experiment[C](
-    experiment: ExperimentFun[C],
-    configs: Sequence[C],
-    output_dir: str,
-    exp_file: str,
-) -> Experiment[C]:
-    """
-    Create an experiment with the given configuration.
-
-    Args:
-        experiment: The experiment function to run
-        configs: List of configurations to test
-        output_dir: Output directory name
-        exp_file: The experiment file path (__file__)
-    """
-    workspace_root = Path(exp_file).parent.parent  # .../examples/mini_eqns
-    exp_name = Path(exp_file).stem
-    context = dp.CommandExecutionContext(
-        modules=MODULES,
-        demo_files=DEMO_FILES,
-    ).with_root(workspace_root)
-
-    # Define a naming function for configurations
-    def config_naming(cfg: object, _id: object) -> str:
-        """Generate a descriptive name for each configuration."""
-        try:
-            bench_name = getattr(cfg, "bench_name", "unknown")
-            model_name = getattr(cfg, "model_name", "unknown")
-            temperature = getattr(cfg, "temperature", 0.0)
-            max_feedback = getattr(cfg, "max_feedback_cycles", 0)
-            seed = getattr(cfg, "seed", 0)
-            # Format temperature nicely
-            temp_str = str(temperature).rstrip("0").rstrip(".") if temperature else "0"
-            return f"{bench_name}_{model_name}_T{temp_str}_FC{max_feedback}_S{seed}"
-        except Exception:
-            return str(_id)
-
-    return Experiment(
-        experiment=experiment,
-        context=context,
-        configs=configs,
-        name=exp_name,
-        output_dir=workspace_root / "experiments" / output_dir / exp_name,
-        config_naming=config_naming,
-    )
-
-
-#####
-##### Baseline Interactive Experiment
-#####
 
 
 @dataclass
@@ -118,33 +58,26 @@ class BaselineConfig:
     loop: bool = False
     max_dollar_budget: float | None = 0.2
 
+    def instantiate(self, context: object) -> dp.RunStrategyArgs:
+        """
+        Instantiate the configuration into a run_strategy command.
+        """
+        budget: dict[str, float] = {}
+        if self.max_dollar_budget is not None:
+            budget[dp.DOLLAR_PRICE] = self.max_dollar_budget
 
-def baseline_experiment(config: BaselineConfig) -> cmd.RunStrategyArgs:
-    """
-    Run the baseline interactive proof strategy on a benchmark equation.
+        lhs, rhs = BENCHS[self.bench_name]
 
-    Args:
-        config: The experiment configuration
-
-    Returns:
-        RunStrategyArgs for the experiment
-    """
-    budget: dict[str, float] = {}
-    if config.max_dollar_budget is not None:
-        budget[dp.DOLLAR_PRICE] = config.max_dollar_budget
-
-    lhs, rhs = BENCHS[config.bench_name]
-
-    return cmd.RunStrategyArgs(
-        strategy="prove_equality_interactive",
-        args={"equality": [lhs, rhs]},
-        policy="prove_equality_interactive_policy",
-        policy_args={
-            "model_name": config.model_name,
-            "temperature": config.temperature,
-            "max_feedback_cycles": config.max_feedback_cycles,
-            "loop": config.loop,
-        },
-        num_generated=1,
-        budget=budget,
-    )
+        return dp.RunStrategyArgs(
+            strategy="prove_equality_interactive",
+            args={"equality": [lhs, rhs]},
+            policy="prove_equality_interactive_policy",
+            policy_args={
+                "model_name": self.model_name,
+                "temperature": self.temperature,
+                "max_feedback_cycles": self.max_feedback_cycles,
+                "loop": self.loop,
+            },
+            num_generated=1,
+            budget=budget,
+        )
