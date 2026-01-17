@@ -9,17 +9,15 @@ from the former format to the latter.
 """
 
 import pprint
-from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, override
+from typing import Any
 
 import delphyne.core as dp
 from delphyne.analysis import feedback as fb
 from delphyne.analysis import navigation as nv
-
-# from delphyne.core import demos as dm
-from delphyne.core import refs
+from delphyne.analysis.resolvers import IRefResolver
+from delphyne.core import hrefs, irefs, refs
 from delphyne.utils import typing as tp
 
 #####
@@ -44,78 +42,61 @@ class RefSimplifier:
     hint_rev_map: nv.HintReverseMap
 
     def action(
-        self, node: refs.GlobalNodePath, action: refs.ValueRef
-    ) -> Sequence[refs.Hint] | None:
+        self, node: refs.GlobalNodeRef, action: refs.ValueRef
+    ) -> Sequence[hrefs.Hint] | None:
         return self.hint_rev_map.actions.get((node, action))
 
     def path_to(
-        self, orig_id: refs.GlobalNodePath, dst_id: refs.GlobalNodePath
-    ) -> Sequence[refs.Hint] | None:
-        # Compute a sequence of hints necessary to go from the root of a
-        # tree directly nested within `orig` to the destination.
-        match refs.global_path_origin(dst_id):
-            case "global_origin":
-                assert False
-            case ("nested", dst_origin, _):
-                assert dst_origin == orig_id
-                return ()
-            case ("child", before, action):
-                action_hints = self.hint_rev_map.actions.get((before, action))
-                if action_hints is None:
-                    return None
-                prefix = self.path_to(orig_id, before)
-                if prefix is None:
-                    return None
-                return tuple([*prefix] + [*action_hints])
+        self, space: refs.GlobalSpacePath, path: refs.NodePath
+    ) -> tuple[hrefs.Hint, ...]:
+        hints: list[hrefs.Hint] = []
+        cur = refs.GlobalNodeRef(space, refs.NodePath(()))
+        for action in path.actions:
+            action_hints = self.action(cur, action)
+            if action_hints is None:
+                raise ValueError("RefSimplifier: incomplete hint_rev_map.")
+            hints.extend(action_hints)
+            cur = cur.child(action)
+        return tuple(hints)
 
     def space_element_ref(
-        self, id: refs.GlobalNodePath, ref: refs.SpaceElementRef
-    ) -> refs.SpaceElementRef:
+        self, node_ref: refs.GlobalNodeRef, ref: refs.SpaceElementRef
+    ) -> hrefs.SpaceElementRef:
         assert ref.space is not None
-        # We start by converting the element answer ref or success path
+        gsref = node_ref.nested_space(ref.space)
         match ref.element:
-            case refs.HintsRef() | refs.AnswerId() | refs.NodeId():
-                assert False
             case refs.Answer():
-                aref: nv.AnswerRef = ((id, ref.space), ref.element)
-                if aref in self.hint_rev_map.answers:
-                    hint = self.hint_rev_map.answers[aref]
-                    hints = refs.HintsRef((hint,) if hint is not None else ())
-                    ref = refs.SpaceElementRef(ref.space, hints)
-            case tuple():  # Node path
-                gpath: refs.GlobalNodePath = (*id, (ref.space, ref.element))
-                hints_raw = self.path_to(id, gpath)
-                assert hints_raw is not None
-                hints = tuple(hints_raw)
-                ref = refs.SpaceElementRef(ref.space, refs.HintsRef(hints))
+                aref: refs.GlobalAnswerRef = (gsref, ref.element)
+                if aref not in self.hint_rev_map.answers:
+                    raise ValueError("Incomplete rev_map.")
+                hint = self.hint_rev_map.answers[aref]
+                hints = (hint,) if hint is not None else ()
+            case refs.NodePath():
+                hints = self.path_to(gsref, ref.element)
         # We make the space reference implicit if we can ('foo bar'
         # instead of cands{'foo bar'}).
-        assert isinstance(ref.element, refs.HintsRef)
-        tree = self.cache[id]
+        tree = self.cache[node_ref]
         node = tree.node
         assert isinstance(node, dp.Node)
         primary_ref = node.primary_space_ref()
         if primary_ref is not None and ref.space == primary_ref:
-            ref = refs.SpaceElementRef(None, ref.element)
-        elif ref.space is not None:
-            # Else we recursively simplify the space reference.
-            ref = refs.SpaceElementRef(
-                self.space_ref(id, ref.space), ref.element
-            )
-        return ref
+            return hrefs.SpaceElementRef(None, hints)
+        else:
+            h_space_ref = self.space_ref(node_ref, ref.space)
+            return hrefs.SpaceElementRef(h_space_ref, hints)
 
     def atomic_value_ref(
-        self, id: refs.GlobalNodePath, ref: refs.AtomicValueRef
-    ) -> refs.AtomicValueRef:
+        self, id: refs.GlobalNodeRef, ref: refs.AtomicValueRef
+    ) -> hrefs.AtomicValueRef:
         if isinstance(ref, refs.IndexedRef):
             parent = self.atomic_value_ref(id, ref.ref)
-            return refs.IndexedRef(parent, ref.index)
+            return hrefs.IndexedRef(parent, ref.index)
         else:
             return self.space_element_ref(id, ref)
 
     def value_ref(
-        self, id: refs.GlobalNodePath, v: refs.ValueRef
-    ) -> refs.ValueRef:
+        self, id: refs.GlobalNodeRef, v: refs.ValueRef
+    ) -> hrefs.ValueRef:
         if v is None:
             return None
         elif isinstance(v, tuple):
@@ -124,12 +105,12 @@ class RefSimplifier:
             return self.atomic_value_ref(id, v)
 
     def space_ref(
-        self, id: refs.GlobalNodePath, ref: refs.SpaceRef
-    ) -> refs.SpaceRef:
+        self, id: refs.GlobalNodeRef, ref: refs.SpaceRef
+    ) -> hrefs.SpaceRef:
         args = tuple(self.value_ref(id, a) for a in ref.args)
-        return refs.SpaceRef(ref.name, args)
+        return hrefs.SpaceRef(ref.name, args)
 
-    def answer(self, ref: nv.AnswerRef) -> refs.Hint | None:
+    def answer(self, ref: refs.GlobalAnswerRef) -> hrefs.Hint | None:
         return self.hint_rev_map.answers[ref]
 
 
@@ -159,119 +140,15 @@ def _value_repr[T](
 
 
 #####
-##### Listing all local spaces and elements
-#####
-
-
-## Enumerating spaces
-
-
-def _spaces_in_node_origin(
-    origin: refs.NodeOrigin,
-) -> Iterable[refs.SpaceRef]:
-    """
-    From a `Trace`, we want to recover a list of all the spawned spaces
-    for every encountered node. For this, we compile a list of all local
-    space references.
-    """
-    match origin:
-        case refs.ChildOf():
-            yield from _spaces_in_value_ref(origin.action)
-        case refs.NestedTreeOf():
-            yield from _spaces_in_space_ref(origin.space)
-
-
-def _spaces_in_atomic_value_ref(
-    ref: refs.AtomicValueRef,
-) -> Iterable[refs.SpaceRef]:
-    if isinstance(ref, refs.IndexedRef):
-        yield from _spaces_in_atomic_value_ref(ref.ref)
-    else:
-        if ref.space is not None:
-            yield from _spaces_in_space_ref(ref.space)
-
-
-def _spaces_in_value_ref(
-    value: refs.ValueRef,
-) -> Iterable[refs.SpaceRef]:
-    if value is None:
-        pass
-    elif isinstance(value, tuple):
-        for v in value:
-            yield from _spaces_in_value_ref(v)
-    else:
-        yield from _spaces_in_atomic_value_ref(value)
-
-
-def _spaces_in_space_ref(ref: refs.SpaceRef) -> Iterable[refs.SpaceRef]:
-    yield ref
-    for a in ref.args:
-        yield from _spaces_in_value_ref(a)
-
-
-## Enumerating space elements
-
-
-def _space_elements_in_value_ref(
-    value: refs.ValueRef,
-) -> Iterable[refs.SpaceElementRef]:
-    if value is None:
-        pass
-    elif isinstance(value, tuple):
-        for v in value:
-            yield from _space_elements_in_value_ref(v)
-    else:
-        yield from _space_elements_in_atomic_value_ref(value)
-
-
-def _space_elements_in_atomic_value_ref(
-    value: refs.AtomicValueRef,
-) -> Iterable[refs.SpaceElementRef]:
-    if isinstance(value, refs.IndexedRef):
-        yield from _space_elements_in_atomic_value_ref(value.ref)
-    else:
-        yield value
-        if value.space is not None:
-            yield from _space_elements_in_space_ref(value.space)
-
-
-def _space_elements_in_space_ref(
-    ref: refs.SpaceRef,
-) -> Iterable[refs.SpaceElementRef]:
-    for a in ref.args:
-        yield from _space_elements_in_value_ref(a)
-
-
-#####
-##### ID Resolver
-#####
-
-
-class IdentifierResolverFromCache(nv.IdentifierResolver):
-    def __init__(self, trace: dp.Trace, cache: dp.TreeCache) -> None:
-        self.trace = trace
-        # Index cached nodes by ids instead of full paths.
-        self.cache: dict[refs.NodeId, dp.AnyTree] = {}
-        for id in trace.nodes:
-            self.cache[id] = cache[trace.expand_node_id(id)]
-
-    @override
-    def resolve_node(self, id: refs.NodeId) -> dp.AnyTree:
-        return self.cache[id]
-
-    @override
-    def resolve_answer(self, id: refs.AnswerId) -> dp.Answer:
-        return self.trace.answers[id][1]
-
-
-#####
 ##### Browsable Traces
 #####
 
 
 def compute_browsable_trace(
     trace: dp.Trace,
-    cache: dp.TreeCache,
+    *,
+    cache: dp.TreeCache | None = None,
+    root: dp.AnyTree | None = None,
     simplifier: RefSimplifier | None = None,
 ) -> fb.Trace:
     """
@@ -279,8 +156,14 @@ def compute_browsable_trace(
 
     A simplifier is typically only available for demonstrations.
     """
-    id_resolver = IdentifierResolverFromCache(trace, cache)
-    tr = _TraceTranslator(trace, id_resolver, simplifier)
+    assert root is not None or cache is not None, (
+        "Either `root` or `cache` must be provided "
+        "to `compute_browsable_trace`."
+    )
+    resolver = IRefResolver(trace, root=root)
+    if cache is not None:
+        resolver.load_tree_cache(cache)
+    tr = _TraceTranslator(trace, resolver, simplifier)
     return tr.translate_trace()
 
 
@@ -288,59 +171,38 @@ class _TraceTranslator:
     def __init__(
         self,
         trace: dp.Trace,
-        id_resolver: nv.IdentifierResolver,
+        resolver: IRefResolver,
         simplifier: RefSimplifier | None = None,
     ) -> None:
         self.trace = trace
-        # The id resolver is necessary because we read a trace that has
-        # references with ids.
-        self.id_resolver = id_resolver
+        self.resolver = resolver
         self.rev_map = dp.TraceReverseMap.make(trace)
         self.simplifier = simplifier
-        # This maps all nodes to a set of local spaces. We do not use
-        # Python sets but dicts instead since converting a set to a list
-        # is nondeterministic.
-        self.spaces: dict[refs.NodeId, dict[refs.SpaceRef, None]] = (
-            defaultdict(dict)
-        )
         # Each local space is mapped to a property id. Note that local
         # data can also consume such ids.
-        self.space_prop_ids: dict[
-            tuple[refs.NodeId, refs.SpaceRef], fb.TraceNodePropertyId
-        ] = {}
+        self.space_prop_ids: dict[irefs.SpaceId, fb.TraceNodePropertyId] = {}
         # For each node, we map action references to ids.
         self.action_ids: dict[
-            tuple[refs.NodeId, refs.ValueRef], fb.TraceActionId
+            tuple[irefs.NodeId, irefs.ValueRef], fb.TraceActionId
         ] = {}
         # Both `self.space_prop_ids` and `self.action_ids` are populated
         # when a node is translated and read later by `translate_origin`
         # when processing a child node or a directly nested node.
+        self.spaces: dict[
+            fb.TraceSpaceId, tuple[fb.TraceNodeId, fb.TraceNodePropertyId]
+        ] = {}
 
     def translate_trace(self) -> fb.Trace:
-        self.detect_spaces()
         # We rely on the nodes in the trace being presented in
         # topological order (see explanation in `translate_node`).
         ids = list(self.trace.nodes.keys())
-        trace = fb.Trace({id.id: self.translate_node(id) for id in ids})
+        nodes = {id.id: self.translate_node(id) for id in ids}
+        trace = fb.Trace(nodes=nodes, spaces=self.spaces)
         return trace
 
-    def detect_spaces(self) -> None:
-        # We go through the node origin table of the trace to detect
-        # spaces and set `self.spaces`.
-        for origin in self.trace.nodes.values():
-            id = origin.node
-            for space in _spaces_in_node_origin(origin):
-                self.spaces[id][space] = None
-        # The answer table also features query origin information, from
-        # which additional spaces can be extracted.
-        for origin in self.trace.answer_ids.keys():
-            id = origin.node
-            for space in _spaces_in_space_ref(origin.ref):
-                self.spaces[id][space] = None
-
-    def translate_node(self, id: refs.NodeId) -> fb.Node:
+    def translate_node(self, id: irefs.NodeId) -> fb.Node:
         # Computing the success value if any
-        tree = self.id_resolver.resolve_node(id)
+        tree = self.resolver.resolve_node(id)
         node = tree.node
         if isinstance(node, dp.Success):
             value = refs.drop_refs(node.success)
@@ -351,11 +213,15 @@ class _TraceTranslator:
         # are translated in topological order. Indeed, when a node is
         # processed and its origin is translated (`translate_origin`),
         # the property id of its originator is needed.
-        prop_refs = {k: None for k in self.spaces[id]}
-        for i, ref in enumerate(prop_refs):
-            self.space_prop_ids[(id, ref)] = i
+        local_spaces = self.rev_map.local_spaces[id]
+        for i, space_id in enumerate(local_spaces):
+            self.space_prop_ids[space_id] = i
+        # TODO: add data fields.
         # Now we can translate properties
-        props = [self.translate_space(id, r) for r in prop_refs]
+        props = [self.translate_space(sid) for sid in local_spaces]
+        for i, (_, sid, _) in enumerate(props):
+            if sid is not None:
+                self.spaces[sid] = (id.id, i)
         # Computing actions. The same reasoning than for property ids
         # applies since `translate_origin` also reads action ids.
         actions: list[fb.Action] = []
@@ -377,8 +243,7 @@ class _TraceTranslator:
 
     def translate_strategy_comp(
         self,
-        id: refs.NodeId,
-        ref: refs.SpaceRef,
+        space_id: irefs.SpaceId,
         strategy: dp.StrategyComp[Any, Any, Any],
         tags: Sequence[dp.Tag],
     ) -> fb.NodeProperty:
@@ -392,7 +257,9 @@ class _TraceTranslator:
         args = {a: _value_repr(v, hints[a]) for a, v in args_raw.items()}
         # We obtain the root id of the nested tree, which can be `None`
         # if the tree hasn't been explored.
-        root_id = self.rev_map.nested_trees[id].get(ref)
+        origin = self.trace.spaces[space_id]
+        assert not isinstance(origin, irefs.MainSpace)
+        root_id = self.rev_map.nested_trees[origin.node].get(space_id)
         root_id_raw = root_id.id if root_id is not None else None
         return fb.NestedTree(
             kind="nested",
@@ -404,28 +271,22 @@ class _TraceTranslator:
 
     def translate_query(
         self,
-        id: refs.NodeId,
-        ref: refs.SpaceRef,
+        space_id: irefs.SpaceId,
         query: dp.AbstractQuery[Any],
         tags: Sequence[dp.Tag],
     ) -> fb.NodeProperty:
         name = query.query_name()
         args = query.serialize_args()
         answers: list[fb.Answer] = []
-        origin = dp.QueryOrigin(id, ref)
-        for a, aid in self.trace.answer_ids.get(origin, {}).items():
+        for aid in self.rev_map.query_answers.get(space_id, []):
+            a = self.trace.answers[aid].answer
             parsed = query.parse_answer(a)
             parsed_repr = _value_repr(parsed, query.answer_type())
             hint_str: tuple[()] | tuple[str] | None = None
             if self.simplifier is not None:
                 # If a simplifier is provided, the associated hint must
-                # be in the rev map. Note that we must compute an
-                # expanded reference to use the simplifier.
-                full_gsref = (
-                    self.trace.expand_node_id(id),
-                    self.trace.expand_space_ref(id, ref),
-                )
-                full_aref: nv.AnswerRef = (full_gsref, a)
+                # be in the rev map.
+                full_aref = self.trace.expand_answer_id(aid)
                 hint = self.simplifier.answer(full_aref)
                 if hint is None:
                     hint_str = ()
@@ -443,66 +304,64 @@ class _TraceTranslator:
         )
 
     def translate_space(
-        self, id: refs.NodeId, ref: refs.SpaceRef
-    ) -> tuple[fb.Reference, fb.NodeProperty]:
-        nav = nv.Navigator(id_resolver=self.id_resolver)
-        tree = self.id_resolver.resolve_node(id)
-        space = nav.resolve_space_ref(tree, ref)
+        self, space_id: irefs.SpaceId
+    ) -> tuple[fb.Reference, fb.TraceSpaceId | None, fb.NodeProperty]:
+        space = self.resolver.resolve_space(space_id)
+        assert space != "main"
         match source := space.source():
             case dp.NestedTree():
                 prop = self.translate_strategy_comp(
-                    id, ref, source.strategy, space.tags()
+                    space_id, source.strategy, space.tags()
                 )
             case dp.AttachedQuery():
                 prop = self.translate_query(
-                    id, ref, source.query, space.tags()
+                    space_id, source.query, space.tags()
                 )
-        ref_str = fb.Reference(
-            with_ids=dp.pprint.space_ref(ref), with_hints=None
-        )
+        # In the UI, what do we want to show?
+        origin = self.trace.spaces[space_id]
+        assert not isinstance(origin, irefs.MainSpace)
+        ref_str = fb.Reference(with_ids=str(origin.space), with_hints=None)
         if self.simplifier is not None:
-            full_nref = self.trace.expand_node_id(id)
-            full_sref = self.trace.expand_space_ref(id, ref)
+            full_nref = self.trace.expand_node_id(origin.node)
+            full_sref = self.trace.expand_space_ref(origin.space)
             simplified = self.simplifier.space_ref(full_nref, full_sref)
-            ref_str.with_hints = dp.pprint.space_ref(simplified)
-        return (ref_str, prop)
+            ref_str.with_hints = str(simplified)
+        return (ref_str, space_id.id, prop)
 
     def translate_action(
-        self, src: refs.NodeId, action: refs.ValueRef, dst: refs.NodeId
+        self, src: irefs.NodeId, action: irefs.ValueRef, dst: irefs.NodeId
     ) -> fb.Action:
         # The `dst` argument is the id of the node that the action leads to
         # Compute two representations of the reference
         ref_str = fb.Reference(
-            with_ids=dp.pprint.value_ref(action), with_hints=None
+            with_ids=irefs.show_value_ref(action), with_hints=None
         )
         hints_str: list[str] | None = None
         if self.simplifier is not None:
             # There are two ways actions could be shown in the UI using
             # hints. See `feedback.Action`.
             full_src_ref = self.trace.expand_node_id(src)
-            full_aref = self.trace.expand_value_ref(src, action)
+            full_aref = self.trace.expand_value_ref(action)
             hints = self.simplifier.action(full_src_ref, full_aref)
             simplified_value_ref = self.simplifier.value_ref(
                 full_src_ref, full_aref
             )
-            ref_str.with_hints = dp.pprint.value_ref(simplified_value_ref)
+            ref_str.with_hints = hrefs.show_value_ref(simplified_value_ref)
             if hints is None:
                 hints_str = None
             else:
-                hints_str = [dp.pprint.hint(h) for h in hints]
+                hints_str = [str(h) for h in hints]
         # Computing related successes and answers (see `feedback`
         # documentation). Using dicts instead of sets to ensure determinism.
         related_successes: dict[fb.TraceNodeId, None] = {}
         related_answers: dict[fb.TraceAnswerId, None] = {}
-        for elt in _space_elements_in_value_ref(action):
-            if isinstance(elt.element, refs.NodeId):
+        for elt in self.trace.space_elements_in_value_ref(action):
+            if isinstance(elt.element, irefs.NodeId):
                 related_successes[elt.element.id] = None
-            elif isinstance(elt.element, refs.AnswerId):
+            else:
                 related_answers[elt.element.id] = None
         # Rendering the value itself by resolving it.
-        nav = nv.Navigator(id_resolver=self.id_resolver)
-        tree = self.id_resolver.resolve_node(src)
-        value = nav.resolve_value_ref(tree, action)
+        value = self.resolver.resolve_value(src, action)
         repr = _value_repr(refs.drop_refs(value), refs.value_type(value))
         return fb.Action(
             ref=ref_str,
@@ -513,13 +372,15 @@ class _TraceTranslator:
             destination=dst.id,
         )
 
-    def translate_origin(self, id: refs.NodeId) -> fb.NodeOrigin:
+    def translate_origin(self, id: irefs.NodeId) -> fb.NodeOrigin:
         match self.trace.nodes[id]:
-            case refs.ChildOf(parent, action):
+            case irefs.ChildOf(parent, action):
                 action_id = self.action_ids[(parent, action)]
                 return ("child", parent.id, action_id)
-            case refs.NestedTreeOf(parent, space):
-                if parent == dp.Trace.GLOBAL_ORIGIN_ID:
+            case irefs.NestedIn(space_id):
+                space_def = self.trace.spaces[space_id]
+                if isinstance(space_def, irefs.MainSpace):
                     return "root"
-                prop_id = self.space_prop_ids[(parent, space)]
+                parent = space_def.node
+                prop_id = self.space_prop_ids[space_id]
                 return ("nested", parent.id, prop_id)

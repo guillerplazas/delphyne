@@ -6,14 +6,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import partial
 
-import delphyne.analysis as analysis
-import delphyne.core as dp
+import delphyne.core_and_base as dp
 import delphyne.stdlib.environments as en
 import delphyne.stdlib.models as md
 import delphyne.stdlib.models as mo
 import delphyne.stdlib.queries as qu
 import delphyne.stdlib.standard_models as stdm
-import delphyne.stdlib.streams as st
 import delphyne.stdlib.tasks as ta
 import delphyne.utils.caching as ca
 from delphyne.core.streams import Barrier, Solution, Spent
@@ -34,6 +32,7 @@ class AnswerQueryArgs:
         prompt_only: If `True`, a dummy model is used that always
             errors, so that only the prompt can be seen in the logs.
         model: The name of the model to use for answering the query.
+        options: Options to pass to the model.
         num_answers: The number of answers to generate.
         iterative_mode: Whether to answer the query in iterative mode
             (see `few_shot` for details).
@@ -49,10 +48,12 @@ class AnswerQueryArgs:
     args: dict[str, object]
     prompt_only: bool
     model: str | None = None
+    options: md.RequestOptions | None = None
     num_answers: int = 1
     iterative_mode: bool = False
     budget: dict[str, float] | None = None
     cache_file: str | None = None
+    embeddings_cache_file: str | None = None
     cache_mode: ca.CacheMode = "read_write"
     log_level: dp.LogLevel = "info"
 
@@ -65,34 +66,43 @@ class AnswerQueryResponse:
 
 def answer_query_with_cache(
     task: ta.TaskContext[ta.CommandResult[AnswerQueryResponse]],
-    exe: ta.CommandExecutionContext,
+    exe: ta.ExecutionContext,
     cmd: AnswerQueryArgs,
-    cache_spec: md.LLMCache | None,
+    cache: md.LLMCache | None,
+    embeddings_cache: dp.EmbeddingsCache | None,
 ):
-    # TODO: support adding examples?
-    loader = analysis.ObjectLoader(exe.base, extra_objects=stdlib_globals())
+    loader = exe.object_loader(extra_objects=stdlib_globals())
     query = loader.load_query(cmd.query, cmd.args)
     env = en.PolicyEnv(
+        object_loader=loader,
         prompt_dirs=exe.prompt_dirs,
         data_dirs=exe.data_dirs,
         demonstration_files=exe.demo_files,
-        do_not_match_identical_queries=True,
-        cache=cache_spec,
+        cache=cache,
+        embeddings_cache=embeddings_cache,
         log_level=cmd.log_level,
     )
     attached = dp.spawn_standalone_query(query)
     model_name = cmd.model or DEFAULT_MODEL_NAME
-    model = stdm.standard_model(model_name)
+    model = stdm.standard_model(model_name, cmd.options)
     if cmd.prompt_only:
         model = mo.DummyModel()
-    policy = qu.few_shot(model=model, iterative_mode=cmd.iterative_mode)
-    stream = policy(attached, env).gen()
+    policy = qu.few_shot(
+        model=model,
+        iterative_mode=cmd.iterative_mode,
+        # We exclude examples related to the exact same query, since
+        # `answer_query` is typically used to inepect model behavior and
+        # there is little to see if the answer is directly copied from
+        # an example.
+        select_examples=dp.all_examples.exclude_identical_queries(),
+    )
+    stream = policy(attached, env)
     if cmd.budget is not None:
-        stream = st.stream_with_budget(stream, dp.BudgetLimit(cmd.budget))
+        stream = stream.with_budget(dp.BudgetLimit(cmd.budget))
     if cmd.prompt_only:
         only_one_req = dp.BudgetLimit({mo.NUM_REQUESTS: 1})
-        stream = st.stream_with_budget(stream, only_one_req)
-    stream = st.stream_take(stream, cmd.num_answers)
+        stream = stream.with_budget(only_one_req)
+    stream = stream.take(cmd.num_answers)
     total_budget = dp.Budget.zero()
     num_successes = 0
 
@@ -122,7 +132,7 @@ def answer_query_with_cache(
 
 def answer_query(
     task: ta.TaskContext[ta.CommandResult[AnswerQueryResponse]],
-    exe: ta.CommandExecutionContext,
+    exe: ta.ExecutionContext,
     cmd: AnswerQueryArgs,
 ):
     """
@@ -132,5 +142,6 @@ def answer_query(
         partial(answer_query_with_cache, task, exe, cmd),
         cache_root=exe.cache_root,
         cache_file=cmd.cache_file,
+        embeddings_cache_file=cmd.embeddings_cache_file,
         cache_mode=cmd.cache_mode,
     )

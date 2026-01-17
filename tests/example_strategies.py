@@ -115,10 +115,10 @@ def make_conjecture[P, T](
     aggregation function that combines several candidates into a list of
     candidates (e.g. removing semantic duplicates).
     """
-    cand = yield dp.spawn_node(
+    recv = yield dp.spawn_node(
         Conjecture, cands=cands, disprove=disprove, aggregate=aggregate
     )
-    return cast(T, cand)
+    return cast(T, recv.action)
 
 
 @dp.search_policy
@@ -132,12 +132,9 @@ def just_guess[P, T](
         case dp.Success(x):
             yield dp.Solution(x)
         case Conjecture(candidate):
-            rec = candidate.stream(env, policy).bind(
-                lambda y: just_guess()(
-                    tree.child(y.tracked), env, policy
-                ).gen()
+            yield from candidate.stream(env, policy).bind(
+                lambda y: just_guess()(tree.child(y.tracked), env, policy)
             )
-            yield from rec.gen()
 
 
 #####
@@ -740,7 +737,7 @@ def recursive_joins(
     depth: int,
 ) -> Strategy[
     dp.Join | dp.Message | dp.Compute | dp.Flag[MethodFlag],
-    dp.NodeMeta,
+    dp.NodeMeta | None,
     int,
 ]:
     if depth == 0:
@@ -755,6 +752,7 @@ def recursive_joins(
         return sum(res)
 
 
+@dp.ensure_compatible(recursive_joins)
 def recursive_joins_policy():
     from delphyne.stdlib.search import recursive_search as dprs
 
@@ -765,6 +763,18 @@ def recursive_joins_policy():
         @ dp.elim_flag(MethodFlag, "def")
     )
     return sp & dprs.OneOfEachSequentially()
+
+
+@dp.ensure_compatible(recursive_joins)
+def recursive_joins_policy_using_elim_join():
+    return (
+        dp.dfs()
+        @ dp.elim_messages()
+        @ dp.elim_compute()
+        @ dp.elim_join()
+        @ dp.elim_flag(MethodFlag, "def")
+        & None
+    )
 
 
 #####
@@ -919,28 +929,27 @@ class AskNumber(dp.Query[dp.Response[int | dp.WrappedParseError, Never]]):
     __parser__ = dp.get_text.map(parse_83).wrap_errors.response
 
     @override
-    def hindsight_answer(self, feedback: object):
-        assert isinstance(feedback, int)
-        return dp.Answer(None, str(feedback))
+    def unparse(self, value: dp.Response[int | dp.WrappedParseError, Never]):
+        assert isinstance(val := value.unwrap(), int)
+        return dp.Answer(None, str(val))
 
 
 @strategy
 def get_magic_number() -> Strategy[
-    Branch | dp.Hindsight, dp.PromptingPolicy, int
+    Branch | dp.Feedback, dp.PromptingPolicy, int
 ]:
     ret = yield from dp.interact(
         step=lambda pre, _: AskNumber(pre).using(dp.ambient_pp),
         process=lambda x, _: dp.const_space(x),
-    )
-    yield from dp.hindsight(
-        AskNumber(()), feedback=ret, as_parsed_answer=False
+        produce_feedback=True,
+        unprocess=lambda res: res,
     )
     return ret
 
 
 @dp.ensure_compatible(get_magic_number)
 def get_magic_number_policy(model: dp.LLM, no_wrap: bool):
-    sp = dp.dfs() @ dp.elim_hindsight()
+    sp = dp.dfs() @ dp.elim_feedback()
     pp = dp.few_shot(model, no_wrap_parse_errors=no_wrap)
     return sp & pp
 
@@ -1021,3 +1030,24 @@ def strategy_loading_data(key: str) -> dp.Strategy[dp.Data, None, str]:
 @dp.ensure_compatible(strategy_loading_data)
 def strategy_loading_data_policy():
     return dp.dfs() @ dp.elim_data() & None
+
+
+#####
+##### Embeddings
+#####
+
+
+@dataclass
+class AnswerTriviaQuestion(dp.Query[str]):
+    """
+    Answer the given trivia questions.
+    """
+
+    question: str
+
+    __parser__ = dp.get_text
+    __instance_prompt__: ClassVar[str] = "{{query.question}}"
+    __embed_query_prompt__: ClassVar[str] = "{{query.question}}"
+    __embed_example_prompt__: ClassVar[str] = (
+        "{{query.question}}\n\nAnswer: {{answer}}"
+    )

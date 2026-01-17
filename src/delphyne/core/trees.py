@@ -12,7 +12,7 @@ from delphyne.core import inspect, refs
 from delphyne.core import node_fields as nf
 from delphyne.core.node_fields import NodeFields, detect_node_structure
 from delphyne.core.queries import AbstractQuery, ParseError
-from delphyne.core.refs import GlobalNodePath, SpaceName, Tracked, Value
+from delphyne.core.refs import GlobalNodeRef, SpaceName, Tracked, Value
 from delphyne.utils.typing import NoTypeInfo, TypeAnnot
 
 #####
@@ -60,6 +60,12 @@ class Space[T](ABC):
         """
         pass
 
+    def ref(self) -> refs.GlobalSpacePath:
+        """
+        Return a global reference to the space.
+        """
+        return self.source().ref
+
 
 @dataclass(frozen=True)
 class AttachedQuery[T]:
@@ -105,9 +111,7 @@ class TransparentQuery[T](Space[T]):
         query: AbstractQuery[T1],
     ) -> "SpaceBuilder[TransparentQuery[T1]]":
         return SpaceBuilder(
-            build=lambda _, spawner, tags: TransparentQuery(
-                spawner(query), tags
-            ),
+            lambda _, spawner, tags: TransparentQuery(spawner(query), tags),
             tags=query.default_tags(),
         )
 
@@ -298,7 +302,7 @@ class Node(ABC):
         space = self.primary_space()
         if space is None:
             return None
-        return space.source().ref[1]
+        return space.source().ref.local_ref()
 
     @final
     def nested_space(
@@ -443,13 +447,13 @@ generated and returned.
 ####
 
 
-type Strategy[N: Node, P, T] = Generator[NodeBuilder[N, P], object, T]
+type Strategy[N: Node, P, T] = Generator[NodeBuilder[N, P], ActionWithRefs, T]
 """
 Type of a strategy computation.
 
 A strategy computation is a generator (i.e., a coroutine) that yields
-node builders and receives corresponding actions, until it returns a
-success value.
+node builders and receives corresponding action/reference pairs, until
+it returns a success value.
 
 Type Parameters:
     N: The strategy's signature, typically a union of node types
@@ -463,6 +467,21 @@ Type Parameters:
     references. The task of concretely building nodes and maintaining
     references is delegated to the `refine` function.
 """
+
+
+@dataclass(frozen=True)
+class ActionWithRefs:
+    """
+    An action along with a reference to the node that the action is
+    associated and a local reference to the value representing the action.
+
+    Strategy generators expect to receive such tuples. Receiving references
+    is useful for implementing hindsight feedback.
+    """
+
+    action: object
+    node_ref: refs.GlobalNodeRef
+    value_ref: refs.ValueRef
 
 
 # We provide manual variance annotations since `P` is a phantom type
@@ -658,7 +677,7 @@ class EmbeddedTree[N: Node, P, T](Space[T]):
         strategy: StrategyComp[N1, P1, T1],
     ) -> "SpaceBuilder[EmbeddedTree[N1, P1, T1]]":
         return SpaceBuilder[EmbeddedTree[N1, P1, T1]](
-            build=lambda spawn, _, tags: EmbeddedTree(spawn(strategy), tags),
+            lambda spawn, _, tags: EmbeddedTree(spawn(strategy), tags),
             tags=strategy.default_tags(),
         )
 
@@ -703,7 +722,7 @@ class QuerySpawner(Protocol):
 
 
 @dataclass(frozen=True)
-class SpaceBuilder[S]:
+class SpaceBuilder[S: Space[Any]]:
     """
     Wrapper for a function that builds a space, given the ability to
     spawn nested trees and attached queries.
@@ -715,11 +734,11 @@ class SpaceBuilder[S]:
     ultimately passed to the resulting space.
 
     Attributes:
-        build: Wrapped builder function
-        tags: Tags to be assocaited to the space.
+        _build: Wrapped builder function
+        tags: Tags to be associated to the space.
     """
 
-    build: Callable[[NestedTreeSpawner, QuerySpawner, Sequence[Tag]], S]
+    _build: Callable[[NestedTreeSpawner, QuerySpawner, Sequence[Tag]], S]
     tags: Sequence[Tag]
 
     def tagged(self, *tags: Tag) -> "SpaceBuilder[S]":
@@ -735,7 +754,7 @@ class SpaceBuilder[S]:
         Build a space, given the provided capabilities along with the
         current set of tags.
         """
-        return self.build(spawner, query_spawner, self.tags)
+        return self._build(spawner, query_spawner, self.tags)
 
 
 class AbstractBuilderExecutor(ABC):
@@ -748,14 +767,16 @@ class AbstractBuilderExecutor(ABC):
     """
 
     @abstractmethod
-    def parametric[S](
+    def parametric[S: Space[Any]](
         self,
         space_name: SpaceName,
         parametric_builder: Callable[..., SpaceBuilder[S]],
     ) -> Callable[..., S]: ...
 
     @abstractmethod
-    def nonparametric[S](self, name: SpaceName, builder: SpaceBuilder[S]) -> S:
+    def nonparametric[S: Space[Any]](
+        self, name: SpaceName, builder: SpaceBuilder[S]
+    ) -> S:
         return self.parametric(name, lambda: builder)()
 
 
@@ -797,7 +818,7 @@ class Tree(Generic[N, P, T]):
 
     node: "N | Success[T]"
     child: "Callable[[Value], Tree[N, P, T]]"
-    ref: GlobalNodePath
+    ref: GlobalNodeRef
 
     def transform[M: Node](
         self,

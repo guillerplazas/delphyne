@@ -1,18 +1,25 @@
 [project]
 name = "delphyne"
-version = "0.13.0"
+version = "0.14.2"
 description = ""
 authors = [{name="Jonathan Laurent", email="jonathan.laurent@cs.cmu.edu"}]
 readme = "README.md"
-requires-python = ">=3.12"
+
+# Python >=3.12 is required for PEP 695 generics.
+# Python >=3.13 is not supported due to an unresolved typing issue:
+# https://discuss.python.org/t/make-replace-stop-interfering-with-variance-inference/96092
+requires-python = ">=3.12,<3.13"
 
 dependencies = [
     "fastapi>=0.111",  # to implement the delphyne language server
     "Jinja2>=3.1",  # for rendering prompt templates
-    "numpy>=2.0",  # e.g., for performing operations on probability vectors
+    "numpy>=2.0",  # e.g., for performing operations on probability vectors and embeddings
     "openai>=1.99",  # for accessing openai-compatible LLM APIs
+    "tiktoken>=0.12.0",  # for estimating budget in advance and estimate embedding costs
+    "h5py>=3.15",  # for implementing embedding caches
     "parsy>=2.1",  # for parsing test commands
     "pyyaml>=6.0",  # standard `yaml` module
+    "filelock>=3.18.0",  # to coordinate access to the global embedding cache file
     "pydantic>=2.8",
     "pytest>=8.2",
     "setuptools>=80.0",
@@ -59,8 +66,9 @@ where = ["src"]
 # Formatting with ruff
 [tool.ruff]
 line-length = 79
+ignore = ["E731"]  # allow inline lambdas
 
-# Currently tested with pyright==1.1.405
+# Currently tested with pyright==1.1.406
 [tool.pyright]
 typeCheckingMode = "strict"
 include = ["src/**", "tests/**"]

@@ -20,9 +20,11 @@ import pandas as pd  # type: ignore
 import yaml
 
 import delphyne.core as dp
+import delphyne.stdlib.answer_loaders as al
 import delphyne.stdlib.commands as cmd
-from delphyne.stdlib.tasks import CommandExecutionContext, run_command
-from delphyne.utils.typing import NoTypeInfo, pydantic_dump, pydantic_load
+from delphyne.stdlib.execution_contexts import ExecutionContext
+from delphyne.stdlib.tasks import run_command
+from delphyne.utils.typing import pydantic_dump, pydantic_load
 
 EXPERIMENT_STATE_FILE = "experiment.yaml"
 STATUS_FILE = "statuses.txt"
@@ -30,6 +32,7 @@ RESULT_FILE = "result.yaml"
 LOG_FILE = "log.txt"
 EXCEPTION_FILE = "exception.txt"
 CACHE_FILE = "cache.yaml"
+EMBEDDINGS_CACHE_FILE = "embeddings.cache.h5"
 RESULTS_SUMMARY = "results_summary.csv"
 CONFIGS_SUBDIR = "configs"
 SNAPSHOTS_DIR = "snapshots"
@@ -46,8 +49,66 @@ def _relative_cache_path(config_name: str) -> str:
     return str(_config_dir_path(Path("."), config_name) / CACHE_FILE)
 
 
+def _relative_embeddings_cache_path(config_name: str) -> str:
+    return str(
+        _config_dir_path(Path("."), config_name) / EMBEDDINGS_CACHE_FILE
+    )
+
+
+def summary_file_path(output_dir: Path) -> Path:
+    """
+    Public function to get the path to the summary file, given an
+    experiment's output directory.
+    """
+    return output_dir / RESULTS_SUMMARY
+
+
+def result_file_path(output_dir: Path, config_name: str) -> Path:
+    """
+    Public function to get the path to a configuration's result file,
+    given an experiment's output directory and the configuration name.
+    """
+    return _config_dir_path(output_dir, config_name) / RESULT_FILE
+
+
+class ExperimentConfig(Protocol):
+    """
+    A configuration is a dataclass that holds a set of hyperparameters,
+    which induce a `run_strategy` call.
+
+    !!! note
+        The following arguments must not be set since they are managed
+        by the `Experiment` class. Any specified value may be discarded.
+
+        - `cache_file`
+        - `embeddings_cache_file`
+        - `cache_mode`
+
+        The following arguments may be set, but the `Experiment` class
+        offers options to override them.
+
+        - `log_level`
+        - `export_raw_trace`
+        - `export_log`
+        - `export_browsable_trace`
+        - `export_all_on_pull`
+    """
+
+    def instantiate(self, context: object) -> cmd.RunStrategyArgs:
+        """
+        Instantiate the configuration into a `run_strategy` command
+        instance.
+
+        Arguments:
+            context: Additional global context information that can be
+                optionally passed by the experiment. By default,
+                experiments just pass `None`.
+        """
+        ...
+
+
 @dataclass
-class ConfigInfo[Config]:
+class ConfigInfo[C: ExperimentConfig]:
     """
     Information stored in the persistent configuration state for each
     configuration.
@@ -62,7 +123,7 @@ class ConfigInfo[Config]:
             must then be `todo`).
     """
 
-    params: Config
+    params: C
     status: Literal["todo", "done", "failed"]
     start_time: datetime | None = None
     end_time: datetime | None = None
@@ -70,16 +131,16 @@ class ConfigInfo[Config]:
 
 
 @dataclass
-class ExperimentState[Config]:
+class ExperimentState[C: ExperimentConfig]:
     """
     Persistent state of an experiment, stored on disk as a YAML file.
     """
 
     name: str | None
     description: str | None
-    configs: dict[str, ConfigInfo[Config]]
+    configs: dict[str, ConfigInfo[C]]
 
-    def inverse_mapping(self) -> Callable[[Config], str | None]:
+    def inverse_mapping(self) -> Callable[[C], str | None]:
         """
         Compute an inverse function mapping configurations to their
         unique names (or None if not in the state).
@@ -88,21 +149,10 @@ class ExperimentState[Config]:
         for name, info in self.configs.items():
             tab[_config_unique_repr(info.params)] = name
 
-        def reverse(config: Config) -> str | None:
+        def reverse(config: C) -> str | None:
             return tab.get(_config_unique_repr(config), None)
 
         return reverse
-
-
-class ExperimentFun[Config](Protocol):
-    """
-    A function defining an experiment, which maps a configuration (i.e.,
-    a set of parameters) to a set of arguments for the `run_strategy`
-    command. Note that caching-related arguments do not need to be set
-    since they are overriden by the `Experiment` class.
-    """
-
-    def __call__(self, config: Config, /) -> cmd.RunStrategyArgs: ...
 
 
 @dataclass
@@ -131,7 +181,7 @@ class WorkersSetup[T]:
 
 
 @dataclass(kw_only=True)
-class Experiment[Config]:
+class Experiment[C: ExperimentConfig]:
     """
     An experiment that consists in running an oracular program on a set of
     different hyperparameter combinations.
@@ -145,26 +195,30 @@ class Experiment[Config]:
     calls to LLMs or to tools with non-replicable outputs.
 
     Type Parameters:
-        Config: Type parameter for the configuration type, which is a
+        C: Type parameter for the configuration type, which is a
             dataclass that holds all experiment hyperparameters.
 
     Attributes:
-        experiment: The experiment function, which defines a run of an
-            oracular program for each configuration.
-        output_dir: The directory where all experiment data is stored
-            (persistent state, results, logs, caches...). The directory
-            is created if it does not alredy exist.
+        config_class: The associated configuration class, which defines
+            the hyperparameters of the experiment and how to map them to
+            arguments of the `run_strategy` command.
         context: Command execution context, which contains the kind of
             information usually provided in the `delphyne.yaml` file
             (experiments do not recognize such files). Note that the
             `cache_root` argument should not be set, since it is
             disregarded and overriden by the `Experiment` class.
+        output_dir: The directory where all experiment data is stored
+            (persistent state, results, logs, caches...), either as an
+            absolute path or relative to the workspace root specified in
+            `context`. The directory is created if it does not alredy
+            exist.
         configs: A sequence of configurations to run. If `None` is
             provided and the experiment already has a persistent state
             stored on disk, the list of configurations is loaded from
             there upon loading.
-        config_type: The `Config` type, which is either passed
-            explicitly or deduced from the `configs` argument.
+        configs_context: A global context parameter to be passed to all
+            configurations' instantiation method. This value must be
+            picklable since it is sent to remote worker processes.
         name: Experiment name, which is stored in the persistent state
             file when provided and is otherwise not used.
         description: Experiment description, which is stored in the
@@ -178,50 +232,63 @@ class Experiment[Config]:
             issuing LLM calls.
         workers_setup: If provided, specifies the setup work to be
             performed on all processes (see `WorkersSetup`).
-        log_level: If provided, overrides the `log_level` argument of
-            the command returned by the `experiment` function.
+        log_level: Minimum log level to record. Messages with a lower
+            level will be ignored. (Override the corresponding
+            `RunStrategyArgs` setting if provided.)
         export_raw_trace: Whether to export the raw trace for all
-            configuration runs.
+            configuration runs. (Override the corresponding
+            `RunStrategyArgs` setting if provided.)
         export_log: Whether to export the log messages for all
-            configuration runs.
+            configuration runs. (Override the corresponding
+            `RunStrategyArgs` setting if provided.)
         export_browsable_trace: Whether to export a browsable trace for
             all configuration runs, which can be visualized in the VSCode
-            extension (see `delphyne.analysis.feedback.Trace`). However,
-            such traces can be large.
+            extension (see `delphyne.analysis.feedback.Trace`). Note that
+            such traces can be large and can be generated after the fact
+            using the Delphyne CLI. (Override the corresponding
+            `RunStrategyArgs` setting if provided.)
         verbose_snapshots: If `True`, when a snapshot is requested, all
             result information (raw trace, log, browsable trace) is
             dumped, regardless of other settings.
 
     ## Tips
 
-    - New hyperparameters can be added to the `Config` type without
+    - New hyperparameters can be added to the `C` type without
       invalidating an existing experiment's persistent state, by
       providing default values for them.
     """
 
-    experiment: ExperimentFun[Config]
-    output_dir: Path  # absolute path expected
-    context: CommandExecutionContext
-    configs: Sequence[Config] | None = None
-    config_type: type[Config] | NoTypeInfo = NoTypeInfo()
+    config_class: type[C]
+    context: ExecutionContext
+    output_dir: Path | str  # relative path expected
+    configs: Sequence[C] | None = None
+    configs_context: object | None = None
     name: str | None = None
     description: str | None = None
-    config_naming: Callable[[Config, uuid.UUID], str] | None = None
+    config_naming: Callable[[C, uuid.UUID], str] | None = None
     cache_requests: bool = True
     workers_setup: WorkersSetup[Any] | None = None
     log_level: dp.LogLevel | None = None
-    export_raw_trace: bool = True
-    export_log: bool = True
-    export_browsable_trace: bool = True
-    verbose_snapshots: bool = False
+    export_raw_trace: bool | None = None
+    export_log: bool | None = None
+    export_browsable_trace: bool | None = None
+    verbose_snapshots: bool | None = None
 
     def __post_init__(self):
         # We override the cache root directory.
-        assert self.context.cache_root is None
-        self.context = replace(self.context, cache_root=self.output_dir)
-        if isinstance(self.config_type, NoTypeInfo):
-            if self.configs:
-                self.config_type = type(self.configs[0])
+        self.context = replace(
+            self.context, cache_root=self.absolute_output_dir
+        )
+
+    @property
+    def absolute_output_dir(self) -> Path:
+        """
+        Get the absolute output directory, by combining the
+        `context.root` and `output_dir` paths.
+        """
+        if self.context.workspace_root is None:
+            raise ValueError("No workspace root is specified.")
+        return self.context.workspace_root / self.output_dir
 
     def load(self) -> Self:
         """
@@ -241,9 +308,10 @@ class Experiment[Config]:
         """
         if not self._dir_exists():
             # If we create the experiment for the first time
-            print(f"Creating experiment directory: {self.output_dir}.")
-            self.output_dir.mkdir(parents=True, exist_ok=True)
-            state = ExperimentState[Config](self.name, self.description, {})
+            output_dir = self.absolute_output_dir
+            print(f"Creating experiment directory: {output_dir}.")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            state = ExperimentState[C](self.name, self.description, {})
             self._save_state(state)
         if self.configs is not None:
             self._add_configs_if_needed(self.configs)
@@ -390,7 +458,9 @@ class Experiment[Config]:
             snapshot_name = str(datetime.now()).replace(" ", "_")
             snapshot_name = snapshot_name.replace(":", "-")
             snapshot_name = snapshot_name.replace(".", "_")
-            snapshot_dir = self.output_dir / SNAPSHOTS_DIR / snapshot_name
+            snapshot_dir = (
+                self.absolute_output_dir / SNAPSHOTS_DIR / snapshot_name
+            )
             snapshot_dir.mkdir(parents=True, exist_ok=True)
             # Generate snapshot index
             index: list[str] = []
@@ -463,9 +533,9 @@ class Experiment[Config]:
                 executor.submit(
                     _run_config,
                     context=self.context,
+                    configs_context=self.configs_context,
                     worker_send=worker_send,
                     worker_receive=manager.Queue(),
-                    experiment=self.experiment,
                     config_name=name,
                     config_dir=self._config_dir(name),
                     config=info.params,
@@ -515,15 +585,19 @@ class Experiment[Config]:
         it exists.
 
         This way, one can debug the execution of an experiment after the
-        fact, without any LLMs being called.
+        fact, without any LLMs being called. Note that one can also
+        replay a configuration that failed with an exception within a
+        debugger to investigate it.
         """
         state = self._load_state()
         assert state is not None
         assert config_name is not None
         info = state.configs[config_name]
-        assert info.status == "done"
-        cmdargs = self.experiment(info.params)
+        cmdargs = info.params.instantiate(self.configs_context)
         cmdargs.cache_file = _relative_cache_path(config_name)
+        cmdargs.embeddings_cache_file = _relative_embeddings_cache_path(
+            config_name
+        )
         cmdargs.cache_mode = "replay"
         run_command(
             command=cmd.run_strategy,
@@ -534,7 +608,7 @@ class Experiment[Config]:
             dump_log=None,
         )
 
-    def replay_config(self, config: Config) -> None:
+    def replay_config(self, config: C) -> None:
         """
         Replay a configuration. See `replay_config_by_name` for details.
         """
@@ -552,6 +626,27 @@ class Experiment[Config]:
             print(f"Replaying configuration: {config_name}...")
             self.replay_config_by_name(config_name)
 
+    def config_success_values_by_name(
+        self, config_name: str, *, type: Any
+    ) -> Sequence[Any]:
+        """
+        Load the success values associated with a given configuration,
+        identified by name.
+        """
+        result_file = (
+            _config_dir_path(self.absolute_output_dir, config_name)
+            / RESULT_FILE
+        )
+        return al.load_success_values_from_command_file(result_file, type)
+
+    def config_success_values(self, config: C, *, type: Any) -> Sequence[Any]:
+        """
+        Load the success values associated with a given configuration.
+        """
+        config_name = self._existing_config_name(config)
+        assert config_name is not None
+        return self.config_success_values_by_name(config_name, type=type)
+
     def save_summary(
         self, ignore_missing: bool = False, add_timing: bool = False
     ):
@@ -567,13 +662,14 @@ class Experiment[Config]:
                 each configuration.
         """
 
+        output_dir = self.absolute_output_dir
         data = _results_summary(
-            self.output_dir,
+            output_dir,
             ignore_missing=ignore_missing,
             add_timing=add_timing,
         )
         frame = pd.DataFrame(data)
-        summary_file = self.output_dir / RESULTS_SUMMARY
+        summary_file = output_dir / RESULTS_SUMMARY
         frame.to_csv(summary_file, index=False)  # type: ignore
 
     def load_summary(self):
@@ -584,7 +680,8 @@ class Experiment[Config]:
         `save_summary` method.
         """
 
-        summary_file = self.output_dir / RESULTS_SUMMARY
+        output_dir = self.absolute_output_dir
+        summary_file = output_dir / RESULTS_SUMMARY
         data = pd.DataFrame, pd.read_csv(summary_file)  # type: ignore
         return data
 
@@ -612,9 +709,9 @@ class Experiment[Config]:
         fire.Fire(ExperimentCLI(self))  # type: ignore
 
     def _config_dir(self, config_name: str) -> Path:
-        return _config_dir_path(self.output_dir, config_name)
+        return _config_dir_path(self.absolute_output_dir, config_name)
 
-    def _add_configs_if_needed(self, configs: Sequence[Config]) -> None:
+    def _add_configs_if_needed(self, configs: Sequence[C]) -> None:
         state = self._load_state()
         assert state is not None
         rev = state.inverse_mapping()
@@ -636,25 +733,25 @@ class Experiment[Config]:
         self._save_state(state)
 
     def _dir_exists(self) -> bool:
-        return self.output_dir.exists() and self.output_dir.is_dir()
-
-    def _state_type(self) -> type[ExperimentState[Config]]:
-        assert not isinstance(self.config_type, NoTypeInfo), (
-            "Please set `Experiment.config_type`."
+        return (
+            self.absolute_output_dir.exists()
+            and self.absolute_output_dir.is_dir()
         )
-        return ExperimentState[self.config_type]
 
-    def _load_state(self) -> ExperimentState[Config] | None:
-        with open(self.output_dir / EXPERIMENT_STATE_FILE, "r") as f:
+    def _state_type(self) -> type[ExperimentState[C]]:
+        return ExperimentState[self.config_class]
+
+    def _load_state(self) -> ExperimentState[C] | None:
+        with open(self.absolute_output_dir / EXPERIMENT_STATE_FILE, "r") as f:
             parsed = yaml.safe_load(f)
             return pydantic_load(self._state_type(), parsed)
 
-    def _save_state(self, state: ExperimentState[Config]) -> None:
-        with open(self.output_dir / EXPERIMENT_STATE_FILE, "w") as f:
+    def _save_state(self, state: ExperimentState[C]) -> None:
+        with open(self.absolute_output_dir / EXPERIMENT_STATE_FILE, "w") as f:
             to_save = pydantic_dump(self._state_type(), state)
             yaml.safe_dump(to_save, f, sort_keys=False)
 
-    def _existing_config_name(self, config: Config) -> str | None:
+    def _existing_config_name(self, config: C) -> str | None:
         state = self._load_state()
         assert state is not None
         for name, info in state.configs.items():
@@ -750,20 +847,21 @@ class _ConfigSnapshot:
     result: str | None
 
 
-def _run_config[Config](
-    context: CommandExecutionContext,
-    experiment: ExperimentFun[Config],
+def _run_config(
+    *,
+    context: ExecutionContext,
+    configs_context: object | None,
     worker_send: Queue[_WorkerSent],
     worker_receive: Queue[_WorkerReceived],
     config_name: str,
     config_dir: Path,
-    config: Config,
+    config: ExperimentConfig,
     cache_requests: bool,
     log_level: dp.LogLevel | None,
-    export_raw_trace: bool,
-    export_log: bool,
-    export_browsable_trace: bool,
-    verbose_snapshots: bool,
+    export_raw_trace: bool | None,
+    export_log: bool | None,
+    export_browsable_trace: bool | None,
+    verbose_snapshots: bool | None,
 ) -> tuple[str, bool]:
     # Setup a monitor
     started = _ConfigStarted(config_name, worker_receive, datetime.now())
@@ -801,24 +899,31 @@ def _run_config[Config](
     threading.Thread(target=monitor).start()
 
     # Create and launch the main command
-    cache_file = None
-    if cache_requests:
-        cache_file = config_dir / CACHE_FILE
-        if cache_file.exists():
-            cache_file.unlink(missing_ok=True)
     for f in (STATUS_FILE, RESULT_FILE, LOG_FILE):
         file_path = config_dir / f
         if file_path.exists():
             file_path.unlink(missing_ok=True)
-    cmdargs = experiment(config)
+    cmdargs = config.instantiate(configs_context)
     if cache_requests:
         # A relative path is expected!
         cmdargs.cache_file = _relative_cache_path(config_name)
+        cmdargs.embeddings_cache_file = _relative_embeddings_cache_path(
+            config_name
+        )
+        assert context.cache_root is not None  # guaranteed by Experiment
+        (context.cache_root / cmdargs.cache_file).unlink(missing_ok=True)
+        (context.cache_root / cmdargs.embeddings_cache_file).unlink(
+            missing_ok=True
+        )
     cmdargs.cache_mode = "create"
-    cmdargs.export_browsable_trace = export_browsable_trace
-    cmdargs.export_log = export_log
-    cmdargs.export_raw_trace = export_raw_trace
-    cmdargs.export_all_on_pull = verbose_snapshots
+    if export_browsable_trace is not None:
+        cmdargs.export_browsable_trace = export_browsable_trace
+    if export_log is not None:
+        cmdargs.export_log = export_log
+    if export_raw_trace is not None:
+        cmdargs.export_raw_trace = export_raw_trace
+    if verbose_snapshots is not None:
+        cmdargs.export_all_on_pull = verbose_snapshots
     if log_level is not None:
         cmdargs.log_level = log_level
     try:
@@ -869,11 +974,13 @@ class ExperimentCLI:
         *,
         max_workers: int = 1,
         retry_errors: bool = False,
-        cache: bool = True,
-        verbose_output: bool = False,
-        log_level: str | None = None,
         interactive: bool = False,
-        verbose_snapshots: bool = False,
+        log: bool | None = None,
+        log_level: str | None = None,
+        cache: bool | None = None,
+        raw_trace: bool | None = None,
+        browsable_trace: bool | None = None,
+        verbose_snapshots: bool | None = None,
     ):
         """
         Start or resume the experiment.
@@ -881,24 +988,34 @@ class ExperimentCLI:
         Attributes:
             max_workers: Number of parallel process workers to use.
             retry_errors: Mark failed configurations to be retried.
-            cache: Enable caching of LLM requests and potentially
-                non-replicable computations.
-            verbose_output: Export raw traces and browsable traces in
-                result files, enabling inspection by the Delphyne VSCode
-                extension's tree view.
             log_level: If provided, overrides the `log_level` argument of
                 the command returned by the `experiment` function.
             interactive: If `True`, pressing `Enter` at any point during
                 execution prints the current status of all workers and
                 dumps a snapshot of ongoing tasks on disk.
-            verbose_snapshots: If `True`, snapshots are verbose regardless
-                of the `verbose_output` setting.
+            cache: If provided, override the `cache_requests` setting of
+                the experiment.
+            log: If provided, override the `export_log` setting of the
+                experiment.
+            log_level: If provided, override the `log_level` setting of
+                the experiment.
+            raw_trace: If provided, override the `export_raw_trace`
+                setting of the experiment.
+            browsable_trace: If provided, override the
+                `export_browsable_trace` setting of the experiment.
+            verbose_snapshots: If provided, override the
+                `verbose_snapshots` setting of the experiment.
         """
-        self.experiment.cache_requests = cache
-        self.experiment.export_raw_trace = verbose_output
-        self.experiment.export_browsable_trace = verbose_output
-        self.experiment.export_log = True
-        self.experiment.verbose_snapshots = verbose_snapshots
+        if cache is not None:
+            self.experiment.cache_requests = cache
+        if raw_trace is not None:
+            self.experiment.export_raw_trace = raw_trace
+        if browsable_trace is not None:
+            self.experiment.export_browsable_trace = browsable_trace
+        if log is not None:
+            self.experiment.export_log = log
+        if verbose_snapshots is not None:
+            self.experiment.verbose_snapshots = verbose_snapshots
         if log_level is not None:
             assert dp.valid_log_level(log_level), (
                 f"Invalid log level: {log_level}"
@@ -953,3 +1070,20 @@ class ExperimentCLI:
         self.experiment.load().save_summary(
             ignore_missing=True, add_timing=add_timing
         )
+
+
+#####
+##### Convenience utilities
+#####
+
+
+def path_stem(path: Path | str) -> str:
+    """
+    Convenience function to get the stem of a path, which is useful to
+    automatically derive experiment names without importing `Path`.
+
+    Example usage:
+
+        experiment_name = dp.path_stem(__file__)
+    """
+    return Path(path).stem

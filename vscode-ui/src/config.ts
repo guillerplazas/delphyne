@@ -56,18 +56,19 @@ export function getWorkspaceRoot(filePath: string | null): string {
 // Configuration File and Command Execution Contexts
 /////
 
-export interface CommandExecutionContext {
+export interface ExecutionContext {
+  strategy_dirs?: string[];
   modules?: string[];
   demo_files?: string[];
-  strategy_dirs?: string[];
   prompt_dirs?: string[];
   data_dirs?: string[];
   cache_root?: string;
+  init?: (string | [string, Record<string, any>])[];
   result_refresh_period?: number | null;
   status_refresh_period?: number | null;
 }
 
-export interface Config extends CommandExecutionContext {}
+export interface Config extends ExecutionContext {}
 
 function loadConfig(rootDir: string): Config {
   const configFilePath = path.join(rootDir, CONFIG_FILE_NAME);
@@ -131,9 +132,9 @@ export function loadLocalConfig(doc: vscode.TextDocument): Config {
 }
 
 // Returns the command execution context for a specific document, using local config if present
-export function getLocalCommandExecutionContext(
+export function getLocalExecutionContext(
   doc: vscode.TextDocument,
-): CommandExecutionContext {
+): ExecutionContext {
   return loadLocalConfig(doc);
 }
 

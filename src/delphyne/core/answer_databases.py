@@ -58,37 +58,19 @@ class FromCommandResult:
     Attributes:
         command_file: Path to the command file, relative to the
             workspace root.
-        answer_id: Index of the answer within the command result
-            (0-based).
+        answer_id: Index of the answer within the command result.
+        modified: Whether the answer was modified by custom feedback
+            handlers.
     """
 
     source: Literal["command_result"]
     command_file: str
     answer_id: int
-
-
-@dataclass(frozen=True)
-class FromCommandResultHindsightFeedback:
-    """
-    Source of an answer located in the hindsight feedback collected
-    during the execution of a command.
-
-    Attributes:
-        command_file: Path to the command file, relative to the
-            workspace root.
-        node_id: Index of the associated hindsight feedback node.
-    """
-
-    source: Literal["command_result_hindsight"]
-    command_file: str
-    node_id: int
+    modified: bool
 
 
 type LocatedAnswerSource = (
-    FromStandaloneQueryDemo
-    | FromStrategyDemo
-    | FromCommandResult
-    | FromCommandResultHindsightFeedback
+    FromStandaloneQueryDemo | FromStrategyDemo | FromCommandResult
 )
 """
 Provenance information for answers in databases.
@@ -108,9 +90,8 @@ def pp_located_answer_source(src: LocatedAnswerSource) -> str:
                 f"{src.query_id}:{src.answer_id}"
             )
         case FromCommandResult():
-            return f"{src.command_file}:trace:{src.answer_id}"
-        case FromCommandResultHindsightFeedback():
-            return f"{src.command_file}:hindsight_feedback:{src.node_id}"
+            mod = "!" if src.modified else ""
+            return f"{src.command_file}:trace:{src.answer_id}{mod}"
 
 
 @dataclass
@@ -121,9 +102,6 @@ class LocatedAnswer:
 
     answer: Answer
     source: LocatedAnswerSource
-
-    def is_from_hindsight_feedback(self) -> bool:
-        return isinstance(self.source, FromCommandResultHindsightFeedback)
 
 
 @dataclass(frozen=True)
@@ -176,7 +154,7 @@ class SeveralAnswerMatches(Exception):
         return "\n".join(lines)
 
 
-type AnswerDatabaseLoader = Callable[
+type AnswerLoader = Callable[
     [AnswerSource], Iterable[tuple[SerializedQuery, LocatedAnswer]]
 ]
 """
@@ -205,7 +183,7 @@ class AnswerDatabase:
     answers: dict[SerializedQuery, list[LocatedAnswer]]
 
     def __init__(
-        self, sources: Sequence[AnswerSource], *, loader: AnswerDatabaseLoader
+        self, sources: Sequence[AnswerSource], *, loader: AnswerLoader
     ):
         """
         Initialize the database by loading answers from a number of
@@ -241,15 +219,11 @@ class AnswerDatabase:
 
         Return `None` if there is no match and the matching answer if
         there is a unique match. Raise `SeveralAnswerMatches` if there
-        are multiple matches. If one match comes from hindsight
-        feedback, it is preferred over other matches.
+        are multiple matches.
         """
         cands = self.answers[query]
         if not cands:
             return None
-        # If a candidate uses hindsight feedback, prefer it.
-        if any(c.is_from_hindsight_feedback() for c in cands):
-            cands = [c for c in cands if c.is_from_hindsight_feedback()]
         if len(cands) == 1:
             return cands[0]
         raise SeveralAnswerMatches(query, cands)

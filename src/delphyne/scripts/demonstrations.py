@@ -20,11 +20,10 @@ class DemoFileFeedback:
     def add_diagnostic(
         self, demo_name: str, loc: str, diag: analysis.Diagnostic
     ):
-        t, s = diag
-        pp = f"[{demo_name}:{loc}] {s}"
-        if t == "error":
+        pp = f"[{demo_name}:{loc}] {diag.message}"
+        if diag.severity == "error":
             self.errors.append(pp)
-        elif t == "warning":
+        elif diag.severity == "warning":
             self.warnings.append(pp)
 
     def add_diagnostics(self, demo_name: str, f: analysis.DemoFeedback):
@@ -45,27 +44,41 @@ class DemoFileFeedback:
                 self.add_diagnostic(demo_name, f"query_{qi}:answer_{ai}", d)
             for cat, d in f.implicit_answers.items():
                 msg = f"Implicit answers: {cat} ({len(d)} answer(s))"
-                self.add_diagnostic(demo_name, "implicit", ("warning", msg))
+                diag = analysis.Diagnostic("warning", msg)
+                self.add_diagnostic(demo_name, "implicit", diag)
 
 
 def check_demo_file(
-    file: Path, context: stdlib.CommandExecutionContext, workspace_root: Path
+    file: Path,
+    context: stdlib.ExecutionContext,
+    workspace_root: Path,
+    demo_name: str | None = None,
 ) -> DemoFileFeedback:
+    """
+    Check a demonstration file. If `demo_name` is provided, only that
+    demonstration will be checked; otherwise, all demonstrations in the
+    file will be checked.
+    """
     # TODO: we should better report line numbers.
     demos_json = yaml.safe_load(open(file, "r").read())
     demos = ty.pydantic_load(list[dp.Demo], demos_json)
-    extra = stdlib.stdlib_globals()
+    if demo_name is not None:
+        demos = [d for d in demos if d.demonstration == demo_name]
+        if not demos:
+            raise ValueError(
+                f"Demonstration '{demo_name}' not found in file {file}"
+            )
     ret = DemoFileFeedback([], [])
+    loader = context.object_loader(extra_objects=stdlib.stdlib_globals())
     for i, d in enumerate(demos):
         feedback = analysis.evaluate_demo(
             d,
-            context.base,
-            extra_objects=extra,
-            answer_database_loader=dp.standard_answer_loader(workspace_root),
-            load_implicit_answer_generators=(
-                stdlib.stdlib_implicit_answer_generators_loader(
-                    context.data_dirs
-                )
+            object_loader=loader,
+            answer_database_loader=dp.standard_answer_loader(
+                workspace_root, loader
+            ),
+            implicit_answer_generators=(
+                stdlib.stdlib_implicit_answer_generators(context.data_dirs)
             ),
         )
         name = d.demonstration if d.demonstration else f"#{i}"

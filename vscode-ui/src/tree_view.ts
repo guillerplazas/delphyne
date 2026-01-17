@@ -13,6 +13,9 @@ import {
   TraceAnswerId,
   TraceNodeId,
   NestedTree,
+  Reference,
+  TraceSpaceId,
+  StrategyDemoFeedback,
 } from "./stubs/feedback";
 import { Element } from "./elements";
 import { QueryDemo, StrategyDemo } from "./stubs/demos";
@@ -22,6 +25,7 @@ import {
   serializeWithoutLocInfo,
 } from "./yaml_utils";
 import { ROOT_ID } from "./common";
+import { logWarning } from "./logging";
 
 const USE_PROPERTY_ICONS = true;
 const COLLAPSE_BY_DEFAULT = true;
@@ -58,8 +62,31 @@ function renderAnswerHint(
       : `'${hint[0]}'`;
 }
 
+function renderUINodeIdAnnot(id: number): string {
+  return `[${id}]`;
+  // return `(ID ${id})`;
+  // return `#${id}`;
+  // return `(#${id})`;
+}
+
+function renderUISpaceIdAnnot(id: number): string {
+  return `[${id}]`;
+  // return `(ID ${id})`;
+  // return `#${id}`;
+  // return `(#${id})`;
+}
+
 function renderActionLabel(main: string, numDescendants: number): string {
   return `${main} / ${numDescendants}`;
+}
+
+function renderPropertyLabel(
+  ref: Reference,
+  sid: TraceSpaceId | null,
+  prop: NodeProperty,
+): string {
+  const refLabel = ref.with_hints ?? ref.with_ids;
+  return sid === null ? refLabel : `${renderUISpaceIdAnnot(sid)} ${refLabel}`;
 }
 
 // function renderActionLabel(main: string, numDescendants: number): string {
@@ -78,8 +105,9 @@ export class TreeInfo {
   constructor(
     public readonly trace: Trace,
     public readonly origin: Element,
+    public readonly feedback?: StrategyDemoFeedback,
   ) {
-    this.cached = computeCachedInfo(trace, origin);
+    this.cached = computeCachedInfo(trace, origin, feedback);
   }
   public readonly cached: TreeCachedInfo;
 }
@@ -89,6 +117,7 @@ export class TreeInfo {
 interface TreeCachedInfo {
   fromDemo: boolean;
   existingQueries: Set<QueryKey>;
+  unreachableQueryTypes: Set<string>;
 }
 
 // The input of a tree view, which is determined by a tree along with a node within it.
@@ -117,15 +146,37 @@ export function queryDemoKey(query: QueryDemo): QueryKey {
   return serializeWithoutLocInfo({ name: query.query, args: query.args });
 }
 
-function computeCachedInfo(trace: Trace, origin: Element): TreeCachedInfo {
+function computeCachedInfo(
+  trace: Trace,
+  origin: Element,
+  feedback?: StrategyDemoFeedback,
+): TreeCachedInfo {
   let existingQueries: QueriesMap = new Set();
+  let unreachableQueryTypes: Set<string> = new Set();
+
   if (origin.kind === "strategy_demo") {
     const demo = JSON.parse(origin.demo) as StrategyDemo;
     for (const query of demo.queries) {
       existingQueries.add(queryDemoKey(query));
     }
+    // Collect unreachable query types from feedback diagnostics
+    if (feedback) {
+      for (const [queryId, diagnostic] of feedback.query_diagnostics) {
+        // Check if diagnostic has an "unreachable" tag
+        if (diagnostic.tags && diagnostic.tags.includes("unreachable")) {
+          // Get the query name from the demo
+          const queryName = demo.queries[queryId].query;
+          unreachableQueryTypes.add(queryName);
+        }
+      }
+    }
   }
-  return { existingQueries, fromDemo: origin.kind === "strategy_demo" };
+
+  return {
+    existingQueries,
+    unreachableQueryTypes,
+    fromDemo: origin.kind === "strategy_demo",
+  };
 }
 
 type QueriesMap = Set<QueryKey>;
@@ -139,7 +190,14 @@ function queryContextValue(query: Query, pointedTree: PointedTree) {
   } else if (cached.fromDemo) {
     exists = false;
   }
-  return `query:exists-${exists}`;
+  // If the query does not exist but unreachable queries with the same type are
+  // known, then we want to propose a refactoring action and so we set an
+  // 'update-args-available' flag.
+  let updateArgsAvailable = false;
+  if (exists === false && cached.unreachableQueryTypes.has(query.name)) {
+    updateArgsAvailable = true;
+  }
+  return `query:exists-${exists}:update-args-${updateArgsAvailable}`;
 }
 
 //////
@@ -449,7 +507,7 @@ function collectDescendants(
   for (const action of node.actions) {
     collectDescendants(trace, action.destination, acc);
   }
-  for (const [_, nestedTree] of node.properties) {
+  for (const [_ref, _sid, nestedTree] of node.properties) {
     if (nestedTree.kind === "nested" && nestedTree.node_id !== null) {
       collectDescendants(trace, nestedTree.node_id, acc);
     }
@@ -512,6 +570,20 @@ export class TreeView {
         const node_id = Number(value);
         this.setSelectedNode(node_id, true);
       }),
+      vscode.commands.registerCommand(
+        "delphyne.jumpToSpaceWithId",
+        async () => {
+          const value = await vscode.window.showInputBox({
+            title: "Jump to space",
+            prompt: "Enter a space identifier",
+          });
+          if (value === undefined) {
+            return;
+          }
+          const space_id = Number(value);
+          this.setSelectedSpace(space_id);
+        },
+      ),
     );
   }
 
@@ -533,11 +605,29 @@ export class TreeView {
     if (this.pointedTree === null) {
       return;
     }
+    const trace = this.pointedTree.tree.trace;
+    if (!(node_id in trace.nodes)) {
+      logWarning(`Attempted to jump to invalid node id: ${node_id}.`);
+      return;
+    }
     if (push_to_history) {
       this.navigationHistory.push(node_id);
     }
     this.pointedTree = new PointedTree(this.pointedTree.tree, node_id);
     this.updateViews();
+  }
+
+  setSelectedSpace(space_id: TraceSpaceId, push_to_history: boolean = true) {
+    if (this.pointedTree === null) {
+      return;
+    }
+    const trace = this.pointedTree.tree.trace;
+    if (!(space_id in trace.spaces)) {
+      logWarning(`Attempted to jump to invalid space id: ${space_id}.`);
+      return;
+    }
+    const node_id = trace.spaces[space_id][0];
+    this.setSelectedNode(node_id, (push_to_history = push_to_history));
   }
 
   undoNavigationAction() {
@@ -554,7 +644,7 @@ export class TreeView {
     if (this.pointedTree) {
       const node = this.pointedTree.getNode();
       const nodeId = this.pointedTree.selectedNode;
-      this.nodeView.description = `${node.kind} (${nodeId})`;
+      this.nodeView.description = `${node.kind} ${renderUINodeIdAnnot(nodeId)}`;
       if (node.summary_message !== null) {
         this.nodeView.message = node.summary_message;
       }
@@ -684,11 +774,11 @@ class NodeView implements vscode.TreeDataProvider<NodeViewItem> {
           },
         ];
       }
-      const children: PropertyItem[] = node.properties.map(([k, v]) => {
+      const children: PropertyItem[] = node.properties.map(([k, sid, v]) => {
         const node_id = v.kind === "nested" ? v.node_id : null;
         return {
           kind: "property",
-          label: k.with_hints ?? k.with_ids,
+          label: renderPropertyLabel(k, sid, v),
           prop: v,
           node_id,
         };
@@ -1020,7 +1110,7 @@ function computePath(
     const path = computePath(trace, src_id, before_id);
     const nestedTreeItem: PathNestedTreeItem = {
       kind: "path_nested_tree",
-      nestedTrees: sub_parent.properties[prop_id][1] as NestedTree,
+      nestedTrees: sub_parent.properties[prop_id][2] as NestedTree,
       path: singletonPath(dst_id, dst),
       expanded: false,
     };

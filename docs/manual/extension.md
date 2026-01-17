@@ -67,7 +67,7 @@ The `Delphyne: Show Root Directory for Current File` command can be used to show
 
 ### Global and Local Configuration {#config}
 
-Both [demonstration](#editing-demonstrations) and [command](#commands) files are evaluated in the context of a given [configuration record][delphyne.CommandExecutionContext], which specifies information such as the location and names of Python modules in which strategies can be found, the location of prompting templates and demonstration files, etc... This information can be stored in the project's `delphyne.yaml` file, whose content may look like:
+Both [demonstration](#editing-demonstrations) and [command](#commands) files are evaluated in the context of a given [configuration record][delphyne.ExecutionContext], which specifies information such as the location and names of Python modules in which strategies can be found, the location of prompting templates and demonstration files, etc... This information can be stored in the project's `delphyne.yaml` file, whose content may look like:
 
 ```yaml
 strategy_dirs: ["."]
@@ -75,7 +75,7 @@ modules: ["module_1", "module_2"]
 demo_files: ["demo_1", "demo_2"]
 ```
 
-See the [Reference][delphyne.CommandExecutionContext] for the list and description of all available settings. All settings have default values so empty `delphyne.yaml` files are allowed (or no file at all if the project root coincides with the VSCode workspace). In addition, any subset of global settings from the `delphyne.yaml` file can be locally overriden in individual demonstration or command files by prefixing it with a [`@config` comment block][delphyne.CommandExecutionContext].
+See the [Reference][delphyne.ExecutionContext] for the list and description of all available settings. All settings have default values so empty `delphyne.yaml` files are allowed (or no file at all if the project root coincides with the VSCode workspace). In addition, any subset of global settings from the `delphyne.yaml` file can be locally overriden in individual demonstration or command files by prefixing it with a [`@config` comment block][delphyne.ExecutionContext].
 
 ## Editing Demonstrations {#editing-demonstrations}
 
@@ -86,9 +86,6 @@ To evaluate a demonstration, put your cursor anywhere in its scope. A light bulb
 Each test in a demonstration, even a failing one, describes a path through the underlying search tree. In order to visualize the endpoint of this path, you can put your cursor on the test and select the `View Test Destination` code action. The resulting node and its context will then be displayed in Delphyne's `Tree`, `Node` and `Actions` view. In the typical case where the test is stuck on a query that is unanswered in the demonstration, one can then click on the `+` icon next to its description (within the `Node` view) to add it to the demonstration (if the query exists already, a `Jump To` icon will be shown instead). The standard workflow is then to add an answer to this query and evaluate the demonstration again.
 
 To evaluate all demonstrations within a file, you can use the `Delphyne: Evaluate All Demonstrations in File` command (use ++cmd+shift+p++ to open the command palette). To see the prompt associated to a query, put your cursor on this query and use the `See Prompt` code action. Doing so will create and run the appropriate [command](#commands) in a new tab.
-
-!!! info "Automatic Reloading of Strategies"
-    The language server reloads all modules listed in [`delphyne.yaml`](#config) for _every_ query, using `importlib.reload`. This way, strategies can be updated interactively without effort. Note that modules are reloaded in the order in which they are listed. Thus, a module should always be listed after its dependencies.
 
 !!! info "Evaluating Demonstrations using the CLI"
     Demonstrations can also be evaluated from the shell, using the [Delphyne CLI][delphyne.__main__.DelphyneCLI]. However, the CLI provides much more limited feedback so it is mainly useful for testing and continuous integration.
@@ -140,8 +137,10 @@ The progress of commands can be supervised while they are running through the `T
 
 Whether they originate from evaluating demonstrations or running commands, [traces][delphyne.Trace] can be inspected using the `Tree`, `Node` and `Actions` views (see screenshot at the top of this page). These views are synchronized together and display information about a single node at a time. The `Tree` view indicates a path from the root to the current node and allows jumping to every intermediate node on this path. The `Node` view shows the node type and all associated spaces. For each space, it shows the underlying query or allows jumping to the underlying tree. Finally, the `Actions` view lists all children of the current node that belong to the trace. Actions leading to subtrees containing success nodes are indicated by small checkmarks.
 
-Navigation operations can be undone by clicking on the `Undo` icon on the header of the tree view or by using shortcut ++cmd+d++ followed by ++cmd+z++. In addition, to jump to a node with a given identifier (node identifier numbers are shown in the title of the "Node" view and in references in some command outputs), you can use shortcut ++cmd+d+cmd+j++.
+Navigation operations can be undone by clicking on the `Undo` icon on the header of the tree view or by using shortcut ++cmd+d++ followed by ++cmd+z++. In addition, to jump to a node with a given identifier (node identifier numbers are shown in the title of the "Node" view and in references in some command outputs), you can use shortcut ++cmd+d+cmd+n++. To jump to a space with a given identifier, you can use shortcut ++cmd+d+cmd+s++.
 
+!!! note "Generating Browsable Traces"
+    In order to visualize the trace contained in a command file, Delphyne looks at the `outcome.result.browsable_trace` field, which contains all information about a trace needed to visualize it in VSCode. However, not all commands output this field since it can be very heavy. If it is not present but raw trace information is still available (in field `outcome.result.raw_trace`), it can be generated using the [`delphyne browse <command_file.exec.yaml>`][delphyne.__main__.DelphyneCLI.browse] command from the Delphyne CLI.
 
 ## Tips and Shortcuts
 

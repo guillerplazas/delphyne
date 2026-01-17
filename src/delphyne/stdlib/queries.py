@@ -3,7 +3,6 @@ Standard queries and building blocks for prompting policies.
 """
 
 import inspect
-import random
 import re
 import textwrap
 import typing
@@ -18,10 +17,11 @@ import numpy as np
 import delphyne.core as dp
 import delphyne.core.chats as ct
 import delphyne.core.inspect as dpi
+import delphyne.stdlib.embeddings as em
 import delphyne.stdlib.models as md
 import delphyne.stdlib.policies as pol
 from delphyne.core.refs import Answer
-from delphyne.stdlib.environments import Example, ExampleDatabase, PolicyEnv
+from delphyne.stdlib.environments import Example, PolicyEnv
 from delphyne.stdlib.opaque import Opaque, OpaqueSpace
 from delphyne.stdlib.policies import IPDict, prompting_policy
 from delphyne.stdlib.streams import SpendingDeclined, Stream, spend_on
@@ -120,6 +120,30 @@ class Response[F, T: md.AbstractTool[Any]]:
 
     answer: dp.Answer
     parsed: FinalAnswer[F] | ToolRequests[T]
+
+    @staticmethod
+    def pure[G](value: G) -> "Response[G, Any]":
+        """
+        A response with an dummy value for the `answer` field.
+
+        This is useful in particular for providing feedback for queries
+        that have a `Response` answer type. In this case, only the final
+        parsed answer matters.
+        """
+        answer = dp.Answer(None, dp.Structured(None))
+        parsed = FinalAnswer(value)
+        return Response(answer, parsed)
+
+    def unwrap(self) -> F:
+        """
+        Extract a final parsed answer.
+
+        Error if the response contains tool calls instead.
+        """
+        if isinstance(self.parsed, FinalAnswer):
+            return self.parsed.final
+        else:
+            raise RuntimeError("Not a final answer.")
 
 
 @dataclass
@@ -1003,9 +1027,9 @@ class Query[T](dp.AbstractQuery[T]):
     ### Hindsight Feedback
 
     @override
-    def hindsight_answer(self, feedback: Any) -> Answer | None:
+    def unparse(self, value: T) -> Answer | None:
         """
-        Return a hindsight answer that parses back to the given value.
+        Unparse an answer.
 
         By default, this method checks whether there is a single mode
         that uses structured output, and handles this case. This method
@@ -1022,7 +1046,7 @@ class Query[T](dp.AbstractQuery[T]):
         output_type = parser.settings.structured_output.type
         if isinstance(output_type, ty.NoTypeInfo):
             return None
-        structured = ty.pydantic_dump(output_type, feedback)
+        structured = ty.pydantic_dump(output_type, value)
         answer = dp.Answer(mode, dp.Structured(structured))
         return answer
 
@@ -1101,54 +1125,490 @@ def _match_string_literal_type(t: Any) -> Sequence[str] | None:
 
 
 #####
+##### Pseudo Queries
+#####
+
+
+class PseudoQuery[T](dp.AbstractQuery[T]):
+    """
+    Base class for queries that do not target LLMs and are not
+    associated with any prompts (e.g. `Compute`).
+    """
+
+    @override
+    def generate_prompt(
+        self,
+        *,
+        kind: str,
+        mode: dp.AnswerMode,
+        params: dict[str, object],
+        extra_args: dict[str, object] | None = None,
+        env: dp.AbstractTemplatesManager | None = None,
+    ) -> str:
+        raise RuntimeError(
+            f"No prompt associated with pseudo-query {type(self)}."
+        )
+
+    @override
+    def query_modes(self):
+        return [None]
+
+    @override
+    def answer_type(self):
+        return dpi.first_parameter_of_base_class(type(self))
+
+
+#####
 ##### Example Selectors
 #####
 
 
-type ExampleSelector = Callable[[Sequence[Example]], Sequence[Example]]
+@dataclass(frozen=True, kw_only=True)
+class SelectedExample:
+    """
+    Wrapper around an example selected for a query.
+
+    Attributes:
+        example: The selected example.
+        index: Index of the example in the database, relative to the
+            query type.
+        similarity: Similarity score between the example and the query,
+            if applicable (e.g., when using embedding-based selection).
+    """
+
+    example: Example
+    index: int
+    similarity: float | None
+
+    def get_similarity(self) -> float:
+        """
+        Obtain the similarity score, raising an error if not
+        available.
+        """
+        if self.similarity is None:
+            raise ValueError("Similarity score not available.")
+        return self.similarity
+
+
+type _ExampleSelectorFn = Callable[
+    [PolicyEnv, dp.AbstractQuery[Any]], Sequence[SelectedExample]
+]
+"""
+Function for selecting examples for a given query.
+"""
+
+
+type ExampleFilter = Callable[
+    [PolicyEnv, dp.AbstractQuery[Any], Sequence[SelectedExample]],
+    Sequence[SelectedExample],
+]
 """
 A function for selecting a subset of examples from a given sequence.
 """
 
 
-def select_all_examples(
-    examples: Sequence[Example],
-) -> Sequence[Example]:
+@dataclass(frozen=True)
+class ExampleSelector:
     """
-    Example selector that returns all available examples.
+    Wrapper around a function for selecting examples.
     """
-    return examples
+
+    _fn: _ExampleSelectorFn
+
+    def __call__(
+        self, env: PolicyEnv, query: dp.AbstractQuery[Any]
+    ) -> Sequence[Example]:
+        return [e.example for e in self._fn(env, query)]
+
+    def filter(self, f: ExampleFilter) -> "ExampleSelector":
+        """
+        Return a new example selector that applies a filter to the
+        examples selected by this selector.
+        """
+
+        def select(
+            env: PolicyEnv,
+            query: dp.AbstractQuery[Any],
+        ) -> Sequence[SelectedExample]:
+            examples = self._fn(env, query)
+            return f(env, query, examples)
+
+        return ExampleSelector(select)
+
+    def concat(self, other: "ExampleSelector") -> "ExampleSelector":
+        """
+        Return a new example selector that concatenates the examples
+        selected by this selector and another selector.
+        """
+
+        def select(
+            env: PolicyEnv,
+            query: dp.AbstractQuery[Any],
+        ) -> Sequence[SelectedExample]:
+            examples1 = self._fn(env, query)
+            examples2 = other._fn(env, query)
+            return [*examples1, *examples2]
+
+        return ExampleSelector(select)
+
+    def deduplicate(self) -> "ExampleSelector":
+        """
+        Return a new example selector that removes duplicate examples
+        while preserving order.
+        """
+
+        def select(
+            env: PolicyEnv,
+            query: dp.AbstractQuery[Any],
+            examples: Sequence[SelectedExample],
+        ) -> Sequence[SelectedExample]:
+            seen: set[int] = set()
+            deduped: list[SelectedExample] = []
+            for ex in examples:
+                if ex.index not in seen:
+                    seen.add(ex.index)
+                    deduped.append(ex)
+            return deduped
+
+        return self.filter(select)
+
+    def reverse(self) -> "ExampleSelector":
+        """
+        Return a new example selector that reverses the order of the
+        selected examples.
+        """
+
+        def select(
+            env: PolicyEnv,
+            query: dp.AbstractQuery[Any],
+            examples: Sequence[SelectedExample],
+        ) -> Sequence[SelectedExample]:
+            return list(reversed(examples))
+
+        return self.filter(select)
+
+    def __add__(self, other: "ExampleSelector") -> "ExampleSelector":
+        """
+        Concatenate two example selectors and deduplicate the result.
+        """
+        return self.concat(other).deduplicate()
+
+    def random(self, num_examples: int) -> "ExampleSelector":
+        """
+        Return a new example selector that randomly selects a given
+        number of examples.
+        """
+        return self.filter(take_random(num_examples))
+
+    def with_tags(self, tags: Sequence[str]) -> "ExampleSelector":
+        """
+        Return a new example selector that only includes examples
+        having all the given tags.
+        """
+
+        def select(
+            env: PolicyEnv,
+            query: dp.AbstractQuery[Any],
+            examples: Sequence[SelectedExample],
+        ) -> Sequence[SelectedExample]:
+            return [
+                ex
+                for ex in examples
+                if all(tag in ex.example.tags for tag in tags)
+            ]
+
+        return self.filter(select)
+
+    def such_that(
+        self, predicate: Callable[[Example], bool]
+    ) -> "ExampleSelector":
+        """
+        Return a new example selector that only includes examples
+        satisfying the given predicate.
+        """
+
+        def select(
+            env: PolicyEnv,
+            query: dp.AbstractQuery[Any],
+            examples: Sequence[SelectedExample],
+        ) -> Sequence[SelectedExample]:
+            return [ex for ex in examples if predicate(ex.example)]
+
+        return self.filter(select)
+
+    def exclude_identical_queries(self) -> "ExampleSelector":
+        """
+        Return a new example selector that excludes examples whose
+        query is identical to the input query.
+        """
+
+        def select(
+            env: PolicyEnv,
+            query: dp.AbstractQuery[Any],
+            examples: Sequence[SelectedExample],
+        ) -> Sequence[SelectedExample]:
+            serialized = dp.SerializedQuery.make(query)
+            return [
+                ex
+                for ex in examples
+                if not dp.SerializedQuery.make(ex.example.query) == serialized
+            ]
+
+        return self.filter(select)
+
+    def cached(self) -> "ExampleSelector":
+        """
+        Return a new example selector that caches its output the first
+        time it is called and then always returns the cached result
+        regardless of its inputs.
+
+        This is useful in particular when using `interact`, so that each
+        query that is part of a same conversation is mapped to the same
+        set of examples.
+        """
+
+        cached: Sequence[SelectedExample] | None = None
+
+        def select(
+            env: PolicyEnv,
+            query: dp.AbstractQuery[Any],
+        ) -> Sequence[SelectedExample]:
+            nonlocal cached
+            if cached is None:
+                cached = self._fn(env, query)
+            return cached
+
+        return ExampleSelector(select)
 
 
-def select_random_examples(num_examples: int) -> ExampleSelector:
+@ExampleSelector
+def all_examples(
+    env: PolicyEnv, query: dp.AbstractQuery[Any]
+) -> Sequence[SelectedExample]:
     """
-    Example selector that randomly selects a given number of examples.
+    Select all examples relevant to a query.
+    """
+    examples = env.examples.examples_for(query.query_name())
+    return [
+        SelectedExample(example=e, index=i, similarity=None)
+        for i, e in enumerate(examples)
+    ]
+
+
+def closest_examples(
+    *,
+    k: int,
+    model_name: str,
+) -> ExampleSelector:
+    """
+    Obtain the `k` closest examples to the given query, based on
+    embedding similarity. Return a list of `(example, similarity)`
+    tuples, sorted by decreasing similarity.
+
+    Arguments:
+        k: Number of examples to select.
+        model_name: Name of the embedding model to use.
+    """
+
+    def select(
+        env: PolicyEnv, query: dp.AbstractQuery[Any]
+    ) -> Sequence[SelectedExample]:
+        qname = query.query_name()
+        lid = env.info(
+            "closest_examples_request",
+            {"query": qname},
+        )
+        embeddings = env.examples.fetch_query_embeddings(qname, model_name)
+        if embeddings is None:
+            # There are no examples in the database.
+            return []
+        model = em.standard_openai_embedding_model(model_name)
+        query_embedding = model.embed(
+            [env.examples.query_embedding_text(query)],
+            cache=env.embeddings_cache,
+        )[0].embedding
+        # Compute cosine similarities.
+        sims = np.dot(embeddings, query_embedding) / (
+            np.linalg.norm(embeddings, axis=1)
+            * np.linalg.norm(query_embedding)
+        )
+        # Get top-k indices.
+        top_k_indices = cast(list[int], np.argsort(-sims)[:k].tolist())
+        examples = env.examples.examples_for(qname)
+        env.info(
+            "closest_examples_response",
+            related=[lid],
+            metadata={
+                "query": qname,
+                "args": query.serialize_args(),
+                "selected": [
+                    {
+                        "similarity": float(sims[k]),
+                        "args": examples[k].query.serialize_args(),
+                    }
+                    for k in top_k_indices
+                ],
+            },
+        )
+        return [
+            SelectedExample(
+                example=examples[i], index=i, similarity=float(sims[i])
+            )
+            for i in top_k_indices
+        ]
+
+    return ExampleSelector(select)
+
+
+def maximum_marginally_relevant(
+    *,
+    k: int,
+    lambda_param: float,
+    model_name: str,
+    always_compute_mmr: bool = False,
+) -> ExampleSelector:
+    """
+    Obtain `k` examples that are maximally relevant to the query while
+    being diverse among themselves, using the Maximal Marginally
+    Relevant (MMR) algorithm.
+
+    Arguments:
+        k: Number of examples to select.
+        lambda_param: Trade-off parameter between relevance and
+            diversity, in [0, 1]. Higher values favor relevance.
+        model_name: Name of the embedding model to use.
+            always_compute_mmr: If `True`, the MMR algorithm is run even
+            when all examples need to be returned. This is useful for
+            debugging purposes or to ensure similarity scores are
+            attached to the output.
+    """
+
+    def select(
+        env: PolicyEnv, query: dp.AbstractQuery[Any]
+    ) -> Sequence[SelectedExample]:
+        if k == 0:
+            return []
+
+        qname = query.query_name()
+        examples = env.examples.examples_for(qname)
+        num_examples = len(examples)
+        if k >= num_examples and not always_compute_mmr:
+            # Return all examples if we need more than available
+            return [
+                SelectedExample(example=e, index=i, similarity=None)
+                for i, e in enumerate(examples)
+            ]
+
+        lid = env.info(
+            "mmr_request",
+            {"query": qname, "k": k, "lambda": lambda_param},
+        )
+        embeddings = env.examples.fetch_query_embeddings(qname, model_name)
+        similarity_matrix = env.examples.fetch_example_similarity_matrix(
+            qname, model_name
+        )
+        if embeddings is None or similarity_matrix is None:
+            return []
+
+        model = em.standard_openai_embedding_model(model_name)
+        query_embedding = model.embed(
+            [env.examples.query_embedding_text(query)],
+            cache=env.embeddings_cache,
+        )[0].embedding
+
+        # Compute cosine similarities to the query for all examples
+        query_sims = np.dot(embeddings, query_embedding) / (
+            np.linalg.norm(embeddings, axis=1)
+            * np.linalg.norm(query_embedding)
+        )
+
+        # MMR algorithm
+        selected_indices: list[int] = []
+        remaining_indices = set(range(num_examples))
+        max_similarities: dict[
+            int, float
+        ] = {}  # Store max similarity for each selected index
+        mmr_scores: dict[
+            int, float
+        ] = {}  # Store MMR score for each selected index
+
+        # Select the first example with highest query similarity
+        first_idx = int(np.argmax(query_sims))
+        selected_indices.append(first_idx)
+        remaining_indices.remove(first_idx)
+        max_similarities[first_idx] = 0.0
+        mmr_scores[first_idx] = query_sims[first_idx]
+
+        # Iteratively select remaining examples
+        for _ in range(k - 1):
+            if not remaining_indices:
+                break
+            best_score = float("-inf")
+            best_idx = -1
+            best_max_similarity = 0.0
+            for idx in remaining_indices:
+                relevance = query_sims[idx]
+                assert selected_indices
+                max_similarity = np.max(
+                    similarity_matrix[idx, selected_indices]
+                )
+                mmr_score = (
+                    lambda_param * relevance
+                    - (1 - lambda_param) * max_similarity
+                )
+                if mmr_score > best_score:
+                    best_score = mmr_score
+                    best_idx = idx
+                    best_max_similarity = max_similarity
+            selected_indices.append(best_idx)
+            remaining_indices.remove(best_idx)
+            max_similarities[best_idx] = float(best_max_similarity)
+            mmr_scores[best_idx] = best_score
+
+        env.info(
+            "mmr_response",
+            related=[lid],
+            metadata={
+                "query": qname,
+                "args": query.serialize_args(),
+                "selected": [
+                    {
+                        "score": float(mmr_scores[idx]),
+                        "query_similarity": float(query_sims[idx]),
+                        "max_example_similarity": float(max_similarities[idx]),
+                        "args": examples[idx].query.serialize_args(),
+                    }
+                    for idx in selected_indices
+                ],
+            },
+        )
+        return [
+            SelectedExample(
+                example=examples[i], index=i, similarity=float(query_sims[i])
+            )
+            for i in selected_indices
+        ]
+
+    return ExampleSelector(select)
+
+
+def take_random(num_examples: int) -> ExampleFilter:
+    """
+    Filter that randomly selects a given number of examples.
 
     All examples are selected if less examples are available than
     requested.
     """
 
     def select(
-        examples: Sequence[Example],
-    ) -> Sequence[Example]:
+        env: PolicyEnv,
+        query: dp.AbstractQuery[Any],
+        examples: Sequence[SelectedExample],
+    ) -> Sequence[SelectedExample]:
         if num_examples >= len(examples):
             return examples
-        selected = random.sample(examples, num_examples)
+        selected = env.random.sample(examples, num_examples)
         return selected
-
-    return select
-
-
-def select_with_either_tags(tags: Sequence[str]):
-    """
-    Select examples that are annotated with at least one of a provided
-    set of tags.
-    """
-
-    def select(
-        examples: Sequence[Example],
-    ) -> Sequence[Example]:
-        return [ex for ex in examples if any(t in ex.tags for t in tags)]
 
     return select
 
@@ -1156,17 +1616,6 @@ def select_with_either_tags(tags: Sequence[str]):
 #####
 ##### Prompting Policies
 #####
-
-
-def fetch_examples(
-    database: ExampleDatabase,
-    query: dp.AbstractQuery[Any],
-    selectors: Sequence[ExampleSelector],
-) -> Sequence[tuple[dp.AbstractQuery[Any], dp.Answer]]:
-    raw = list(database.examples(dp.SerializedQuery.make(query)))
-    for sel in selectors:
-        raw = sel(raw)
-    return [(ex.query.parse(type(query)), ex.answer) for ex in raw]
 
 
 def _priming_split(prompt: str) -> tuple[str, str | None]:
@@ -1233,7 +1682,7 @@ def _instance_prompt(
 
 def create_prompt(
     query: dp.AbstractQuery[Any],
-    examples: Sequence[tuple[dp.AbstractQuery[Any], dp.Answer]],
+    examples: Sequence[Example],
     params: dict[str, object],
     mode: dp.AnswerMode,
     env: dp.AbstractTemplatesManager | None,
@@ -1243,8 +1692,9 @@ def create_prompt(
         kind="system", mode=mode, params=params, env=env
     )
     msgs.append(md.SystemMessage(sys))
-    for i, (q, ans) in enumerate(examples):
-        msgs.extend(_instance_prompt(q, env, params, ans.mode, i + 1))
+    for i, e in enumerate(examples):
+        ans = e.answer
+        msgs.extend(_instance_prompt(e.query, env, params, ans.mode, i + 1))
         msgs.append(md.AssistantMessage(ans))
     msgs.extend(_instance_prompt(query, env, params, mode, None))
     return tuple(msgs)
@@ -1294,17 +1744,6 @@ def _parse_or_log_and_raise[T](
     return parsed
 
 
-type _RequestDigest = str
-
-
-def json_object_digest(obj: Any) -> str:
-    import hashlib
-    import json
-
-    obj_str = json.dumps(obj).encode("utf-8")
-    return hashlib.md5(obj_str).hexdigest()[:8]
-
-
 def _log_request(
     env: PolicyEnv,
     *,
@@ -1312,27 +1751,21 @@ def _log_request(
     request: md.LLMRequest,
 ):
     req_json = ty.pydantic_dump(md.LLMRequest, request)
-    req_digest = json_object_digest(req_json)
     info = {
-        "hash": req_digest,
         "query": query.query.query_name(),
         "request": req_json,
     }
-    env.info("llm_request", info, loc=query)
-    return req_digest
+    return env.info("llm_request", info, loc=query)
 
 
 def _log_response(
     env: PolicyEnv,
     *,
     query: dp.AttachedQuery[Any],
-    request: md.LLMRequest,
     response: md.LLMResponse,
+    request_log_id: dp.LogMessageId | None,
 ):
-    req_json = ty.pydantic_dump(md.LLMRequest, request)
-    req_digest = json_object_digest(req_json)
     info = {
-        "request": req_digest,
         "response": ty.pydantic_dump(md.LLMResponse, response),
     }
     if response.usage_info is not None:
@@ -1341,10 +1774,15 @@ def _log_response(
             "usage": response.usage_info,
         }
         info["usage"] = usage
-    env.info("llm_response", info, loc=query)
+    env.info("llm_response", info, loc=query, related=[request_log_id])
     for extra in response.log_items:
-        meta = {"request": req_digest, "details": extra.metadata}
-        env.log(extra.level, extra.message, meta, loc=query)
+        env.log(
+            extra.level,
+            extra.message,
+            extra.metadata,
+            loc=query,
+            related=[request_log_id],
+        )
 
 
 def _send_request(
@@ -1354,13 +1792,22 @@ def _send_request(
     query: dp.AttachedQuery[Any],
     request: md.LLMRequest,
 ) -> dp.StreamContext[md.LLMResponse | SpendingDeclined]:
-    _log_request(env, query=query, request=request)
+    def expensive():
+        resp = model.send_request(request, env.cache)
+        assert resp.budget is not None
+        return (resp, resp.budget)
+
+    req_id = _log_request(env, query=query, request=request)
     response = yield from spend_on(
-        lambda: (resp := model.send_request(request, env.cache), resp.budget),
-        estimate=model.estimate_budget(request),
+        expensive, estimate=model.estimate_budget(request)
     )
     if not isinstance(response, SpendingDeclined):
-        _log_response(env, query=query, request=request, response=response)
+        _log_response(
+            env,
+            query=query,
+            response=response,
+            request_log_id=req_id,
+        )
     return response
 
 
@@ -1370,7 +1817,7 @@ def classify[T](
     env: PolicyEnv,
     model: md.LLM,
     params: dict[str, object] | None = None,
-    select_examples: Sequence[ExampleSelector] = (),
+    select_examples: ExampleSelector | None = None,
     mode: dp.AnswerMode = None,
     top_logprobs: int = 20,
     temperature: float = 1.0,
@@ -1385,7 +1832,8 @@ def classify[T](
         env: The global policy environment.
         model: The LLM to use for answering the query.
         params: Prompt hyperparameters.
-        select_examples: Example selector.
+        select_examples: Example selector. By default, `all_examples` is
+            used.
         mode: The answer mode to use for parsing the query answer.
         top_logprobs: The number of top logprobs to request from the
             LLM, putting an upper bound on the support size of the
@@ -1399,7 +1847,9 @@ def classify[T](
     See `few_shot` for details on some of the arguments above.
     """
     env.tracer.trace_query(query)
-    examples = fetch_examples(env.examples, query.query, select_examples)
+    if select_examples is None:
+        select_examples = all_examples
+    examples = select_examples(env, query.query)
     mngr = env.templates
     if params is None:
         params = {}
@@ -1419,7 +1869,7 @@ def classify[T](
         "temperature": 0.0,
     }
     req = md.LLMRequest(
-        prompt,
+        chat=prompt,
         num_completions=1,
         options=options,
     )
@@ -1501,7 +1951,7 @@ def few_shot[T](
     model: md.LLM,
     *,
     params: dict[str, object] | None = None,
-    select_examples: Sequence[ExampleSelector] = (),
+    select_examples: ExampleSelector | None = None,
     mode: dp.AnswerMode = None,
     temperature: float | None = None,
     num_completions: int = 1,
@@ -1522,9 +1972,7 @@ def few_shot[T](
         model: The LLM to use for answering the query
         params: Prompt hyperparameters, which are passed to prompt
             templates as a `params` dictionary.
-        select_examples: A series of filters for selecting examples, to
-            be applied in sequence. By default, no filter is used and so
-            all available examples are fetched.
+        select_examples: Example selector (default: `all_examples`).
         mode: The answer mode to use for parsing the query answer.
         temperature: The temperature parameter to use with the LLM, as a
             number from 0 to 2.
@@ -1574,7 +2022,9 @@ def few_shot[T](
         yield dp.Solution(overriden_parsed)
         return
 
-    examples = fetch_examples(env.examples, query.query, select_examples)
+    if select_examples is None:
+        select_examples = all_examples
+    examples = select_examples(env, query.query)
     mngr = env.templates
     if params is None:
         params = {}
@@ -1596,7 +2046,7 @@ def few_shot[T](
     while max_requests is None or num_reqs < max_requests:
         num_reqs += 1
         req = md.LLMRequest(
-            prompt,
+            chat=prompt,
             num_completions=num_completions,
             options=options,
             tools=tuple(tools),

@@ -10,8 +10,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from delphyne.core import refs
-from delphyne.core.refs import Hint, SpaceRef, ValueRef
+from delphyne.core import hrefs, refs
+from delphyne.core.hrefs import Hint, SpaceRef, ValueRef
 
 type TestCommandString = str
 """
@@ -54,6 +54,8 @@ class Answer:
             strategy tree and thus should not be used as examples).
         tags: A sequence of example tags that can be used by policies to
             select appropriate examples.
+        meta: An optional metadata dictionary for the associated
+            example, which can be used by policies (similar to `tags`).
         justification: An optional justification for the answer (see
             [`delphyne.core.refs.Answer`][]).
     """
@@ -65,6 +67,7 @@ class Answer:
     label: str | None = None
     example: bool | None = None
     tags: Sequence[str] = ()
+    meta: dict[str, Any] | None = None
     justification: str | None = None
 
 
@@ -90,16 +93,15 @@ class CommandResultAnswerSource:
         node_ids: Identifiers of the nodes whose full references
             features answers to be fetched. If `None`, the success node
             for the first generated result is used.
-        hindsight: Whether to also fetch answers from the collected
-            hindsight feedback. If `True`, such answers override their
-            original counterparts in the trace.
+        backprop_with: Tags for the feedback backpropagation handlers to
+            activate.
         queries: Query types to be fetched. If `None`, queries are
             fetched regardless of their type.
     """
 
     command: str
     node_ids: Sequence[int] | None = None
-    hindsight: bool = True
+    backprop_with: Sequence[str] | None = None
     queries: Sequence[str] | None = None
 
 
@@ -390,3 +392,96 @@ def translate_answer(ans: Answer) -> refs.Answer:
         content = refs.Structured(ans.answer)
     tool_calls = tuple([refs.ToolCall(c.tool, c.args) for c in ans.call])
     return refs.Answer(ans.mode, content, tool_calls, ans.justification)
+
+
+def reverse_translate_answer(ans: refs.Answer) -> Answer:
+    structured = "auto"
+    if isinstance(ans.content, refs.Structured):
+        content = ans.content.structured
+        if isinstance(content, str):
+            structured = True
+    else:
+        content = ans.content
+    tool_calls = tuple(
+        [ToolCall(c.name, dict(c.args)) for c in ans.tool_calls]
+    )
+    return Answer(
+        answer=content,
+        call=tool_calls,
+        structured=structured,
+        mode=ans.mode,
+        justification=ans.justification,
+    )
+
+
+#####
+##### Printing tests
+#####
+
+
+class CmdNames:
+    RUN = "run"
+    RUN_UNTIL = "at"
+    SELECT = "go"
+    GO_TO_CHILD = "take"
+    ANSWER = "answer"
+    IS_SUCCESS = "success"
+    IS_FAILURE = "failure"
+    SAVE = "save"
+    LOAD = "load"
+
+
+def show_tag_selector(selector: TagSelector) -> str:
+    ret = selector.tag
+    if selector.num is not None:
+        ret += "#" + str(selector.num)
+    return ret
+
+
+def show_tag_selectors(selectors: TagSelectors) -> str:
+    return "&".join(show_tag_selector(sel) for sel in selectors)
+
+
+def show_node_selector(selector: NodeSelector) -> str:
+    if isinstance(selector, WithinSpace):
+        return (
+            show_tag_selectors(selector.space)
+            + "/"
+            + show_node_selector(selector.selector)
+        )
+    else:
+        return show_tag_selectors(selector)
+
+
+def show_test_step(ts: TestStep) -> str:
+    match ts:
+        case Run(hs, None):
+            if not hs:
+                return CmdNames.RUN
+            return f"{CmdNames.RUN} {hrefs.show_hints(hs)}"
+        case Run(hs, until):
+            assert until is not None
+            sel = show_node_selector(until)
+            res = f"{CmdNames.RUN_UNTIL} {sel}"
+            if hs:
+                res += f" {hrefs.show_hints(hs)}"
+            return res
+        case SelectSpace(ref):
+            if ts.expects_query:
+                return f"{CmdNames.ANSWER} {ref}"
+            else:
+                return f"{CmdNames.SELECT} {ref}"
+        case GoToChild(action):
+            return f"{CmdNames.GO_TO_CHILD} {hrefs.show_value_ref(action)}"
+        case IsSuccess():
+            return CmdNames.IS_SUCCESS
+        case IsFailure():
+            return CmdNames.IS_FAILURE
+        case Save(name):
+            return f"{CmdNames.SAVE} {name}"
+        case Load(name):
+            return f"{CmdNames.LOAD} {name}"
+
+
+def show_test_command(tc: TestCommand) -> str:
+    return " | ".join(show_test_step(ts) for ts in tc)

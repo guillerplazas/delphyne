@@ -2,11 +2,14 @@
 Standard policy types and wrappers
 """
 
+import typing
+from abc import abstractmethod
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, NoReturn, Protocol, TypeVar
+from typing import Any, Generic, Iterable, Protocol, TypeVar, override
 
 import delphyne.core as dp
+import delphyne.stdlib.streams as st
 from delphyne.core import Node
 from delphyne.stdlib.environments import PolicyEnv
 from delphyne.stdlib.streams import Stream, StreamTransformer
@@ -16,33 +19,117 @@ from delphyne.stdlib.streams import Stream, StreamTransformer
 #####
 
 
+class StandardPolicy[N: Node, P](dp.AbstractPolicy[PolicyEnv, N, P]):
+    """
+    Protocol for standard policies.
+
+    This class specializes `AbstractPolicy` and is implemented by
+    `Policy` and `PolicyRecord` in particular.
+    """
+
+    @abstractmethod
+    def __call__[T](self, tree: dp.Tree[N, P, T], env: PolicyEnv) -> Stream[T]:
+        pass
+
+
 N = TypeVar("N", bound=Node, contravariant=True)
 P = TypeVar("P", covariant=True)
 
 
 @dataclass(frozen=True)
-class Policy(Generic[N, P], dp.AbstractPolicy[PolicyEnv, N, P]):
+class Policy(
+    Generic[N, P],
+    StandardPolicy[N, P],
+    st.SupportsStreamCombinators,
+):
     """
-    A pair of a search policy and of an inner policy.
+    A policy maps a tree with a given signature (contravariant parameter
+    N) and inner policy type (covariant parameter P) to a search stream.
 
-    More precisely, a policy for trees with effects `N` (contravariant)
-    gathers a search policy handling `N` along with an inner policy
-    object of type `P` (covariant).
-
-    Values of this type can be built concisely using the `&` operator
-    defined on type `SearchPolicy`.
+    Values of this type can be built by combining a search policy and an
+    inner policy using the `&` operator defined on type `SearchPolicy`.
     """
 
-    _search: "SearchPolicy[N]"
-    _inner: P
+    _fn: "_PolicyFn[N, P]"
 
-    @property
-    def search(self) -> "SearchPolicy[N]":
-        return self._search
+    def __call__[T](
+        self, tree: "dp.Tree[N, P, T]", env: PolicyEnv
+    ) -> Stream[T]:
+        return Stream(lambda: self._fn(tree, env))
 
-    @property
-    def inner(self) -> P:
-        return self._inner
+    def __rmatmul__(self, other: StreamTransformer) -> "Policy[N, P]":
+        """
+        Compose a search policy with a stream transformer.
+        """
+        if not isinstance(other, StreamTransformer):  # pyright: ignore[reportUnnecessaryIsInstance]
+            return NotImplemented
+        return self._compose_with_stream_transformer(other)
+
+    def or_else[M: Node, Q](
+        self: "Policy[M, Q]", other: "Policy[M, Q]"
+    ) -> "Policy[M, Q]":
+        """
+        Combine two policies into one that tries the first one,
+        and if it yields no solution, tries the second one.
+        """
+
+        def policy[T](
+            tree: dp.Tree[M, Q, T], env: PolicyEnv
+        ) -> dp.StreamGen[T]:
+            yield from self(tree, env).or_else(other(tree, env))
+
+        return Policy(policy)
+
+    @classmethod
+    def with_env[M: Node, Q](
+        cls, f: Callable[[PolicyEnv], "Policy[M, Q]"], /
+    ) -> "Policy[M, Q]":
+        """
+        Create a policy that depends on the global policy environment.
+        """
+
+        def aux[T](tree: dp.Tree[M, Q, T], env: PolicyEnv) -> dp.StreamGen[T]:
+            policy = f(env)
+            yield from policy(tree, env)
+
+        return Policy(aux)
+
+    @classmethod
+    def sequence[M: Node, Q](
+        cls, policies: Iterable["Policy[M, Q]"], *, stop_on_reject: bool = True
+    ) -> "Policy[M, Q]":
+        def aux[T](tree: dp.Tree[M, Q, T], env: PolicyEnv) -> dp.StreamGen[T]:
+            yield from Stream.sequence(
+                (p(tree, env) for p in policies),
+                stop_on_reject=stop_on_reject,
+            )
+
+        return Policy(aux)
+
+    @classmethod
+    def parallel[M: Node, Q](
+        cls, policies: Sequence["Policy[M, Q]"]
+    ) -> "Policy[M, Q]":
+        def aux[T](tree: dp.Tree[M, Q, T], env: PolicyEnv) -> dp.StreamGen[T]:
+            yield from Stream.parallel([p(tree, env) for p in policies])
+
+        return Policy(aux)
+
+    def _compose_with_stream_transformer(
+        self, trans: StreamTransformer
+    ) -> "Policy[N, P]":
+        def policy[T](
+            tree: dp.Tree[N, P, T], env: PolicyEnv
+        ) -> dp.StreamGen[T]:
+            return iter(trans(self(tree, env), env))
+
+        return Policy(policy)
+
+
+class _PolicyFn[N: Node, P](Protocol):
+    def __call__[T](
+        self, tree: dp.Tree[N, P, T], env: PolicyEnv
+    ) -> dp.StreamGen[T]: ...
 
 
 #####
@@ -51,7 +138,10 @@ class Policy(Generic[N, P], dp.AbstractPolicy[PolicyEnv, N, P]):
 
 
 @dataclass(frozen=True)
-class SearchPolicy[N: Node](dp.AbstractSearchPolicy[PolicyEnv, N]):
+class SearchPolicy[N: Node](
+    dp.AbstractSearchPolicy[PolicyEnv, N],
+    st.SupportsStreamCombinators,
+):
     """
     A search policy takes as arguments a tree with a given signature
     (covariant type parameter `N`), a global policy environment, and an
@@ -81,7 +171,13 @@ class SearchPolicy[N: Node](dp.AbstractSearchPolicy[PolicyEnv, N]):
         """
         Pair a search policy with an inner policy to form a policy.
         """
-        return Policy(self, other)
+
+        def policy[T](
+            tree: dp.Tree[N, P, T], env: PolicyEnv
+        ) -> dp.StreamGen[T]:
+            return self._fn(tree, env, other)
+
+        return Policy(policy)
 
     def __rmatmul__(self, other: StreamTransformer) -> "SearchPolicy[N]":
         """
@@ -98,9 +194,73 @@ class SearchPolicy[N: Node](dp.AbstractSearchPolicy[PolicyEnv, N]):
         def policy[P, T](
             tree: dp.Tree[N, P, T], env: PolicyEnv, policy: P
         ) -> dp.StreamGen[T]:
-            return trans(self(tree, env, policy), env).gen()
+            return iter(trans(self(tree, env, policy), env))
 
         return SearchPolicy(policy)
+
+    def or_else[M: Node](
+        self: "SearchPolicy[M]", other: "SearchPolicy[M]"
+    ) -> "SearchPolicy[M]":
+        """
+        Combine two search policies into one that tries the first one,
+        and if it yields no solution, tries the second one.
+        """
+
+        def policy[T](
+            tree: dp.Tree[M, Any, T], env: PolicyEnv, policy: Any
+        ) -> dp.StreamGen[T]:
+            yield from self(tree, env, policy).or_else(
+                other(tree, env, policy)
+            )
+
+        return SearchPolicy(policy)
+
+    @classmethod
+    def with_env[M: Node](
+        cls, f: Callable[[PolicyEnv], "SearchPolicy[M]"], /
+    ) -> "SearchPolicy[M]":
+        """
+        Create a search policy that depends on the global policy
+        environment.
+        """
+
+        def aux[P, T](
+            tree: dp.Tree[M, P, T], env: PolicyEnv, policy: P
+        ) -> dp.StreamGen[T]:
+            search_policy = f(env)
+            yield from search_policy(tree, env, policy)
+
+        return SearchPolicy(aux)
+
+    @classmethod
+    def sequence[M: Node](
+        cls,
+        policies: Iterable["SearchPolicy[M]"],
+        *,
+        stop_on_reject: bool = True,
+    ) -> "SearchPolicy[M]":
+        def aux[P, T](
+            tree: dp.Tree[M, P, T], env: PolicyEnv, policy: P
+        ) -> dp.StreamGen[T]:
+            yield from Stream.sequence(
+                (p(tree, env, policy) for p in policies),
+                stop_on_reject=stop_on_reject,
+            )
+
+        return SearchPolicy(aux)
+
+    @classmethod
+    def parallel[M: Node](
+        cls, policies: Sequence["SearchPolicy[M]"]
+    ) -> "SearchPolicy[M]":
+        def aux[P, T](
+            tree: dp.Tree[M, P, T], env: PolicyEnv, policy: P
+        ) -> dp.StreamGen[T]:
+            yield from Stream.parallel(
+                [p(tree, env, policy) for p in policies]
+            )
+
+        return SearchPolicy(aux)
 
 
 class _SearchPolicyFn[N: Node](Protocol):
@@ -159,13 +319,23 @@ def search_policy[N: Node, **A](
     return parametric
 
 
+nonparametric_search_policy = SearchPolicy
+"""
+Decorator similar to `search_policy`, but for non-parametric search
+policies.
+"""
+
+
 #####
 ##### Prompting Policies
 #####
 
 
 @dataclass(frozen=True)
-class PromptingPolicy(dp.AbstractPromptingPolicy[PolicyEnv]):
+class PromptingPolicy(
+    dp.AbstractPromptingPolicy[PolicyEnv],
+    st.SupportsStreamCombinators,
+):
     """
     A prompting policy takes as arguments a query (attached to a
     specific node) and a global policy environment, and returns a search
@@ -188,6 +358,64 @@ class PromptingPolicy(dp.AbstractPromptingPolicy[PolicyEnv]):
     ) -> Stream[T]:
         return Stream(lambda: self._fn(query, env))
 
+    def or_else(self, other: "PromptingPolicy") -> "PromptingPolicy":
+        """
+        Combine two prompting policies into one that tries the first one,
+        and if it yields no solution, tries the second one.
+        """
+
+        def policy[T](
+            query: dp.AttachedQuery[T], env: PolicyEnv
+        ) -> dp.StreamGen[T]:
+            yield from self(query, env).or_else(other(query, env))
+
+        return PromptingPolicy(policy)
+
+    @classmethod
+    def with_env(
+        cls, f: Callable[[PolicyEnv], "PromptingPolicy"], /
+    ) -> "PromptingPolicy":
+        """
+        Create a prompting policy that depends on the global policy
+        environment.
+        """
+
+        def aux[T](
+            query: dp.AttachedQuery[T], env: PolicyEnv
+        ) -> dp.StreamGen[T]:
+            prompting_policy = f(env)
+            yield from prompting_policy(query, env)
+
+        return PromptingPolicy(aux)
+
+    @classmethod
+    def sequence(
+        cls,
+        policies: Iterable["PromptingPolicy"],
+        *,
+        stop_on_reject: bool = True,
+    ) -> "PromptingPolicy":
+        def aux[T](
+            query: dp.AttachedQuery[T], env: PolicyEnv
+        ) -> dp.StreamGen[T]:
+            yield from Stream.sequence(
+                (p(query, env) for p in policies),
+                stop_on_reject=stop_on_reject,
+            )
+
+        return PromptingPolicy(aux)
+
+    @classmethod
+    def parallel(
+        cls, policies: Sequence["PromptingPolicy"]
+    ) -> "PromptingPolicy":
+        def aux[T](
+            query: dp.AttachedQuery[T], env: PolicyEnv
+        ) -> dp.StreamGen[T]:
+            yield from Stream.parallel([p(query, env) for p in policies])
+
+        return PromptingPolicy(aux)
+
     def __rmatmul__(self, other: StreamTransformer) -> "PromptingPolicy":
         """
         Compose a prompting policy with a stream transformer.
@@ -203,7 +431,7 @@ class PromptingPolicy(dp.AbstractPromptingPolicy[PolicyEnv]):
         def policy[T](
             query: dp.AttachedQuery[T], env: PolicyEnv
         ) -> dp.StreamGen[T]:
-            return trans(self(query, env), env).gen()
+            return iter(trans(self(query, env), env))
 
         return PromptingPolicy(policy)
 
@@ -333,7 +561,7 @@ class ContextualTreeTransformer[A: Node, B: Node]:
 
     def __rmatmul__[N: Node](
         self, search_policy: "SearchPolicy[B | N]"
-    ) -> "SearchPolicy[A | N]":
+    ) -> "SearchPolicy[A | B | N]":
         """
         Compose a contextual tree transformer with a search policy.
         """
@@ -346,7 +574,7 @@ class ContextualTreeTransformer[A: Node, B: Node]:
             policy: P,
         ) -> dp.StreamGen[T]:
             new_tree = self.fn(env, policy)(tree)
-            return search_policy(new_tree, env, policy).gen()
+            return iter(search_policy(new_tree, env, policy))
 
         return SearchPolicy(new_search_policy)
 
@@ -503,15 +731,38 @@ def query_dependent(
         query: dp.AttachedQuery[T], env: PolicyEnv
     ) -> dp.StreamGen[T]:
         query_policy = f(query.query)
-        return query_policy(query, env).gen()
+        return iter(query_policy(query, env))
 
     return PromptingPolicy(policy)
 
 
-def unsupported_node(node: dp.Node) -> NoReturn:
+def unsupported_node(node: dp.Node) -> typing.NoReturn:
     """
     Raise an exception indicating that a node has an unsupported type.
 
     See `dfs` for an example usage.
     """
     assert False, f"Unsupported node type: {type(node)}."
+
+
+class PolicyRecord[N: Node, P](StandardPolicy[N, P]):
+    """
+    Base class for policy records.
+
+    Policy records are dataclasses that can be instantiated into
+    policies. This is useful for building serializable policy
+    representations that can be loaded and saved from disk.
+    """
+
+    def instantiate_with(self, env: PolicyEnv) -> Policy[N, P]:
+        raise ValueError(
+            "You must implement `instantiate` or `instantiate_with` "
+            + f"for class `{type(self)}`."
+        )
+
+    def instantiate(self) -> Policy[N, P]:
+        return Policy.with_env(self.instantiate_with)
+
+    @override
+    def __call__[T](self, tree: dp.Tree[N, P, T], env: PolicyEnv) -> Stream[T]:
+        return self.instantiate()(tree, env)

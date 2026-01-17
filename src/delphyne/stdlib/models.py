@@ -7,7 +7,7 @@ import time
 import typing
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from collections.abc import AsyncIterable, Iterable, Sequence
+from collections.abc import AsyncIterable, Callable, Iterable, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -128,6 +128,12 @@ type Chat = tuple[ChatMessage, ...]
 # We specifically require tuples so that Chat is hashable.
 
 
+type ReasoningEffort = Literal["minimal", "low", "medium", "high"]
+"""
+Reasoning effort for reasoning-capable models.
+"""
+
+
 class RequestOptions(typing.TypedDict, total=False):
     """
     LLM request options, inspired from the OpenAI chat API.
@@ -158,7 +164,7 @@ class RequestOptions(typing.TypedDict, total=False):
     """
 
     model: str
-    reasoning_effort: Literal["minimal", "low", "medium", "high"]
+    reasoning_effort: ReasoningEffort
     tool_choice: Literal["auto", "none", "required"]
     temperature: float
     max_completion_tokens: int
@@ -281,8 +287,8 @@ class LLMOutput:
     """
 
     content: str | Structured
-    tool_calls: Sequence[ToolCall]
-    finish_reason: FinishReason
+    tool_calls: Sequence[ToolCall] = ()
+    finish_reason: FinishReason = "stop"
     logprobs: Sequence[TokenInfo] | None = None
     reasoning_content: str | None = None
 
@@ -373,17 +379,17 @@ class LLMResponseLogItem:
     metadata: Any = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class LLMRequest:
     """
     An LLM chat completion request.
 
     Attributes:
         chat: The chat history.
+        options: Request options.
         num_completions: The number of completions to generate. Note
             that most LLM providers only bill input tokens once,
             regardless of the number of requested completions.
-        options: Request options.
         tools: Available tools.
         structured_output: Provide a schema to enable structured output,
             or `None` for disabling it.
@@ -394,8 +400,8 @@ class LLMRequest:
     """
 
     chat: Chat
-    num_completions: int
     options: RequestOptions
+    num_completions: int = 1
     tools: tuple[Schema, ...] = ()
     structured_output: Schema | None = None
 
@@ -437,8 +443,8 @@ class LLMResponse:
     """
 
     outputs: Sequence[LLMOutput]
-    budget: Budget
-    log_items: list[LLMResponseLogItem]
+    budget: Budget | None = None
+    log_items: Sequence[LLMResponseLogItem] = ()
     model_name: str | None = None
     usage_info: dict[str, Any] | None = None
 
@@ -506,10 +512,8 @@ class LLM(ABC):
             req: The request to send.
             cache: An optional cache to use for the request.
         """
-        if cache is not None:
-            self = CachedModel(self, cache)
         full_req = self.add_model_defaults(req)
-        return self._send_final_request(full_req)
+        return fetch_or_answer(cache, full_req, self._send_final_request)
 
 
 @dataclass
@@ -574,11 +578,10 @@ class WithRetry(LLM):
             try:
                 ret = self.model.send_request(req, None)
                 if i > 0:
-                    ret.log_items.append(
-                        LLMResponseLogItem(
-                            "info", "successful_retry", {"delay": retry_delay}
-                        )
+                    msg = LLMResponseLogItem(
+                        "info", "successful_retry", {"delay": retry_delay}
                     )
+                    ret.log_items = (*ret.log_items, msg)
                 return ret
             except LLMBusyException as e:
                 if retry_delay is None:
@@ -594,7 +597,7 @@ class WithRetry(LLM):
 
 
 @dataclass(frozen=True)
-class _CachedRequest:
+class CachedRequest:
     request: LLMRequest
     iter: int
 
@@ -615,10 +618,10 @@ class LLMCache:
     context manager.
     """
 
-    cache: Cache[_CachedRequest, LLMResponse]
+    cache: Cache[CachedRequest, LLMResponse]
     num_seen: dict[LLMRequest, int]
 
-    def __init__(self, cache: Cache[_CachedRequest, LLMResponse]):
+    def __init__(self, cache: Cache[CachedRequest, LLMResponse]):
         self.cache = cache
         self.num_seen: dict[LLMRequest, int] = defaultdict(lambda: 0)
 
@@ -629,45 +632,39 @@ def load_request_cache(file: Path, *, mode: CacheMode):
     Context manager that loads an LLM request cache from a YAML file.
     """
     with load_cache(
-        file, mode=mode, input_type=_CachedRequest, output_type=LLMResponse
+        file, mode=mode, input_type=CachedRequest, output_type=LLMResponse
     ) as cache:
         yield LLMCache(cache)
 
 
-@dataclass
-class CachedModel(LLM):
+@contextmanager
+def load_optional_request_cache(file: Path | None, *, mode: CacheMode):
     """
-    Wrap a model to use a given cache.
+    Context manager that loads an optional LLM request cache from a YAML
+    file. If `file` is `None`, yields `None`.
+    """
+    if file is None:
+        yield None
+        return
+    with load_cache(
+        file, mode=mode, input_type=CachedRequest, output_type=LLMResponse
+    ) as cache:
+        yield LLMCache(cache)
 
-    !!! note
-        The `LLM.send_request` method has a `cache` argument that can be
-        used as a replacement for the `CachedModel` wrapper. In
-        addition, all standard prompting policies use a global request
-        cache (see `PolicyEnv`) when available. Thus, external users
-        should rarely need to manually wrap models with `CachedModel`.
+
+def fetch_or_answer(
+    cache: LLMCache | None,
+    req: LLMRequest,
+    f: Callable[[LLMRequest], LLMResponse],
+) -> LLMResponse:
+    """
+    Try and fetch the answer to a request into the cache, and compute
+    the answer using `f` if not found.
     """
 
-    model: LLM
-    cache: LLMCache
-
-    def __post_init__(self):
-        @self.cache.cache
-        def run_request(req: _CachedRequest) -> LLMResponse:
-            base = req.request
-            return self.model.send_request(base, None)
-
-        self.run_request = run_request
-
-    @override
-    def _send_final_request(self, req: LLMRequest) -> LLMResponse:
-        self.cache.num_seen[req] += 1
-        num_seen = self.cache.num_seen[req]
-        return self.run_request(_CachedRequest(req, num_seen))
-
-    @override
-    def estimate_budget(self, req: LLMRequest) -> Budget:
-        return self.model.estimate_budget(req)
-
-    @override
-    def add_model_defaults(self, req: LLMRequest) -> LLMRequest:
-        return self.model.add_model_defaults(req)
+    if cache is None:
+        return f(req)
+    cache.num_seen[req] += 1
+    num_seen = cache.num_seen[req]
+    full_req = CachedRequest(req, num_seen)
+    return cache.cache(lambda full: f(full.request))(full_req)

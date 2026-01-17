@@ -1,0 +1,115 @@
+"""
+Utilities to work with the MiniF2F benchmark suite.
+"""
+
+import re
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Literal
+
+type Split = Literal["test", "valid"]
+"""
+MiniF2F dataset splits.
+"""
+
+
+type Benchmark = dict[str, str]
+"""
+Mapping problem names to theorem commands with a `sorry` proof.
+"""
+
+
+def repo_path() -> Path:
+    delphyne_repo = Path(__file__).absolute().parent.parent
+    return delphyne_repo / "benchmarks" / "minif2f"
+
+
+def load_minif2f_file(split: Split):
+    repo = repo_path()
+    file = "Test.lean" if split == "test" else "Valid.lean"
+    path = repo / "MiniF2F" / file
+    with open(path, "r") as f:
+        return f.read()
+
+
+def load_theorems(file_content: str) -> Sequence[str]:
+    """
+    Parse theorem blocks from a Lean file and return them as a list of
+    strings.
+    """
+    # Find 'theorem' occurrences that start at the beginning of a line.
+    # We'll consider a theorem block to end at the next blank line. This
+    # avoids pulling in trailing comments or text on the same line that
+    # shouldn't be part of the theorem. We operate on the original
+    # file_content (no upfront comment stripping) as requested.
+    pattern = re.compile(r"^theorem\b", re.MULTILINE)
+    matches = list(pattern.finditer(file_content))
+    theorems: list[str] = []
+
+    for i, m in enumerate(matches):
+        start = m.start()
+        # Search for the next blank line after the match; if found, cut
+        # the theorem there. Otherwise fall back to the next theorem
+        # or end of file.
+        after = file_content[m.end() :]
+        blank_match = re.search(r"\n\s*\n", after)
+        if blank_match:
+            end = m.end() + blank_match.start()
+        else:
+            end = (
+                matches[i + 1].start()
+                if i + 1 < len(matches)
+                else len(file_content)
+            )
+
+        theorem = file_content[start:end].strip()
+        theorems.append(theorem)
+
+    return theorems
+
+
+def remove_proof(theorem: str) -> str:
+    """
+    Removesthe proof content from a theorem statement and replace it
+    with ':= by sorry'.
+    """
+    by_pos = theorem.find(":= by")
+    if by_pos == -1:
+        return theorem
+    theorem_signature = theorem[:by_pos].strip()
+    return theorem_signature + " := by sorry"
+
+
+def extract_theorem_name(theorem: str) -> str:
+    """
+    Extract the theorem name from a theorem statement.
+    """
+    parts = theorem.split("theorem ", 1)
+    if len(parts) < 2:
+        return ""
+    return parts[1].split()[0]
+
+
+def load_minif2f(split: Split) -> Benchmark:
+    """
+    Load the MiniF2F benchmark for the given split.
+
+    Returns a dictionary mapping theorem names to theorem statements
+    with proofs replaced by 'sorry'.
+    """
+    file_content = load_minif2f_file(split)
+    theorems = load_theorems(file_content)
+
+    benchmark: Benchmark = {}
+    for theorem in theorems:
+        theorem_without_proof = remove_proof(theorem)
+        theorem_name = extract_theorem_name(theorem)
+        assert theorem_name
+        benchmark[theorem_name] = theorem_without_proof
+
+    return benchmark
+
+
+if __name__ == "__main__":
+    assert len(load_minif2f("test")) == 244
+    assert len(load_minif2f("valid")) == 244

@@ -9,11 +9,11 @@ import itertools
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-import delphyne as dp
-from delphyne import Branch, Compute, Fail, Strategy, strategy
-
 import why3_utils as why3
 from why3_utils import File, Formula
+
+import delphyne as dp
+from delphyne import Branch, Compute, Fail, Strategy, strategy
 
 # fmt: off
 
@@ -46,8 +46,8 @@ def prove_program_by_recursive_abduction(
         suggest=lambda feedback:
             _suggest_invariants(feedback)
                 .using(lambda p: p.suggest, ProveProgIP),
-        search_equivalent=lambda proved, fml:
-            _search_equivalent(proved, fml)
+        search_equivalent=lambda facts, fml:
+            _search_equivalent(facts, fml)
                 .using(lambda p: p.search_equivalent, ProveProgIP),
         redundant=lambda proved, fml:
             _is_redundant(proved, fml)
@@ -79,20 +79,16 @@ def _suggest_invariants(
     assert len(unproved) > 0
     # We focus on the first unproved obligation
     answer = yield from dp.branch(
-        SuggestInvariants(unproved[0]).using(dp.ambient_pp))
+        SuggestInvariants(unproved[0]).using(lambda p: p, dp.PromptingPolicy))
     return [s.invariant for s in answer.suggestions]
 
 
 @strategy
 def _search_equivalent(
-    proved: Sequence[Formula], fml: Formula
+    facts: Sequence[Formula], fml: Formula
 ) -> Strategy[Compute, None, Formula | None]:
-    for p in proved:
-        limpl = yield from dp.compute(why3.is_valid_implication)([p], fml)
-        rimpl = yield from dp.compute(why3.is_valid_implication)([fml], p)
-        if limpl and rimpl:
-            return p
-    return None
+    ret = yield from dp.compute(search_equivalent)(facts, fml)
+    return ret
 
 
 @strategy
@@ -104,6 +100,20 @@ def _is_redundant(
 
 
 ### Utilities
+
+
+def search_equivalent(
+    facts: Sequence[Formula],
+    fml: Formula,
+    *,
+    timeout: float | None = None
+) -> Formula | None:
+    for f in facts:
+        limpl = why3.is_valid_implication([f], fml, timeout=timeout)
+        rimpl = why3.is_valid_implication([fml], f, timeout=timeout)
+        if limpl and rimpl:
+            return f
+    return None
 
 
 def _modified_program(
@@ -188,14 +198,14 @@ def prove_program_by_saturation(
     *,
     model_name: str | None = None,
     model_cycle: Sequence[tuple[str, int]] | None = None,
+    temperature: float | None = None,
     num_completions: int = 8,
     max_rollout_depth: int = 3,
     max_requests_per_attempt: int = 4,
-    max_retries_per_step: int = 8,
-    max_propagation_steps: int = 4,
-    max_candidates: int = 12,
-    max_proved: int = 8,
-    temperature: float | None = None,
+    max_candidates: int | None = 64,
+    max_proved: int | None = 64,
+    max_retries_per_step: int | None = None,
+    max_propagation_steps: int | None = None,
 ):
     """
     A policy that uses advanced saturation-based search, as featured and
@@ -220,7 +230,7 @@ def prove_program_by_saturation(
     sp = dp.with_budget(per_attempt) @ dp.abduct_and_saturate(
         log_steps="info",
         max_rollout_depth=max_rollout_depth,
-        max_raw_suggestions_per_step=3*num_completions,
+        max_raw_suggestions_per_step=8*num_completions,
         max_reattempted_candidates_per_propagation_step=max_retries_per_step,
         max_consecutive_propagation_steps=max_propagation_steps,
         remember_disproved=False,

@@ -5,21 +5,26 @@ Policies have access to a global environment for fetching prompts, data,
 examples, caching LLM requests, and logging information.
 """
 
+import random
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast, override
 
 import jinja2
+import numpy as np
 import yaml
+from numpy.typing import NDArray
 
 import delphyne.core as dp
 import delphyne.core.answer_databases as ad
 import delphyne.core.demos as dm
 import delphyne.stdlib.answer_loaders as loaders
+import delphyne.stdlib.embeddings as em
 import delphyne.stdlib.models as md
-from delphyne.utils.yaml import dump_yaml_object
+from delphyne.analysis import ObjectLoader
+from delphyne.utils.yaml import dump_yaml_object, pretty_yaml
 
 ####
 #### Data Manager
@@ -51,35 +56,42 @@ def _load_data(data_dirs: Sequence[Path]) -> dict[str, Any]:
 
     Find all files with extension `*.data.yaml` in the data_dirs,
     parse them and save everything in a big dict. If two files have
-    the same name, raise an error.
+    the same name, raise an error, unless these both represent lists, in
+    which cases the lists are concatenated.
     """
+
     result: dict[str, Any] = {}
-    seen_filenames: set[str] = set()
 
     for data_dir in data_dirs:
         if not data_dir.exists():
             continue
-
         for yaml_file in data_dir.glob("*.data.yaml"):
-            filename = yaml_file.name
-
-            # Check for duplicate filenames
-            if filename in seen_filenames:
-                raise ValueError(f"Duplicate data file found: {filename}")
-
-            seen_filenames.add(filename)
-
             # Parse the YAML file and add its contents to the result
             try:
                 with yaml_file.open() as f:
                     data = yaml.safe_load(f)
-                    if data is not None:
-                        # Use the filename (without extension) as the key
-                        key = yaml_file.stem.replace(".data", "")
-                        result[key] = data
             except Exception as e:
                 raise ValueError(f"Error parsing YAML file {yaml_file}: {e}")
-
+            if data is None:
+                # In case the YAML file is empty, we ignore it
+                continue
+            # Use the filename (without extension) as the key
+            key = yaml_file.stem.replace(".data", "")
+            if key in result:
+                # If the data already exists
+                current = result[key]
+                if isinstance(current, list) and isinstance(data, list):
+                    current = cast(list[Any], current)
+                    data = cast(list[Any], data)
+                    current.extend(data)
+                else:
+                    raise ValueError(
+                        f"Data key '{key}' already exists from a "
+                        f"previous file; cannot overwrite it from "
+                        f"{yaml_file}."
+                    )
+            else:
+                result[key] = data
     return result
 
 
@@ -91,47 +103,108 @@ def _load_data(data_dirs: Sequence[Path]) -> dict[str, Any]:
 type _QueryName = str
 
 
+type _EmbeddingModelName = str
+
+
+type _EmbeddingsBucket = tuple[_QueryName, _EmbeddingModelName]
+
+
 @dataclass(kw_only=True)
 class Example:
     """
     An example, usable for few-shot prompting.
 
     Attributes:
-        query: The corresponding serialized query.
+        query: The corresponding query.
         answer: The answer to the query.
+        demo_file: Path of the demonstration file that the
+            example originates from, if any.
+        demo_name: The name of the demonstration within the file, if
+            any.
         tags: A sequence of tags associated with the example, which
             policies can use to select appropriate examples.
     """
 
-    query: dp.SerializedQuery
+    query: dp.AbstractQuery[Any]
     answer: dp.Answer
+    demo_file: Path | None
+    demo_name: str | None
     tags: Sequence[str]
+    meta: dict[str, Any]
 
 
-@dataclass
 class ExampleDatabase:
     """
     A simple example database.
-
-    Attributes:
-        do_not_match_identical_queries: If set to `True`, the `examples`
-            method won't return examples that match identical queries
-            (i.e., with the exact same arguments). This is useful in the
-            context of writing demonstrations, where one may want to see
-            how an LLM would answer a query, even when a ground-truth
-            answer is provided already.
     """
 
     # TODO: add provenance info for better error messages.
 
-    do_not_match_identical_queries: bool = False
+    def __init__(
+        self,
+        *,
+        object_loader: ObjectLoader | None,
+        global_embeddings_cache_file: Path | None = None,
+        templates_manager: dp.AbstractTemplatesManager | None = None,
+    ):
+        """
+        Arguments:
+            object_loader: An object loader for loading query objects.
+            global_embeddings_cache_file: Global cache file that stores
+                common embeddings (e.g. embeddings of examples).
+            templates_manager: A templates manager, necessary when using
+                embeddings.
+        """
+        self._embeddings_cache_file = global_embeddings_cache_file
+        self.object_loader = object_loader
+        self._templates_manager = templates_manager
+        self._examples: dict[_QueryName, list[Example]] = defaultdict(list)
 
-    # Maps each query name to a list of
-    _examples: dict[_QueryName, list[Example]] = field(
-        default_factory=lambda: defaultdict(list)
-    )
+        # For both `_query_embeddings` and `_example_embeddings`, we
+        # store `None` if the embeddings were computed but there were
+        # zero examples. This is the equivalent of a numpy array with
+        # zero lines.
 
-    def add_query_demonstration(self, demo: dp.QueryDemo):
+        # Embeddings for queries, classified by type
+        self._query_embeddings: dict[
+            _EmbeddingsBucket, NDArray[np.float32] | None
+        ] = {}
+        # Embeddings for full examples, classified by type
+        self._example_embeddings: dict[
+            _EmbeddingsBucket, NDArray[np.float32] | None
+        ] = {}
+        # Similarity matrix
+        self._example_similarity_matrix: dict[
+            _EmbeddingsBucket, NDArray[np.float32] | None
+        ] = {}
+
+    def add_demonstration(self, demo: dp.Demo, file: Path | None = None):
+        """
+        Add all examples from a demonstration to the database.
+        """
+        if isinstance(demo, dp.QueryDemo):
+            self._add_query_demonstration(demo, file, None)
+        else:
+            assert isinstance(demo, dp.StrategyDemo)
+            for q in demo.queries:
+                self._add_query_demonstration(q, file, demo.demonstration)
+        # Embeddings are cleared since new examples were added.
+        self._query_embeddings.clear()
+
+    def add_demonstrations_from_file(self, file: Path):
+        """
+        Load all demonstrations from a file and add them to the
+        database.
+        """
+        for demo in loaders.load_demo_file(file):
+            self.add_demonstration(demo, file)
+
+    def _add_query_demonstration(
+        self,
+        demo: dp.QueryDemo,
+        file: Path | None,
+        surrounding_demo_name: str | None,
+    ):
         """
         Add all examples from a standalone query demonstration to the
         database.
@@ -145,33 +218,188 @@ class ExampleDatabase:
             return
         demo_answer = demo.answers[0]
         answer = dm.translate_answer(demo_answer)
-        serialized = dp.SerializedQuery.from_json(demo.query, demo.args)
+        if self.object_loader is None:
+            raise ValueError(
+                "ExampleDatabase was not provided with an ObjectLoader."
+            )
+        query = self.object_loader.load_query(demo.query, demo.args)
         example = Example(
-            query=serialized, answer=answer, tags=demo_answer.tags
+            query=query,
+            answer=answer,
+            tags=demo_answer.tags,
+            meta=demo_answer.meta or {},
+            demo_file=file,
+            demo_name=surrounding_demo_name or demo.demonstration,
         )
         self._examples[demo.query].append(example)
 
-    def add_demonstration(self, demo: dp.Demo):
+    def examples_for(self, query_name: str) -> Sequence[Example]:
         """
-        Add all examples from a demonstration to the database.
+        Obtain examples by their indices for a given query name.
         """
-        if isinstance(demo, dp.QueryDemo):
-            self.add_query_demonstration(demo)
-        else:
-            assert isinstance(demo, dp.StrategyDemo)
-            for q in demo.queries:
-                self.add_query_demonstration(q)
+        return self._examples[query_name]
 
-    def examples(self, query: dp.SerializedQuery) -> Iterable[Example]:
+    ### Useful accessors
+
+    @property
+    def templates_manager(self) -> dp.AbstractTemplatesManager:
+        if self._templates_manager is None:
+            raise ValueError(
+                "ExampleDatabase.templates_manager was not provided."
+            )
+        return self._templates_manager
+
+    @property
+    def global_embeddings_cache_file(self) -> Path:
+        if self._embeddings_cache_file is None:
+            raise ValueError(
+                "ExampleDatabase.global_embeddings_cache_file was not provided."
+            )
+        return self._embeddings_cache_file
+
+    ### Loading embeddings
+
+    def query_embedding_text(self, query: dp.AbstractQuery[Any]) -> str:
+        return _query_embedding_text(self.templates_manager, query)
+
+    def example_embedding_text(self, example: Example) -> str:
+        return _example_embedding_text(self.templates_manager, example)
+
+    def fetch_query_embeddings(
+        self,
+        name: _QueryName,
+        model: _EmbeddingModelName,
+    ) -> NDArray[np.float32] | None:
         """
-        Obtain all potential examples that can be used for few-shot
-        prompting with a given query.
+        Obtain the query embeddings for all examples of a given type.
+
+        If the embeddings are not loaded yet, they are loaded from
+        cache or computed on the fly.
         """
-        for ex in self._examples[query.name]:
-            if self.do_not_match_identical_queries:
-                if ex.query == query:
-                    continue
-            yield ex
+        key = (name, model)
+        if key not in self._query_embeddings:
+            embs = self._load_embeddings(
+                model,
+                self.examples_for(name),
+                lambda e: self.query_embedding_text(e.query),
+            )
+            self._query_embeddings[key] = embs
+        return self._query_embeddings[key]
+
+    def fetch_example_embeddings(
+        self,
+        name: _QueryName,
+        model: _EmbeddingModelName,
+    ) -> NDArray[np.float32] | None:
+        """
+        Obtain the embeddings of all examples of a given type.
+
+        If the embeddings are not loaded yet, they are loaded from
+        cache or computed on the fly.
+        """
+        key = (name, model)
+        if key not in self._example_embeddings:
+            embs = self._load_embeddings(
+                model,
+                self.examples_for(name),
+                self.example_embedding_text,
+            )
+            self._example_embeddings[key] = embs
+        return self._example_embeddings[key]
+
+    def fetch_example_similarity_matrix(
+        self,
+        name: _QueryName,
+        model: _EmbeddingModelName,
+    ) -> NDArray[np.float32] | None:
+        """
+        Obtain the similarity matrix of all examples of a given type.
+
+        If the similarity matrix is not loaded yet, it is computed on
+        the fly from the example embeddings.
+        """
+        key = (name, model)
+        if key not in self._example_similarity_matrix:
+            embs = self.fetch_example_embeddings(name, model)
+            if embs is None:
+                sim_matrix = None
+            else:
+                # Compute cosine similarity matrix
+                norms = np.linalg.norm(embs, axis=1, keepdims=True)
+                normalized_embs = embs / np.clip(
+                    norms, a_min=1e-10, a_max=None
+                )
+                sim_matrix = normalized_embs @ normalized_embs.T
+            self._example_similarity_matrix[key] = sim_matrix
+        return self._example_similarity_matrix[key]
+
+    def _load_embeddings(
+        self,
+        model_name: _EmbeddingModelName,
+        examples: Sequence[Example],
+        embed_fun: Callable[[Example], str],
+    ) -> NDArray[np.float32] | None:
+        """
+        Get embeddings for all examples of a given query type.
+
+        This method takes a global file lock so as to avoid concurrent
+        accesses to the embeddings cache file.
+        """
+
+        import filelock
+
+        # Note: on Unix systems, the lockfile may not be automatically
+        # deleted. See https://stackoverflow.com/questions/58098634/
+
+        model = em.standard_openai_embedding_model(model_name)
+        to_embed = [embed_fun(e) for e in examples]
+        cache_file = self.global_embeddings_cache_file
+        lock_file = _embeddings_cache_lockfile(
+            self.global_embeddings_cache_file
+        )
+        with filelock.FileLock(lock_file):
+            with em.load_embeddings_cache(cache_file, "read_write") as cache:
+                res = model.embed(to_embed, cache)
+        if not res:
+            return None
+        embeddings = np.array([r.embedding for r in res], dtype=np.float32)
+        # We ignore spending for the global cache.
+        return embeddings
+
+
+def _embeddings_cache_lockfile(cache_file: Path) -> Path:
+    return cache_file.with_suffix(cache_file.suffix + ".lock")
+
+
+def _query_embedding_text(
+    templates_manager: dp.AbstractTemplatesManager,
+    query: dp.AbstractQuery[Any],
+) -> str:
+    return query.generate_prompt(
+        kind=em.QUERY_EMBEDDING_PROMPT_NAME,
+        mode=None,
+        params={},
+        extra_args=None,
+        env=templates_manager,
+    )
+
+
+def _example_embedding_text(
+    templates_manager: dp.AbstractTemplatesManager,
+    example: Example,
+) -> str:
+    answer = example.answer
+    if isinstance(answer.content, str):
+        rendered = answer.content
+    else:
+        rendered = pretty_yaml(answer.content.structured)
+    return example.query.generate_prompt(
+        kind=em.EXAMPLE_EMBEDDING_PROMPT_NAME,
+        mode=None,
+        params={},
+        extra_args={"answer": rendered},
+        env=templates_manager,
+    )
 
 
 ####
@@ -236,6 +464,9 @@ class TemplatesManager(dp.AbstractTemplatesManager):
             trim_blocks=True,
             lstrip_blocks=True,
             keep_trailing_newline=False,
+            # We raise exceptions when trying to access nonexisting
+            # fields or values.
+            undefined=jinja2.StrictUndefined,
         )
         self.env.filters["yaml"] = dump_yaml_object
         self.env.filters["json"] = _dump_json_object
@@ -298,28 +529,6 @@ def _dump_json_object(
 
 
 ####
-#### Hindsight Feedback Data
-####
-
-
-@dataclass(frozen=True)
-class HindsightFeedback:
-    """
-    Feedback about what the answer to a query *should have been*.
-    """
-
-    query: str
-    args: dict[str, object]
-    answer: dp.Answer
-
-
-type HindsightFeedbackDict = dict[int, HindsightFeedback]
-"""
-A mapping from node IDs to the attached hindsight feedback.
-"""
-
-
-####
 #### Policy Environment
 ####
 
@@ -340,23 +549,30 @@ class PolicyEnv:
         templates: The prompt templates manager.
         tracer: The tracer, which can also be used for logging.
         examples: The example database.
-        log_long_computations: see constructor.
+        log_long_computations: See constructor.
+        random: A random number generator.
     """
 
     def __init__(
         self,
         *,
+        object_loader: ObjectLoader | None = None,
         prompt_dirs: Sequence[Path] = (),
         demonstration_files: Sequence[Path] = (),
         data_dirs: Sequence[Path] = (),
         cache: md.LLMCache | None = None,
+        embeddings_cache: em.EmbeddingsCache | None = None,
+        global_embeddings_cache_file: Path | None = None,
         override_answers: dp.AnswerDatabase | None = None,
         log_level: dp.LogLevel = "info",
         log_long_computations: tuple[dp.LogLevel, float] | None = None,
-        do_not_match_identical_queries: bool = False,
+        random_seed: int = 0,
     ):
         """
         Args:
+            object_loader: An object loader. This is useful in
+                particular for loading query objects from their
+                serialized representation.
             prompt_dirs: A sequence of directories where Jinja prompt
                 templates can be found.
             demonstration_files: A sequence of paths to demonstration
@@ -365,6 +581,10 @@ class PolicyEnv:
             data_dirs: A sequence of directories where data files can be
                 found.
             cache: A request cache, or `None` to disable caching.
+            embeddings_cache: An embeddings cache, or `None` to disable
+                embeddings caching.
+            global_embeddings_cache_file: Global cache file that stores
+                common embeddings (e.g. embeddings of examples).
             override_answers: If provided, a database of answers that
                 must be used to override LLM calls whenever possible.
                 Individual prompting policies such as `few_shot` are
@@ -376,29 +596,25 @@ class PolicyEnv:
                 than the given number of seconds at the given severity
                 level. This settings can be locally overriden by
                 `elim_compute`.
-            do_not_match_identical_queries: See `ExampleDatabase`.
+            random_seed: The seed with which to initialize the random
+                number generator.
         """
         self.data_manager = DataManager(data_dirs)
         self.templates = TemplatesManager(prompt_dirs, self.data_manager)
-        self.examples = ExampleDatabase(do_not_match_identical_queries)
+        self.examples = ExampleDatabase(
+            global_embeddings_cache_file=global_embeddings_cache_file,
+            templates_manager=self.templates,
+            object_loader=object_loader,
+        )
+        self.object_loader = object_loader
         self.tracer = dp.Tracer(log_level=log_level)
         self.log_long_computations = log_long_computations
         self.cache = cache
+        self.embeddings_cache = embeddings_cache
         self.override_answers = override_answers
+        self.random = random.Random(random_seed)
         for path in demonstration_files:
-            for demo in loaders.load_demo_file(path):
-                self.examples.add_demonstration(demo)
-        self._hindsight_feedback: HindsightFeedbackDict = {}
-
-    def add_hindsight_feedback(
-        self, node_id: int, feedback: HindsightFeedback
-    ) -> None:
-        with self.tracer.lock:
-            self._hindsight_feedback[node_id] = feedback
-
-    def get_hindsight_feedback(self) -> HindsightFeedbackDict:
-        with self.tracer.lock:
-            return self._hindsight_feedback.copy()
+            self.examples.add_demonstrations_from_file(path)
 
     def overriden_answer(
         self, query: dp.AbstractQuery[Any]
@@ -429,7 +645,8 @@ class PolicyEnv:
         metadata: object | None = None,
         *,
         loc: dp.Tree[Any, Any, Any] | dp.AttachedQuery[Any] | None = None,
-    ) -> None:
+        related: Sequence[dp.LogMessageId | None] = (),
+    ) -> dp.LogMessageId | None:
         """
         Log a message.
 
@@ -441,15 +658,10 @@ class PolicyEnv:
             loc: Tree or attached query that the message is about, if
                 relevant.
         """
-
-        match loc:
-            case None:
-                location = None
-            case dp.Tree():
-                location = dp.Location(loc.ref, None)
-            case dp.AttachedQuery(_, ref):
-                location = dp.Location(ref[0], ref[1])
-        self.tracer.log(level, message, metadata, location)
+        location = loc.ref if loc is not None else None
+        return self.tracer.log(
+            level, message, metadata, location=location, related=related
+        )
 
     def trace(
         self,
@@ -457,13 +669,14 @@ class PolicyEnv:
         metadata: object | None = None,
         *,
         loc: dp.Tree[Any, Any, Any] | dp.AttachedQuery[Any] | None = None,
-    ) -> None:
+        related: Sequence[dp.LogMessageId | None] = (),
+    ) -> dp.LogMessageId | None:
         """
         Log a message with "trace" severity level.
 
         See `log` method.
         """
-        self.log("trace", message, metadata, loc=loc)
+        return self.log("trace", message, metadata, loc=loc, related=related)
 
     def debug(
         self,
@@ -471,13 +684,14 @@ class PolicyEnv:
         metadata: object | None = None,
         *,
         loc: dp.Tree[Any, Any, Any] | dp.AttachedQuery[Any] | None = None,
-    ) -> None:
+        related: Sequence[dp.LogMessageId | None] = (),
+    ) -> dp.LogMessageId | None:
         """
         Log a message with "debug" severity level.
 
         See `log` method.
         """
-        self.log("debug", message, metadata, loc=loc)
+        return self.log("debug", message, metadata, loc=loc, related=related)
 
     def info(
         self,
@@ -485,13 +699,14 @@ class PolicyEnv:
         metadata: object | None = None,
         *,
         loc: dp.Tree[Any, Any, Any] | dp.AttachedQuery[Any] | None = None,
-    ) -> None:
+        related: Sequence[dp.LogMessageId | None] = (),
+    ) -> dp.LogMessageId | None:
         """
         Log a message with "info" severity level.
 
         See `log` method.
         """
-        self.log("info", message, metadata, loc=loc)
+        return self.log("info", message, metadata, loc=loc, related=related)
 
     def warn(
         self,
@@ -499,13 +714,14 @@ class PolicyEnv:
         metadata: object | None = None,
         *,
         loc: dp.Tree[Any, Any, Any] | dp.AttachedQuery[Any] | None = None,
-    ) -> None:
+        related: Sequence[dp.LogMessageId | None] = (),
+    ) -> dp.LogMessageId | None:
         """
         Log a message with "warn" severity level.
 
         See `log` method.
         """
-        self.log("warn", message, metadata, loc=loc)
+        return self.log("warn", message, metadata, loc=loc, related=related)
 
     def error(
         self,
@@ -513,10 +729,11 @@ class PolicyEnv:
         metadata: object | None = None,
         *,
         loc: dp.Tree[Any, Any, Any] | dp.AttachedQuery[Any] | None = None,
-    ) -> None:
+        related: Sequence[dp.LogMessageId | None] = (),
+    ) -> dp.LogMessageId | None:
         """
         Log a message with "error" severity level.
 
         See `log` method.
         """
-        self.log("error", message, metadata, loc=loc)
+        return self.log("error", message, metadata, loc=loc, related=related)

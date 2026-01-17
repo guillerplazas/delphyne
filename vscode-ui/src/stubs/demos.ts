@@ -18,6 +18,7 @@ export interface Answer {
   label?: string | null;
   example?: boolean | null;
   tags?: string[];
+  meta?: Record<string, unknown> | null;
   justification?: string | null;
   __loc: vscode.Range;
   __loc__answer: vscode.Range;
@@ -29,6 +30,7 @@ export interface Answer {
   __loc__example: vscode.Range;
   __loc__tags: vscode.Range;
   __loc_items__tags: vscode.Range[];
+  __loc__meta: vscode.Range;
   __loc__justification: vscode.Range;
 }
 
@@ -37,11 +39,14 @@ export type AnswerSource = CommandResultAnswerSource | DemoAnswerSource;
 export interface CommandResultAnswerSource {
   command: string;
   node_ids?: number[] | null;
+  backprop_with?: string[] | null;
   queries?: string[] | null;
   __loc: vscode.Range;
   __loc__command: vscode.Range;
   __loc__node_ids: vscode.Range;
   __loc_items__node_ids: vscode.Range[];
+  __loc__backprop_with: vscode.Range;
+  __loc_items__backprop_with: vscode.Range[];
   __loc__queries: vscode.Range;
   __loc_items__queries: vscode.Range[];
 }
@@ -90,4 +95,3 @@ export interface StrategyDemo {
 export type Demo = QueryDemo | StrategyDemo;
 
 export type DemoFile = Demo[];
-

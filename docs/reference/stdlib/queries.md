@@ -44,6 +44,14 @@
 
 ::: delphyne.ProbInfo
 
+::: delphyne.ExampleSelector
+
+::: delphyne.all_examples
+
+::: delphyne.closest_examples
+
+::: delphyne.maximum_marginally_relevant
+
 ## Models
 
 ::: delphyne.stdlib.models.LLM
@@ -77,8 +85,6 @@
 ::: delphyne.stdlib.models.DummyModel
 
 ::: delphyne.stdlib.models.WithRetry
-
-::: delphyne.stdlib.models.CachedModel
 
 ::: delphyne.stdlib.models.LLMCache
 

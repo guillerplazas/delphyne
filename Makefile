@@ -19,6 +19,7 @@ TO_CLEAN := \
 	-name '_build' -o \
 	-name '.ruff_cache' -o \
 	-name '.DS_Store' -o \
+	-name '*.yaml.lock' -o \
 	-name 'repomix-output.xml'
 
 SCHEMAS_FOLDER := vscode-ui/resources
@@ -173,7 +174,7 @@ serve-doc:
 # is valid for the latest stable release.
 deploy-doc-release:
 	git fetch origin gh-pages
-	mike deploy 0.13 latest --update-aliases --push
+	mike deploy 0.14 latest --update-aliases --push
 
 
 # Build and deploy the documentation for the dev version
@@ -205,7 +206,7 @@ release:
 
 # Count the number of lines of code
 cloc:
-	cloc . --exclude-dir=node_modules,out,.vscode-test --include-lang=python,typescript
+	cloc . --exclude-dir=node_modules,out,.vscode-test,minif2f --include-lang=python,typescript
 
 
 # Estimate the size of the documentation. A page is traditionally defined as 250

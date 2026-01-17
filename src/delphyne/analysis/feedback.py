@@ -11,12 +11,23 @@ from typing import Any, Literal
 #####
 
 
+type DiagnosticTag = Literal["unreachable", "stuck"] | str
+"""Optional tag for classifying diagnostic information."""
+
+
 type DiagnosticType = Literal["error", "warning", "info"]
 """Diagnostic type."""
 
 
-type Diagnostic = tuple[DiagnosticType, str]
-"""A diagnostic gathers a type (i.e. severity) and a message."""
+@dataclass(frozen=True)
+class Diagnostic:
+    """
+    A diagnostic message shown in the editor.
+    """
+
+    severity: DiagnosticType
+    message: str
+    tags: Sequence[DiagnosticTag] = ()
 
 
 #####
@@ -30,6 +41,10 @@ type Diagnostic = tuple[DiagnosticType, str]
 
 type TraceNodeId = int
 """Global node id, as set in `core.traces.Trace`."""
+
+
+type TraceSpaceId = int
+"""Global space id, as set in `core.traces.Trace`."""
 
 
 type TraceAnswerId = int
@@ -252,12 +267,12 @@ class Node:
     leaf_node: bool
     label: str | None
     tags: list[str]
-    properties: list[tuple[Reference, NodeProperty]]
+    properties: list[tuple[Reference, TraceSpaceId | None, NodeProperty]]
     actions: list[Action]
     origin: NodeOrigin
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Trace:
     """
     A browsable trace.
@@ -283,6 +298,7 @@ class Trace:
     """
 
     nodes: dict[TraceNodeId, Node]
+    spaces: dict[TraceSpaceId, tuple[TraceNodeId, TraceNodePropertyId]]
 
 
 #####

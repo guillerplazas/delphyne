@@ -5,21 +5,20 @@ The `Compute` Effect
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from functools import partial
 from typing import Any, Never, cast, override
 
 import yaml
 
 import delphyne.core.inspect as insp
 import delphyne.core_and_base as dp
+import delphyne.stdlib.models as md
 import delphyne.utils.typing as ty
 from delphyne.core_and_base import PolicyEnv, spawn_node
-from delphyne.stdlib.queries import create_prompt, json_object_digest
 from delphyne.utils.yaml import dump_yaml
 
 
 @dataclass
-class __Computation__(dp.AbstractQuery[object]):
+class __Computation__(dp.PseudoQuery[object]):
     """
     A special query that represents a computation.
 
@@ -32,29 +31,6 @@ class __Computation__(dp.AbstractQuery[object]):
 
     fun: str
     args: dict[str, Any]
-
-    @override
-    def generate_prompt(
-        self,
-        *,
-        kind: str,
-        mode: dp.AnswerMode,
-        params: dict[str, object],
-        extra_args: dict[str, object] | None = None,
-        env: dp.AbstractTemplatesManager | None = None,
-    ) -> str:
-        # The prompt is never sent to LLMs but it is important that it
-        # uniquely identifies the query instance since it is used for
-        # caching.
-        return dump_yaml(Any, self.__dict__)
-
-    @override
-    def query_modes(self):
-        return [None]
-
-    @override
-    def answer_type(self):
-        return object
 
     @override
     def parse_answer(self, answer: dp.Answer) -> object:
@@ -118,21 +94,22 @@ class Compute(dp.Node):
         overriden_args: dict[str, Any] | None = None,
     ) -> str:
         """
-        Run the computation using a fake oracle so that the LLM caching
-        mechanism can be reused.
+        Disguise the computation as an LLM request so as to reuse the
+        caching infrastructure.
         """
-        chat = create_prompt(
-            self.query.attached.query,
-            examples=[],
-            params={},
-            mode=None,
-            env=None,
+
+        def _compute_answer() -> dp.LLMResponse:
+            res = self.run_computation(overriden_args=overriden_args)
+            return dp.LLMResponse(outputs=[dp.LLMOutput(content=res)])
+
+        query = self.query.attached.query
+        assert isinstance(query, __Computation__)
+        serialized = dump_yaml(Any, query.__dict__)
+        chat = (dp.UserMessage(serialized),)
+        req = dp.LLMRequest(
+            chat=chat, num_completions=1, options={"model": "__compute__"}
         )
-        req = dp.LLMRequest(chat=chat, num_completions=1, options={})
-        model = ComputationOracle(
-            partial(self.run_computation, overriden_args=overriden_args)
-        )
-        resp = model.send_request(req, cache)
+        resp = md.fetch_or_answer(cache, req, lambda _: _compute_answer())
         assert len(resp.outputs) == 1
         answer = resp.outputs[0].content
         assert isinstance(answer, str)
@@ -174,46 +151,17 @@ def compute[**A, T, P](
         fun = insp.function_name(f)
         assert fun is not None
         query = dp.TransparentQuery.build(__Computation__(fun, fun_args))
-        unparsed = yield spawn_node(
+        recv = yield spawn_node(
             Compute,
             query=query,
             override_args=override_args,
             _comp=comp,
             _ret_type=ret_type,
         )
-        ret = ty.pydantic_load(ret_type, unparsed)
+        ret = ty.pydantic_load(ret_type, recv.action)
         return cast(T, ret)
 
     return wrapped
-
-
-@dataclass
-class ComputationOracle(dp.LLM):
-    """
-    A fake LLM that performs computations.
-
-    Using such an oracle allows reusing the LLM request caching
-    infrasrtructure.
-    """
-
-    computation: Callable[[], str]
-
-    @override
-    def add_model_defaults(self, req: dp.LLMRequest) -> dp.LLMRequest:
-        return req
-
-    @override
-    def _send_final_request(self, req: dp.LLMRequest) -> dp.LLMResponse:
-        res = self.computation()
-        return dp.LLMResponse(
-            outputs=[
-                dp.LLMOutput(content=res, tool_calls=[], finish_reason="stop")
-            ],
-            budget=dp.Budget({}),
-            log_items=[],
-            model_name=None,
-            usage_info=None,
-        )
 
 
 @dp.contextual_tree_transformer
@@ -260,12 +208,12 @@ def elim_compute(
                 cache = env.cache
             query = tree.node.query.attached.query
             assert isinstance(query, __Computation__), str(type(query))
-            digest = json_object_digest(ty.pydantic_dump(Any, query))
+            lid = None
             if log_computations:
-                env.log(
+                lid = env.log(
                     log_computations,
                     "computation_started",
-                    {"hash": digest, "details": query},
+                    {"computation": query},
                     loc=tree,
                 )
             overriden: dict[str, Any] = override_args or {}
@@ -279,19 +227,20 @@ def elim_compute(
             )
             _elapsed = time.time() - start
             if log_computations:
+                assert lid is not None
                 env.log(
                     log_computations,
                     "computation_finished",
-                    {"hash": digest, "elapsed": _elapsed, "result": answer},
+                    {"elapsed": _elapsed, "result": answer},
                     loc=tree,
+                    related=[lid],
                 )
             if log_long_computations and _elapsed > log_long_computations[1]:
                 env.log(
                     log_long_computations[0],
                     "long_computation",
                     {
-                        "hash": digest,
-                        "details": query,
+                        "computation": query,
                         "elapsed": _elapsed,
                         "result": answer,
                     },

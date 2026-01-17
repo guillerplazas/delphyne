@@ -6,10 +6,22 @@ Delphyne standard library.
 # pyright: reportUnusedImport=false
 
 from delphyne.stdlib.base import *
+from delphyne.stdlib.commands.run_strategy import (
+    RunStrategyArgs,
+    run_strategy,
+    RunLoadedStrategyArgs,
+    run_loaded_strategy,
+)
 from delphyne.stdlib.computations import (
     Compute,
     compute,
     elim_compute,
+)
+from delphyne.stdlib.execution_contexts import (
+    ExecutionContext,
+    load_execution_context,
+    surrounding_workspace_dir,
+    workspace_execution_context,
 )
 from delphyne.stdlib.flags import (
     Flag,
@@ -19,7 +31,7 @@ from delphyne.stdlib.flags import (
 )
 from delphyne.stdlib.globals import (
     stdlib_globals,
-    stdlib_implicit_answer_generators_loader,
+    stdlib_implicit_answer_generators,
 )
 from delphyne.stdlib.data import (
     Data,
@@ -34,12 +46,8 @@ from delphyne.stdlib.misc import (
     const_space,
     failing_pp,
     just_compute,
-    just_dfs,
     map_space,
     nofail,
-    or_else,
-    sequence,
-    parallel,
 )
 from delphyne.stdlib.openai_api import (
     OpenAICompatibleModel,
@@ -60,6 +68,7 @@ from delphyne.stdlib.search.classification_based import (
 from delphyne.stdlib.search.dfs import (
     dfs,
     par_dfs,
+    exec,
 )
 from delphyne.stdlib.search.interactive import (
     InteractStats,
@@ -78,7 +87,6 @@ from delphyne.stdlib.standard_models import (
 )
 from delphyne.stdlib.tasks import (
     Command,
-    CommandExecutionContext,
     CommandResult,
     StreamingTask,
     TaskContext,
@@ -95,5 +103,7 @@ from delphyne.stdlib.universal_queries import (
 
 from delphyne.stdlib.experiments.experiment_launcher import (
     Experiment,
+    ExperimentConfig,
     WorkersSetup,
+    path_stem,
 )

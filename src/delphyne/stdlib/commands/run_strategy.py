@@ -12,14 +12,15 @@ from typing import Any, assert_type, cast
 
 import delphyne.analysis as analysis
 import delphyne.analysis.feedback as fb
-import delphyne.core.refs as refs
 import delphyne.core_and_base as dp
 import delphyne.stdlib.environments as en
 import delphyne.stdlib.models as md
 import delphyne.stdlib.policies as pol
 import delphyne.stdlib.tasks as ta
 import delphyne.utils.caching as ca
+from delphyne.core import irefs, refs
 from delphyne.core.streams import Barrier, Solution, Spent
+from delphyne.stdlib.globals import stdlib_globals
 from delphyne.utils.typing import pydantic_dump
 
 
@@ -35,7 +36,6 @@ class RunStrategyResponse:
         success_nodes: Identifiers of success nodes in the trace. Only
             available when the trace is exported, in which case it has
             the same length as `values`.
-        hindsight_feedback: Hindsight feedback dictionary.
         raw_trace: Raw trace of the strategy execution, if requested.
         log: Log messages generated during the strategy execution.
         browsable_trace: A browsable trace, if requested.
@@ -45,7 +45,6 @@ class RunStrategyResponse:
     values: Sequence[Any | None]
     spent_budget: Mapping[str, float]
     success_nodes: Sequence[int] | None = None
-    hindsight_feedback: dp.HindsightFeedbackDict | None = None
     raw_trace: dp.ExportableTrace | None = None
     log: Sequence[dp.ExportableLogMessage] | None = None
     browsable_trace: fb.Trace | None = None
@@ -60,11 +59,13 @@ class RunLoadedStrategyArgs[N: dp.Node, P, T]:
     """
 
     strategy: dp.StrategyComp[N, P, T]
-    policy: pol.Policy[N, P]
+    policy: pol.StandardPolicy[N, P]
+    answer_loader: dp.AnswerLoader | None
     num_generated: int = 1
     budget: dict[str, float] | None = None
     using: Sequence[dp.AnswerSource] | None = None
     cache_file: str | None = None
+    embeddings_cache_file: str | None = None
     cache_mode: ca.CacheMode = "read_write"
     log_level: dp.LogLevel = "info"
     log_long_computations: tuple[dp.LogLevel, float] | None = None
@@ -75,39 +76,51 @@ class RunLoadedStrategyArgs[N: dp.Node, P, T]:
     remove_timing_info: bool = False
 
 
-def run_loaded_strategy_with_cache[N: dp.Node, P, T](
+def run_loaded_strategy_with_caches[N: dp.Node, P, T](
     task: ta.TaskContext[ta.CommandResult[RunStrategyResponse]],
-    exe: ta.CommandExecutionContext,
+    exe: ta.ExecutionContext,
     args: RunLoadedStrategyArgs[N, P, T],
     request_cache: md.LLMCache | None,
+    embeddings_cache: dp.EmbeddingsCache | None,
 ):
     answer_database = None
     if args.using is not None:
         assert exe.workspace_root is not None, (
             "No workspace root is specified."
         )
-        loader = dp.standard_answer_loader(exe.workspace_root)
-        answer_database = dp.AnswerDatabase(args.using, loader=loader)
+        assert args.answer_loader is not None, "No answer loader specified."
+        answer_database = dp.AnswerDatabase(
+            args.using, loader=args.answer_loader
+        )
     env = en.PolicyEnv(
         prompt_dirs=exe.prompt_dirs,
         data_dirs=exe.data_dirs,
         demonstration_files=exe.demo_files,
         cache=request_cache,
+        embeddings_cache=embeddings_cache,
+        global_embeddings_cache_file=exe.global_embeddings_cache_file,
+        object_loader=exe.object_loader(extra_objects=stdlib_globals()),
         override_answers=answer_database,
         log_level=args.log_level,
         log_long_computations=args.log_long_computations,
-        do_not_match_identical_queries=True,
     )
     lock = threading.Lock()  # to protect state that can be pulled
     # We do not need to cache all tree nodes (which can cost a lot of
     # memory) unless a browsable trace may be computed.
     cache: dp.TreeCache | None = None
+    hooks: list[dp.TreeHook] = []
     if args.export_browsable_trace or args.export_all_on_pull:
         cache = {}
-    monitor = dp.TreeMonitor(cache, hooks=[dp.tracer_hook(env.tracer)])
+    if (
+        args.export_browsable_trace
+        or args.export_all_on_pull
+        or args.export_raw_trace
+    ):
+        hooks.append(dp.tracer_hook(env.tracer))
+    monitor = dp.TreeMonitor(cache, hooks=hooks)
     tree = dp.reify(args.strategy, monitor)
     policy = args.policy
-    stream = policy.search(tree, env, policy.inner)
+    stream = policy(tree, env)
     if args.budget is not None:
         stream = stream.with_budget(dp.BudgetLimit(args.budget))
     stream = stream.take(args.num_generated)
@@ -130,17 +143,15 @@ def run_loaded_strategy_with_cache[N: dp.Node, P, T](
         raw_trace = trace.export() if export_raw_trace else None
         browsable_trace: fb.Trace | None = None
         success_nodes = None
-        hindsight_feedback = None
         if raw_trace is not None:
             success_nodes = [
                 _node_id_of_tracked_value(r, trace).id for r in results
             ]
-            hindsight_feedback = env.get_hindsight_feedback()
-            if not hindsight_feedback:
-                hindsight_feedback = None
         if export_browsable_trace:
             assert cache is not None
-            browsable_trace = analysis.compute_browsable_trace(trace, cache)
+            browsable_trace = analysis.compute_browsable_trace(
+                trace, cache=cache
+            )
         log = None
         if export_log:
             log = list(
@@ -155,7 +166,6 @@ def run_loaded_strategy_with_cache[N: dp.Node, P, T](
             spent_budget=total_budget.values,
             raw_trace=raw_trace,
             success_nodes=success_nodes,
-            hindsight_feedback=hindsight_feedback,
             log=log,
             browsable_trace=browsable_trace,
         )
@@ -194,7 +204,7 @@ def run_loaded_strategy_with_cache[N: dp.Node, P, T](
     last_refreshed_status = time.time()
     # TODO: generating each element is blocking here. Should we spawn a
     # thread for every new element?
-    for msg in stream.gen():
+    for msg in stream:
         with lock:
             match msg:
                 case Solution():
@@ -224,34 +234,52 @@ def run_loaded_strategy_with_cache[N: dp.Node, P, T](
 
 def run_loaded_strategy[N: dp.Node, P, T](
     task: ta.TaskContext[ta.CommandResult[RunStrategyResponse]],
-    exe: ta.CommandExecutionContext,
+    exe: ta.ExecutionContext,
     args: RunLoadedStrategyArgs[N, P, T],
 ):
     """
     Command for running an oracular program.
     """
+
     with_cache_spec(
-        partial(run_loaded_strategy_with_cache, task, exe, args),
+        partial(run_loaded_strategy_with_caches, task, exe, args),
         cache_root=exe.cache_root,
         cache_file=args.cache_file,
+        embeddings_cache_file=args.embeddings_cache_file,
         cache_mode=args.cache_mode,
     )
 
 
 def with_cache_spec[T](
-    f: Callable[[md.LLMCache | None], T],
+    f: Callable[[dp.LLMCache | None, dp.EmbeddingsCache | None], T],
     *,
     cache_root: Path | None,
     cache_file: str | None,
+    embeddings_cache_file: str | None,
     cache_mode: ca.CacheMode,
 ) -> T:
+    """
+    Utility function for loading request and embeddings caches
+    before calling `f`.
+    """
+
+    request_cache_path = None
+    embeddings_cache_path = None
+    unspecified_message = "Nonspecified cache root."
+
     if cache_file is not None:
-        assert cache_root is not None, "Nonspecified cache root."
-        cache_file_path = cache_root / cache_file
-        with md.load_request_cache(cache_file_path, mode=cache_mode) as rc:
-            return f(rc)
-    else:
-        return f(None)
+        assert cache_root is not None, unspecified_message
+        request_cache_path = cache_root / cache_file
+    if embeddings_cache_file is not None:
+        assert cache_root is not None, unspecified_message
+        embeddings_cache_path = cache_root / embeddings_cache_file
+    with md.load_optional_request_cache(
+        request_cache_path, mode=cache_mode
+    ) as request_cache:
+        with dp.load_optional_embeddings_cache(
+            embeddings_cache_path, mode=cache_mode
+        ) as embeddings_cache:
+            return f(request_cache, embeddings_cache)
 
 
 @dataclass(kw_only=True)
@@ -272,6 +300,9 @@ class RunStrategyArgs:
             auto-completing demonstrations.
         cache_file: File within the global cache directory to use for
             request caching, or `None` to disable caching.
+        embeddings_cache_file: File within the global cache directory to
+            use for embeddings caching, or `None` to disable embeddings
+            caching.
         cache_mode: Cache mode to use.
         log_level: Minimum log level to record. Messages with a lower
             level will be ignored.
@@ -299,6 +330,7 @@ class RunStrategyArgs:
     using: Sequence[dp.AnswerSource] | None = None
     num_generated: int = 1
     cache_file: str | None = None
+    embeddings_cache_file: str | None = None
     cache_mode: ca.CacheMode = "read_write"
     log_level: dp.LogLevel = "info"
     log_long_computations: tuple[dp.LogLevel, float] | None = None
@@ -311,28 +343,34 @@ class RunStrategyArgs:
 
 def run_strategy(
     task: ta.TaskContext[ta.CommandResult[RunStrategyResponse]],
-    exe: ta.CommandExecutionContext,
+    exe: ta.ExecutionContext,
     args: RunStrategyArgs,
 ):
     """
     Command for running an oracular program from a serialized
     specification.
     """
-    loader = analysis.ObjectLoader(exe.base)
+    loader = exe.object_loader(extra_objects=stdlib_globals())
     strategy = loader.load_strategy_instance(args.strategy, args.args)
     policy = loader.load_and_call_function(args.policy, args.policy_args)
+    answer_loader = None
+    if args.using is not None:
+        assert exe.workspace_root is not None
+        answer_loader = dp.standard_answer_loader(exe.workspace_root, loader)
     assert isinstance(policy, dp.AbstractPolicy)
-    policy = cast(pol.Policy[Any, Any], policy)
+    policy = cast(pol.StandardPolicy[Any, Any], policy)
     run_loaded_strategy(
         task=task,
         exe=exe,
         args=RunLoadedStrategyArgs(
             strategy=strategy,
             policy=policy,
+            answer_loader=answer_loader,
             num_generated=args.num_generated,
             budget=args.budget,
             using=args.using,
             cache_file=args.cache_file,
+            embeddings_cache_file=args.embeddings_cache_file,
             cache_mode=args.cache_mode,
             log_level=args.log_level,
             log_long_computations=args.log_long_computations,
@@ -347,14 +385,13 @@ def run_strategy(
 
 def _node_id_of_tracked_value(
     value: dp.Tracked[object], trace: dp.Trace
-) -> refs.NodeId:
+) -> irefs.NodeId:
     ref = value.ref
     while isinstance(ref, refs.IndexedRef):
         ref = ref.ref
     eref = ref.element
-    assert not isinstance(
-        eref, (refs.HintsRef, refs.Answer, refs.AnswerId, refs.NodeId)
-    )
+    assert not isinstance(eref, refs.Answer)
     assert_type(eref, refs.NodePath)
-    gref: refs.GlobalNodePath = ((refs.MAIN_SPACE, eref),)
-    return trace.convert_global_node_path(gref)
+    main_space = refs.GlobalSpacePath(())
+    gref = refs.GlobalNodeRef(main_space, eref)
+    return trace.convert_global_node_ref(gref)

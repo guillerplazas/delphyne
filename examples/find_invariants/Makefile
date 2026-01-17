@@ -36,7 +36,6 @@ test-exp:
 	@echo "\n"
 
 
-# delphyne run commands/test_abduct_branch.exec.yaml --cache --no-output --ensure-no-erro
 CMD_FILES := $(filter-out commands/test_abduct_branch_difficult.exec.yaml,$(wildcard commands/*.exec.yaml))
 
 execute-commands: $(CMD_FILES)

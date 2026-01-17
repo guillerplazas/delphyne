@@ -1,32 +1,37 @@
 """
-A concrete implementation of `AnswerDatabaseLoader`.
+A concrete implementation of `AnswerLoader`.
 """
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import yaml
 
+import delphyne.analysis as an
 import delphyne.core as dp
 import delphyne.core.demos as dm
+import delphyne.stdlib.feedback_processing as fp
 import delphyne.utils.typing as ty
-from delphyne.core.traces import ExportableQueryInfo, NodeOriginStr
-from delphyne.stdlib.environments import HindsightFeedbackDict
 
 type _AnswerIterable = Iterable[tuple[dp.SerializedQuery, dp.LocatedAnswer]]
 
 
 DEMO_FILE_EXT = ".demo.yaml"
 COMMAND_FILE_EXT = ".exec.yaml"
+COMMAND_ARGS_PATH = ("args",)
+COMMAND_STRATEGY_NAME_FIELD = "strategy"
+COMMAND_STRATEGY_ARGS_FIELD = "args"
 COMMAND_RESULT_PATH = ("outcome", "result")
+COMMAND_RESULT_SUCCESS_VALUES_FIELD = "values"
 COMMAND_RESULT_TRACE_FIELD = "raw_trace"
 COMMAND_RESULT_SUCCESS_NODES_FIELD = "success_nodes"
-COMMAND_RESULT_HINDSIGHT_FEEDBACK_FIELD = "hindsight_feedback"
 
 
-def standard_answer_loader(workspace_root: Path) -> dp.AnswerDatabaseLoader:
+def standard_answer_loader(
+    workspace_root: Path, object_loader: an.ObjectLoader
+) -> dp.AnswerLoader:
     """
     Standard answer loader.
     """
@@ -68,33 +73,30 @@ def standard_answer_loader(workspace_root: Path) -> dp.AnswerDatabaseLoader:
     ) -> _AnswerIterable:
         command_file = workspace_root / source.command
         trace_data = load_trace_data_from_command_file(command_file)
-        if not source.hindsight:
-            trace_data.hindsight_feedback = None
         node_ids = source.node_ids
         if node_ids is None:
             if trace_data.success_nodes:
                 node_ids = [trace_data.success_nodes[0]]
             else:
                 node_ids = []
-        for node_id in node_ids:
-            all_relevant = relevant_answers(
-                trace_data.trace, node_id, trace_data.hindsight_feedback
+        resolver = trace_data.resolver(object_loader)
+        raw_examples = fp.extract_examples(
+            resolver,
+            roots=[dp.irefs.NodeId(i) for i in node_ids],
+            backprop_handler_tags=source.backprop_with,
+        )
+        for ex in raw_examples:
+            serialized = dp.SerializedQuery.make(ex.query)
+            answer = dp.LocatedAnswer(
+                answer=ex.answer,
+                source=dp.FromCommandResult(
+                    "command_result",
+                    source.command,
+                    answer_id=ex.answer_id.id,
+                    modified=ex.modified,
+                ),
             )
-            for relevant in all_relevant:
-                if relevant.hindsight:
-                    answer_source = dp.FromCommandResultHindsightFeedback(
-                        "command_result_hindsight",
-                        command_file=source.command,
-                        node_id=relevant.id,
-                    )
-                else:
-                    answer_source = dp.FromCommandResult(
-                        "command_result",
-                        command_file=source.command,
-                        answer_id=relevant.id,
-                    )
-                located = dp.LocatedAnswer(relevant.answer, answer_source)
-                yield (relevant.query, located)
+            yield (serialized, answer)
 
     def unfiltered_loader(source: dp.AnswerSource) -> _AnswerIterable:
         match source:
@@ -171,13 +173,21 @@ def demo_with_name(demos: Sequence[dm.Demo], name: str) -> dm.Demo:
 
 
 @dataclass
-class _TraceData:
+class TraceData:
+    strategy: str
+    args: dict[str, Any]
     trace: dp.ExportableTrace
     success_nodes: Sequence[int]
-    hindsight_feedback: HindsightFeedbackDict | None
+
+    def resolver(self, object_loader: an.ObjectLoader) -> an.IRefResolver:
+        trace = dp.Trace.load(self.trace)
+        strategy = object_loader.load_strategy_instance(
+            self.strategy, self.args
+        )
+        return an.IRefResolver(trace, root=dp.reify(strategy))
 
 
-def load_trace_data_from_command_file(path: Path) -> _TraceData:
+def load_trace_data_from_command_file(path: Path) -> TraceData:
     """
     Load trace-related data from a command file.
     """
@@ -186,97 +196,32 @@ def load_trace_data_from_command_file(path: Path) -> _TraceData:
         path = path.with_suffix(COMMAND_FILE_EXT)
     with open(path, "r") as f:
         content: Any = yaml.safe_load(f)
+    cmd_args = content
+    for key in COMMAND_ARGS_PATH:
+        cmd_args = cmd_args[key]
+    strategy = cmd_args[COMMAND_STRATEGY_NAME_FIELD]
+    args = cmd_args.get(COMMAND_STRATEGY_ARGS_FIELD, {})
     for key in COMMAND_RESULT_PATH:
         content = content[key]
     trace_raw = content[COMMAND_RESULT_TRACE_FIELD]
     success_value = content.get(COMMAND_RESULT_SUCCESS_NODES_FIELD, [])
     trace = ty.pydantic_load(dp.ExportableTrace, trace_raw)
     success_nodes = ty.pydantic_load(Sequence[int], success_value)
-    hf_raw = content.get(COMMAND_RESULT_HINDSIGHT_FEEDBACK_FIELD, None)
-    hf = cast(Any, ty.pydantic_load(HindsightFeedbackDict | None, hf_raw))
-    return _TraceData(trace, success_nodes, hf)
+    return TraceData(strategy, args, trace, success_nodes)
 
 
-#####
-##### Extract answers from traces
-#####
-
-
-def node_and_answer_ids_in_node_origin_string(
-    origin: NodeOriginStr,
-) -> tuple[set[int], set[int]]:
+def load_success_values_from_command_file(
+    path: Path, type: Any
+) -> Sequence[Any]:
     """
-    Return all node ids and answer ids mentioned in a pretty printed
-    node origin reference.
-
-    This is implemented using regexes. Node ids are of the form `%<int>`
-    and answer ids are of the form `@<int>`. In addition, `origin` is of
-    the form `nested(id, ...)` or `child(id, ...)` and `id` must also be
-    added to the sequence of recognized node ids.
+    Load all success values from a command file, using the `type`
+    argument to properly deserialize them.
     """
-    import re
-
-    # Find all %<int> (node ids)
-    node_id_matches = re.findall(r"%(\d+)", origin)
-    node_ids = set(int(n) for n in node_id_matches)
-
-    # Find all @<int> (answer ids)
-    answer_id_matches = re.findall(r"@(\d+)", origin)
-    answer_ids = set(int(a) for a in answer_id_matches)
-
-    # Find nested(id, ...) and child(id, ...)
-    nested_child_matches = re.findall(r"(?:nested|child)\((\d+)", origin)
-    assert len(nested_child_matches) == 1
-    node_ids.update(int(n) for n in nested_child_matches)
-
-    return node_ids, answer_ids
-
-
-@dataclass
-class _RelevantAnswer:
-    query: dp.SerializedQuery
-    answer: dp.Answer
-    id: int  # answer id if `hindsight=False`, else node if
-    hindsight: bool  # whether this answer comes from hindsight feedback
-
-
-def relevant_answers(
-    trace: dp.ExportableTrace,
-    node_id: int,
-    hindsight_feedback: HindsightFeedbackDict | None,
-) -> Iterable[_RelevantAnswer]:
-    """
-    Take a trace and a node identifier and return an iterable of all
-    answers needed to reach this node in the trace, along with answers
-    coming from relevant hindsight feedback.
-
-    The output can include duplicates.
-    """
-
-    answer_info: dict[int, ExportableQueryInfo] = {}
-    for query in trace.queries:
-        for ans_id in query.answers:
-            answer_info[ans_id] = query
-
-    def aux(
-        node_id: int,
-    ) -> Iterable[_RelevantAnswer]:
-        if node_id == 0:
-            return
-        if hindsight_feedback and node_id in hindsight_feedback:
-            feedback = hindsight_feedback[node_id]
-            query = dp.SerializedQuery.from_json(feedback.query, feedback.args)
-            yield _RelevantAnswer(query, feedback.answer, node_id, True)
-        origin = trace.nodes[node_id]
-        nids, aids = node_and_answer_ids_in_node_origin_string(origin)
-        for aid in aids:
-            info = answer_info[aid]
-            assert info.query is not None and info.args is not None, (
-                f"Missing query information for answer {aid}."
-            )
-            query = dp.SerializedQuery.from_json(info.query, info.args)
-            yield _RelevantAnswer(query, info.answers[aid], aid, False)
-        for n in nids:
-            yield from aux(n)
-
-    yield from aux(node_id)
+    if not path.suffix:
+        path = path.with_suffix(COMMAND_FILE_EXT)
+    with open(path, "r") as f:
+        content: Any = yaml.safe_load(f)
+    for key in COMMAND_RESULT_PATH:
+        content = content[key]
+    success_values_raw = content[COMMAND_RESULT_SUCCESS_VALUES_FIELD]
+    return ty.pydantic_load(Sequence[type], success_values_raw)

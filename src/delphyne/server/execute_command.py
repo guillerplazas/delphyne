@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import delphyne.analysis as analysis
+import delphyne.analysis.feedback as fb
 import delphyne.core_and_base as dp
 import delphyne.stdlib.tasks as ta
 import delphyne.utils.typing as ty
@@ -20,10 +21,9 @@ class CommandSpec:
     args: dict[str, object]
 
     def load(
-        self, ctx: analysis.DemoExecutionContext
+        self, object_loader: dp.ObjectLoader
     ) -> tuple[ta.Command[Any, Any], Any]:
-        loader = analysis.ObjectLoader(ctx, extra_objects=STD_COMMANDS)
-        command = loader.find_object(self.command)
+        command = object_loader.find_object(self.command)
         args_type = ta.command_args_type(command)
         args = ty.pydantic_load(args_type, self.args)
         return (command, args)
@@ -31,28 +31,31 @@ class CommandSpec:
 
 def execute_command(
     task: ta.TaskContext[ta.CommandResult[Any]],
-    exe: ta.CommandExecutionContext,
+    exe: ta.ExecutionContext,
     workspace_root: Path,
     cmd: CommandSpec,
 ):
     try:
         exe = exe.with_root(workspace_root)
-        command, args = cmd.load(exe.base)
+        loader = exe.object_loader(extra_objects=STD_COMMANDS)
+        command, args = cmd.load(loader)
         command(task, exe, args)
     except analysis.ObjectNotFound as e:
-        error = ("error", f"Not found: {e}")
+        error = fb.Diagnostic("error", f"Not found: {e}")
         task.set_result(ta.CommandResult([error], None))
     except dp.InvalidDemoFile as e:
-        error = ("error", f"Invalid demonstration file: {e.file}")
+        error = fb.Diagnostic("error", f"Invalid demonstration file: {e.file}")
         task.set_result(ta.CommandResult([error], None))
     except dp.TemplateError as e:
-        error = ("error", f"Invalid prompt template `{e.name}`:\n{e.exn}")
+        msg = f"Invalid prompt template `{e.name}`:\n{e.exn}"
+        error = fb.Diagnostic("error", msg)
         task.set_result(ta.CommandResult([error], None))
     except dp.TemplateFileMissing as e:
-        error = ("error", f"Prompt template file missing: {e.file}")
+        msg = f"Prompt template file missing: {e.file}"
+        error = dp.Diagnostic("error", msg)
         task.set_result(ta.CommandResult([error], None))
     except Exception as e:
-        error = (
+        error = fb.Diagnostic(
             "error",
             f"Internal error: {repr(e)}\n\n{traceback.format_exc()}",
         )

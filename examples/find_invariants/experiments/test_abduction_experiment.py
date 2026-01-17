@@ -1,5 +1,7 @@
 import code2inv_experiments as c2i
 
+import delphyne as dp
+
 configs = [
     c2i.AbductionConfig(
         bench_name=bench,
@@ -8,14 +10,15 @@ configs = [
         num_completions=4,
         max_requests_per_attempt=4,
         max_dollar_budget=0.1,
-        max_retries_per_step=6,
-        max_propagation_steps=2,
         seed=0,
     )
     for bench in ["1", "7"]
 ]
 
 if __name__ == "__main__":
-    c2i.make_experiment(
-        c2i.abduction_experiment, configs, "test-output", __file__
+    dp.Experiment(
+        config_class=c2i.AbductionConfig,
+        context=dp.workspace_execution_context(__file__),
+        configs=configs,
+        output_dir=f"experiments/test-output/{dp.path_stem(__file__)}",
     ).run_cli()

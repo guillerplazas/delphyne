@@ -6,14 +6,15 @@ Delphyne Core
 # pyright: reportUnusedImport=false
 
 from delphyne.core import (
+    hrefs,
+    irefs,
     parse,
-    pprint,
+    refs,
 )
 from delphyne.core.answer_databases import (
     AnswerDatabase,
-    AnswerDatabaseLoader,
+    AnswerLoader,
     FromCommandResult,
-    FromCommandResultHindsightFeedback,
     FromStandaloneQueryDemo,
     FromStrategyDemo,
     LocatedAnswer,
@@ -86,7 +87,7 @@ from delphyne.core.traces import (
     Location,
     LogLevel,
     LogMessage,
-    QueryOrigin,
+    LogMessageId,
     Trace,
     Tracer,
     TraceReverseMap,

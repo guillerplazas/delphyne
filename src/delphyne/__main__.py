@@ -11,13 +11,18 @@ from typing import Any
 import fire  # type: ignore
 import yaml
 
+import delphyne.analysis.feedback as fb
 import delphyne.core as dp
 import delphyne.stdlib as std
 import delphyne.utils.typing as ty
 from delphyne.scripts.command_utils import command_file_header
 from delphyne.scripts.demonstrations import check_demo_file
-from delphyne.scripts.load_configs import find_workspace_dir, load_config
 from delphyne.server.execute_command import CommandSpec
+from delphyne.stdlib.commands import STD_COMMANDS
+from delphyne.stdlib.execution_contexts import (
+    load_execution_context,
+    surrounding_workspace_dir,
+)
 from delphyne.utils.misc import StatusIndicator
 from delphyne.utils.yaml import pretty_yaml
 
@@ -88,19 +93,25 @@ class DelphyneCLI:
         """
         workspace_dir = self.workspace_dir
         if workspace_dir is None:
-            workspace_dir = find_workspace_dir(file)
+            workspace_dir = surrounding_workspace_dir(file)
         if workspace_dir is None:
             workspace_dir = Path.cwd()
         return workspace_dir
 
-    def check(self, file: str):
+    def check(self, file: str, *, demo: str | None = None):
         """
         Check a demonstration file.
+
+        Arguments:
+            file: Path to the demonstration file to check.
+            demo: If provided, only check the demonstration with the
+                given name. Otherwise, check all demonstrations in the
+                file.
         """
         file_path = Path(file)
         workspace_dir = self._workspace_dir_for(file_path)
-        config = load_config(workspace_dir, local_config_from=file_path)
-        feedback = check_demo_file(file_path, config, workspace_dir)
+        config = load_execution_context(workspace_dir, local=file_path)
+        feedback = check_demo_file(file_path, config, workspace_dir, demo)
         self._process_diagnostics(feedback.warnings, feedback.errors)
 
     def run(
@@ -138,7 +149,7 @@ class DelphyneCLI:
         """
         file_path = Path(file)
         workspace_dir = self._workspace_dir_for(file_path)
-        config = load_config(workspace_dir, local_config_from=file_path)
+        config = load_execution_context(workspace_dir, local=file_path)
         config = replace(
             config,
             status_refresh_period=STATUS_REFRESH_PERIOD_IN_SECONDS,
@@ -154,13 +165,19 @@ class DelphyneCLI:
             config = replace(config, cache_root=file_path.parent / "cache")
         with open(file, "r") as f:
             spec = ty.pydantic_load(CommandSpec, yaml.safe_load(f))
-        cmd, args = spec.load(config.base)
+        loader = config.object_loader(extra_objects=STD_COMMANDS)
+        cmd, args = spec.load(loader)
         if cache:
             assert hasattr(args, "cache_file"), (
                 "Command does not have a `cache_file` argument."
             )
             if not args.cache_file:
                 args.cache_file = file_path.stem + ".yaml"
+            assert hasattr(args, "embeddings_cache_file"), (
+                "Command does not have an `embeddings_cache_file` argument."
+            )
+            if not args.embeddings_cache_file:
+                args.embeddings_cache_file = file_path.stem + ".embeddings.h5"
         if log_level:
             if not hasattr(args, "log_level"):
                 raise ValueError(
@@ -191,8 +208,10 @@ class DelphyneCLI:
         if update:
             with open(file_path, "w") as f:
                 f.write(output)
-        errors = [d[1] for d in res.diagnostics if d[0] == "error"]
-        warnings = [d[1] for d in res.diagnostics if d[0] == "warning"]
+        errors = [d.message for d in res.diagnostics if d.severity == "error"]
+        warnings = [
+            d.message for d in res.diagnostics if d.severity == "warning"
+        ]
         self._process_diagnostics(
             warnings,
             errors,
@@ -209,6 +228,92 @@ class DelphyneCLI:
             content = f.read()
         new_content = command_file_header(content)
         with open(path, "w") as f:
+            f.write(new_content)
+
+    def browse(self, file: str, clear: bool = False):
+        """
+        Add browsable trace information to a command file's outcome if a
+        `raw_trace` field is found.
+
+        Arguments:
+            file: Path to the command file to update.
+            clear: If `True`, clear the browsable trace instead of
+                adding it (convenience shortcut for `clear_browsable`
+                method).
+        """
+
+        if clear:
+            self.clear_browsable(file)
+            return
+
+        # TODO: introduce cleaner ways to load information from command files
+
+        import delphyne.analysis as analysis
+        from delphyne.scripts.command_utils import update_command_file_outcome
+
+        file_path = Path(file)
+        workspace_dir = self._workspace_dir_for(file_path)
+        config = load_execution_context(workspace_dir, local=file_path)
+
+        with open(file_path, "r") as f:
+            content = f.read()
+
+        # Load the tree root from the header
+        file_data = yaml.safe_load(content)
+        strategy_name = file_data["args"]["strategy"]
+        strategy_args = file_data["args"]["args"]
+        loader = config.object_loader(extra_objects=STD_COMMANDS)
+        strategy = loader.load_strategy_instance(strategy_name, strategy_args)
+        root = dp.reify(strategy)
+
+        def add_browsable_trace(outcome_data: Any) -> Any:
+            if outcome_data is None:
+                return outcome_data
+            result = outcome_data.get("result")
+            if result is None:
+                return outcome_data
+            raw_trace = result.get("raw_trace")
+            if raw_trace is None:
+                print(
+                    "No raw_trace found in command outcome.", file=sys.stderr
+                )
+                return outcome_data
+            trace = ty.pydantic_load(dp.ExportableTrace, raw_trace)
+            loaded_trace = dp.Trace.load(trace)
+
+            btrace = analysis.compute_browsable_trace(loaded_trace, root=root)
+            result["browsable_trace"] = ty.pydantic_dump(fb.Trace, btrace)
+            return outcome_data
+
+        new_content = update_command_file_outcome(content, add_browsable_trace)
+        with open(file_path, "w") as f:
+            f.write(new_content)
+
+    def clear_browsable(self, file: str):
+        """
+        Clear the browsable trace from a command file's outcome if a
+        `browsable_trace` field is found.
+        """
+        from delphyne.scripts.command_utils import update_command_file_outcome
+
+        file_path = Path(file)
+        with open(file_path, "r") as f:
+            content = f.read()
+
+        def remove_browsable_trace(outcome_data: Any) -> Any:
+            if outcome_data is None:
+                return outcome_data
+            result = outcome_data.get("result")
+            if result is None:
+                return outcome_data
+            if "browsable_trace" in result:
+                del result["browsable_trace"]
+            return outcome_data
+
+        new_content = update_command_file_outcome(
+            content, remove_browsable_trace
+        )
+        with open(file_path, "w") as f:
             f.write(new_content)
 
     def serve(self, *, port: int = 3008):

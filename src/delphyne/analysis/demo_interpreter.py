@@ -2,238 +2,20 @@
 Demonstration Interpreter.
 """
 
-import importlib
-import sys
 import traceback
 from collections import defaultdict
 from collections.abc import Callable, Sequence
-from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Literal, cast, override
+from typing import Any, Literal, override
 
 import delphyne.core as dp
 from delphyne.analysis import browsable_traces as br
 from delphyne.analysis import feedback as fb
 from delphyne.analysis import navigation as nv
+from delphyne.analysis.object_loaders import ObjectLoader
 from delphyne.core import answer_databases as da
 from delphyne.core import demos as dm
-from delphyne.core import refs
-from delphyne.utils import typing as tp
-
-#####
-##### Execution Context and Object Loader
-#####
-
-
-@dataclass
-class ModuleNotFound(Exception):
-    """
-    Raised by `ObjectLoader` when a module is not found.
-    """
-
-    module_name: str
-
-
-@dataclass
-class ObjectNotFound(Exception):
-    """
-    Raised by `ObjectLoader` when an object cannot be found.
-    """
-
-    object_name: str
-
-
-@dataclass
-class StrategyLoadingError(Exception):
-    """
-    Raised by `ObjectLoader` when a strategy instance cannot be loaded.
-    """
-
-    message: str
-
-
-@dataclass(frozen=True)
-class AmbiguousObjectIdentifier(Exception):
-    """
-    Raised when attempting to load an object with an ambiguous name.
-
-    Attributes:
-        identifier: the ambiguous identifier.
-        modules: a list of modules where different objects with the same
-            identifier were found
-    """
-
-    identifier: str
-    modules: Sequence[str]
-
-
-@dataclass(frozen=True, kw_only=True)
-class DemoExecutionContext:
-    """
-    Demonstration Execution Context.
-
-    Attributes:
-        strategy_dirs: A list of directories in which strategy modules
-            can be found, to be added to `sys.path`.
-        modules: A list of modules in which python object identifiers
-            should be resolved. Modules can be part of packages and so
-            their name may feature `.`.
-    """
-
-    strategy_dirs: Sequence[Path]
-    modules: Sequence[str]
-
-    def with_root(self, root: Path) -> "DemoExecutionContext":
-        return DemoExecutionContext(
-            strategy_dirs=[root / p for p in self.strategy_dirs],
-            modules=self.modules,
-        )
-
-
-class ObjectLoader:
-    """
-    Utility class for loading Python objects.
-
-    Demonstration and command files may refer to Python identifiers that
-    need to be resolved. This is done relative to an execution context
-    (`DemoExecutionContext`) that specifies a list of directories to be
-    added to `sys.path`, along with a list of modules.
-
-    An exception is raised if an object with the requested identifier
-    can be found in several modules.
-    """
-
-    def __init__(
-        self,
-        ctx: DemoExecutionContext,
-        extra_objects: dict[str, object] | None = None,
-        reload: bool = True,
-    ):
-        """
-        Attributes:
-            ctx: The execution context in which to resolve Python
-                identifiers.
-            extra_objects: Additional objects that can be resolved by
-                name (with higher precedence).
-            reload: Whether to reload all modules specified in the
-                execution context upon initialization. Setting this
-                value to `True` makes `ObjectLoader` not thread-safe
-                (also, multiple instances must not be used in an
-                overlappaping way within a single thread).
-
-        Raises:
-            ModuleNotFound: a module could not be found.
-        """
-        self.ctx = ctx
-        self.extra_objects = extra_objects if extra_objects is not None else {}
-        self.modules: list[Any] = []
-        with _append_path(self.ctx.strategy_dirs):
-            for module_name in ctx.modules:
-                try:
-                    module = __import__(module_name)
-                    if reload:
-                        module = importlib.reload(module)
-                    self.modules.append(module)
-                except AttributeError:
-                    raise ModuleNotFound(module_name)
-
-    def find_object(self, name: str) -> Any:
-        """
-        Find an object with a given name.
-
-        If the name is unqualified (it features no `.`), one attempts to
-        find the object in every registered module in order. If the name
-        is qualified, one looks at the specified registered module.
-
-        Raises:
-            ObjectNotFound: The object could not be found.
-            AmbiguousObjectIdentifier: The object name is ambiguous,
-                i.e. it is found in several modules.
-        """
-        if name in self.extra_objects:
-            return self.extra_objects[name]
-        comps = name.split(".")
-        assert comps
-        if len(comps) == 1:
-            # unqualified name
-            cands: list[object] = []
-            modules_with_id: dict[int, list[str]] = defaultdict(list)
-            for module in self.modules:
-                if hasattr(module, name):
-                    obj = getattr(module, name)
-                    modules_with_id[id(obj)].append(module)
-                    cands.append(obj)
-            if len(modules_with_id) > 1:
-                ambiguous = [ms[0] for ms in modules_with_id.values()]
-                raise AmbiguousObjectIdentifier(name, ambiguous)
-            if cands:
-                return cands[0]
-        else:
-            # qualified name
-            module = ".".join(comps[:-1])
-            attr = comps[-1]
-            if hasattr(module, attr):
-                return getattr(module, attr)
-        raise ObjectNotFound(name)
-
-    def load_and_call_function(self, name: str, args: dict[str, Any]) -> Any:
-        """
-        Load and call a function by wrapping a call to `find_object`.
-        """
-        f = self.find_object(name)
-        args = tp.parse_function_args(f, args)
-        return f(**args)
-
-    def load_strategy_instance(
-        self, name: str, args: dict[str, Any]
-    ) -> dp.StrategyComp[Any, Any, Any]:
-        """
-        Load and instantiate a strategy function with given arguments.
-
-        Raises:
-            ObjectNotFound: If the strategy function cannot be found.
-            AmbiguousObjectIdentifier: If an ambiguous name is given.
-            StrategyLoadingError: If the object is not a strategy function
-                or if the arguments are invalid.
-        """
-        f = self.find_object(name)
-        try:
-            args = tp.parse_function_args(f, args)
-            comp = f(**args)
-            assert isinstance(comp, dp.StrategyComp), (
-                f"Object {name} is not a strategy function."
-                + " Did you forget to use the @strategy decorator?"
-            )
-            return cast(Any, comp)
-        except Exception as e:
-            raise StrategyLoadingError(str(e))
-
-    def load_query(
-        self, name: str, args: dict[str, Any]
-    ) -> dp.AbstractQuery[Any]:
-        """
-        Load a query by name and instantiate it with given arguments.
-
-        Raises:
-            ObjectNotFound: if the query cannot be found.
-            AmbiguousObjectIdentifier: if an ambiguous name is given.
-            AssertionError: if the object is not a query.
-        """
-        obj = self.find_object(name)
-        assert issubclass(obj, dp.AbstractQuery), (
-            f"Object {name} is not a query type."
-        )
-        q = cast(type[dp.AbstractQuery[Any]], obj)
-        return q.parse_instance(args)
-
-
-@contextmanager
-def _append_path(paths: Sequence[Path]):
-    sys.path = [str(p) for p in paths] + sys.path
-    yield
-    sys.path = sys.path[len(paths) :]
-
+from delphyne.core import hrefs, refs
 
 #####
 ##### Demo Hint Resolver
@@ -255,15 +37,6 @@ type ImplicitAnswerGenerator = Callable[
 A function that optionally maps a tree node along with a query within this
 node to an implicit answer for the query. This is useful in particular
 for supporting `Compute` nodes in demonstrations.
-"""
-
-
-type ImplicitAnswerGeneratorsLoader = Callable[
-    [], Sequence[ImplicitAnswerGenerator]
-]
-"""
-A zero-arry function that loads a sequence of implicit answer
-generators, to be tried in sequence.
 """
 
 
@@ -294,7 +67,7 @@ class DemoHintResolver(nv.HintResolver):
                     raise DemoHintResolver.InvalidAnswer(i, j, parsed)
         # Used to populate `DemoFeedback.answer_refs`, which is needed
         # to implement the `Jump to Answer` action in the UI tree view.
-        self.answer_refs: dict[nv.AnswerRef, fb.DemoAnswerId] = {}
+        self.answer_refs: dict[refs.GlobalAnswerRef, fb.DemoAnswerId] = {}
         # To keep track of what queries are reachable
         self.query_used: list[bool] = [False] * len(self.queries)
         # Keeping track of implicit answers
@@ -304,7 +77,7 @@ class DemoHintResolver(nv.HintResolver):
         self,
         query: dp.SerializedQuery,
         ref: refs.GlobalSpacePath,
-        hint: refs.HintValue | None,
+        hint: hrefs.HintValue | None,
     ) -> (
         refs.Answer
         | Literal["no_answers", "query_not_found", "label_not_found"]
@@ -332,7 +105,7 @@ class DemoHintResolver(nv.HintResolver):
 
     @override
     def answer_with_hint(
-        self, query: dp.AttachedQuery[Any], hint: refs.HintValue
+        self, query: dp.AttachedQuery[Any], hint: hrefs.HintValue
     ) -> refs.Answer | None:
         serialized = dp.SerializedQuery.make(query.query)
         res = self._answer_with_demo_examples(
@@ -379,7 +152,7 @@ class DemoHintResolver(nv.HintResolver):
                 return ans
         return None
 
-    def get_answer_refs(self) -> dict[nv.AnswerRef, fb.DemoAnswerId]:
+    def get_answer_refs(self) -> dict[refs.GlobalAnswerRef, fb.DemoAnswerId]:
         return self.answer_refs
 
     def get_implicit_answers(
@@ -397,7 +170,8 @@ class DemoHintResolver(nv.HintResolver):
         for i, used in enumerate(self.query_used):
             if not used:
                 msg = "Unreachable query."
-                feedback.query_diagnostics.append((i, ("warning", msg)))
+                diag = fb.Diagnostic("warning", msg, ("unreachable",))
+                feedback.query_diagnostics.append((i, diag))
 
     def navigator(self) -> nv.Navigator:
         return nv.Navigator(self)
@@ -451,16 +225,16 @@ Nodes saved using the `save` test instruction.
 """
 
 
-def _unused_hints(diagnostics: list[fb.Diagnostic], rem: Sequence[refs.Hint]):
+def _unused_hints(diagnostics: list[fb.Diagnostic], rem: Sequence[hrefs.Hint]):
     if rem:
-        msg = f"Unused hints: {dp.pprint.hints(rem)}."
-        diagnostics.append(("warning", msg))
+        msg = f"Unused hints: {hrefs.show_hints(rem)}."
+        diagnostics.append(fb.Diagnostic("warning", msg))
 
 
 def _strategy_exn(diagnostics: list[fb.Diagnostic], exn: dp.StrategyException):
     details = f"{repr(exn.exn)}\n\n{traceback.format_exc()}"
     msg = f"Exception raised in strategy:\n\n{details}"
-    diagnostics.append(("error", msg))
+    diagnostics.append(fb.Diagnostic("error", msg))
 
 
 def _handle_navigation_error_or_reraise(
@@ -473,7 +247,7 @@ def _handle_navigation_error_or_reraise(
     """
     if isinstance(exn, nv.Stuck):
         msg = "Test is stuck."
-        diagnostics.append(("warning", msg))
+        diagnostics.append(fb.Diagnostic("warning", msg, ("stuck",)))
         return exn.tree
     elif isinstance(exn, dp.StrategyException):
         _strategy_exn(diagnostics, exn)
@@ -481,25 +255,25 @@ def _handle_navigation_error_or_reraise(
     elif isinstance(exn, dp.NavigationError):
         details = f"{repr(exn.message)}\n\n{traceback.format_exc()}"
         msg = f"Navigation error:\n\n{details}"
-        diagnostics.append(("error", msg))
+        diagnostics.append(fb.Diagnostic("error", msg))
         return None
     elif isinstance(exn, nv.ReachedFailureNode):
-        step_str = dp.pprint.test_step(test_step)
+        step_str = dm.show_test_step(test_step)
         msg = f"Reached failure node while executing: {step_str}."
-        diagnostics.append(("error", msg))
+        diagnostics.append(fb.Diagnostic("error", msg))
         return exn.tree
     elif isinstance(exn, nv.InvalidSpace):
-        name = dp.pprint.space_name(exn.space_name)
+        name = str(exn.space_name)
         msg = f"Invalid reference to space: {name}."
-        diagnostics.append(("error", msg))
+        diagnostics.append(fb.Diagnostic("error", msg))
         return exn.tree
     elif isinstance(exn, nv.NoPrimarySpace):
         msg = f"Node {exn.tree.node.effect_name()} has no primary space."
-        diagnostics.append(("error", msg))
+        diagnostics.append(fb.Diagnostic("error", msg))
         return exn.tree
     elif isinstance(exn, da.SeveralAnswerMatches):
         msg = str(exn)
-        diagnostics.append(("error", msg))
+        diagnostics.append(fb.Diagnostic("error", msg))
         return None
     raise exn
 
@@ -526,12 +300,12 @@ def _interpret_test_run_step(
             rem = e.remaining_hints
         _unused_hints(diagnostics, rem)
         if step.until is not None:
-            until_pp = dp.pprint.node_selector(step.until)
+            until_pp = dm.show_node_selector(step.until)
             msg = f"Leaf node reached before '{until_pp}'."
-            diagnostics.append(("warning", msg))
+            diagnostics.append(fb.Diagnostic("warning", msg))
         if step.until is None and not tree.node.leaf_node():
             msg = "The `run` command did not reach a leaf."
-            diagnostics.append(("warning", msg))
+            diagnostics.append(fb.Diagnostic("warning", msg))
         return tree, "continue"
     except nv.MatchedSelector as intr:
         tree = intr.tree
@@ -554,7 +328,7 @@ def _interpret_test_select_step(
     nav_info = nv.NavigationInfo(hint_rev)
     navigator.info = nav_info
     navigator.tracer = tracer
-    space_ref_pretty = dp.pprint.space_ref(step.space)
+    space_ref_pretty = str(step.space)
     try:
         space = navigator.resolve_space_ref(tree, step.space)
         source = space.source()
@@ -562,13 +336,13 @@ def _interpret_test_select_step(
         if step.expects_query:
             if not isinstance(source, dp.AttachedQuery):
                 msg = f"Not a query: {space_ref_pretty}."
-                diagnostics.append(("error", msg))
+                diagnostics.append(fb.Diagnostic("error", msg))
                 return tree, "stop"
             tracer.trace_query(source)
             answer = hint_resolver.answer_without_hint(source, tree)
             if answer is None:
                 msg = f"Query not answered: {space_ref_pretty}."
-                diagnostics.append(("error", msg))
+                diagnostics.append(fb.Diagnostic("error", msg))
                 return tree, "stop"
             tracer.trace_answer(source.ref, answer)
             hint_rev.answers[(source.ref, answer)] = None
@@ -576,7 +350,7 @@ def _interpret_test_select_step(
         else:
             if not isinstance(source, dp.NestedTree):
                 msg = f"Not a nested tree: {space_ref_pretty}."
-                diagnostics.append(("error", msg))
+                diagnostics.append(fb.Diagnostic("error", msg))
                 return tree, "stop"
             tree = source.spawn_tree()
             return tree, "continue"
@@ -632,7 +406,7 @@ def _interpret_test_step(
         case dm.IsSuccess():
             if not isinstance(tree.node, dp.Success):
                 msg = "Success check failed."
-                diagnostics.append(("error", msg))
+                diagnostics.append(fb.Diagnostic("error", msg))
                 return tree, "stop"
             else:
                 return tree, "continue"
@@ -640,7 +414,7 @@ def _interpret_test_step(
             node = tree.node
             if not (node.leaf_node() and not isinstance(node, dp.Success)):
                 msg = "Failure check failed."
-                diagnostics.append(("error", msg))
+                diagnostics.append(fb.Diagnostic("error", msg))
                 return tree, "stop"
             else:
                 return tree, "continue"
@@ -650,7 +424,7 @@ def _interpret_test_step(
         case dm.Load():
             if step.name not in saved:
                 msg = f"No saved node named: '{step.name}'."
-                diagnostics.append(("error", msg))
+                diagnostics.append(fb.Diagnostic("error", msg))
                 return tree, "stop"
             return saved[step.name], "continue"
 
@@ -668,7 +442,7 @@ def _evaluate_test(
     try:
         test = dp.parse.test_command(test_str)
     except dp.parse.ParseError:
-        diagnostics = [("error", "Syntax error.")]
+        diagnostics = [fb.Diagnostic("error", "Syntax error.")]
         return fb.TestFeedback(diagnostics, None)
     for step in test:
         tree, status = _interpret_test_step(
@@ -676,7 +450,7 @@ def _evaluate_test(
         )
         if status == "stop":
             break
-    ref = tracer.trace.convert_global_node_path(tree.ref)
+    ref = tracer.trace.convert_global_node_ref(tree.ref)
     return fb.TestFeedback(diagnostics, ref.id)
 
 
@@ -687,15 +461,14 @@ def _evaluate_test(
 
 def evaluate_strategy_demo_and_return_trace(
     demo: dm.StrategyDemo,
-    context: DemoExecutionContext,
     *,
-    extra_objects: dict[str, object],
-    answer_database_loader: dp.AnswerDatabaseLoader,
-    load_implicit_answer_generators: ImplicitAnswerGeneratorsLoader,
+    object_loader: ObjectLoader,
+    answer_database_loader: dp.AnswerLoader,
+    implicit_answer_generators: Sequence[ImplicitAnswerGenerator],
 ) -> tuple[fb.StrategyDemoFeedback, dp.Trace | None]:
     feedback = fb.StrategyDemoFeedback(
         kind="strategy",
-        trace=fb.Trace({}),
+        trace=fb.Trace(nodes={}, spaces={}),
         answer_refs={},
         saved_nodes={},
         test_feedback=[],
@@ -705,11 +478,12 @@ def evaluate_strategy_demo_and_return_trace(
         implicit_answers=defaultdict(list),
     )
     try:
-        loader = ObjectLoader(context, extra_objects)
-        strategy = loader.load_strategy_instance(demo.strategy, demo.args)
+        strategy = object_loader.load_strategy_instance(
+            demo.strategy, demo.args
+        )
     except Exception as e:
         msg = f"Failed to instantiate strategy:\n{e}"
-        feedback.global_diagnostics.append(("error", msg))
+        feedback.global_diagnostics.append(fb.Diagnostic("error", msg))
         return feedback, None
     try:
         cache: dp.TreeCache = {}
@@ -725,28 +499,22 @@ def evaluate_strategy_demo_and_return_trace(
             demo.using, loader=answer_database_loader
         )
     except dp.SourceLoadingError as e:
-        feedback.global_diagnostics.append(("error", str(e)))
-        return feedback, trace
-    try:
-        implicit_answer_generators = load_implicit_answer_generators()
-    except Exception as e:
-        msg = f"Failed to load implicit answer generators:\n{e}"
-        feedback.global_diagnostics.append(("error", msg))
+        feedback.global_diagnostics.append(fb.Diagnostic("error", str(e)))
         return feedback, trace
     try:
         hresolver = DemoHintResolver(
             demo,
-            loader=loader,
+            loader=object_loader,
             external_answers=answer_database,
             implicit_answer_generators=implicit_answer_generators,
         )
     except DemoHintResolver.InvalidQuery as e:
         msg = f"Failed to load query:\n{e.exn}"
-        feedback.query_diagnostics.append((e.id, ("error", msg)))
+        feedback.query_diagnostics.append((e.id, fb.Diagnostic("error", msg)))
         return feedback, trace
     except DemoHintResolver.InvalidAnswer as e:
         msg = f"Failed to parse answer:\n{e.parse_error}"
-        diag = ("error", msg)
+        diag = fb.Diagnostic("error", msg)
         feedback.answer_diagnostics.append(((e.query_id, e.answer_id), diag))
         return feedback, trace
     saved: SavedNodes = {}
@@ -757,13 +525,15 @@ def evaluate_strategy_demo_and_return_trace(
         )
         feedback.test_feedback.append(test_feedback)
     feedback.saved_nodes = {
-        k: tracer.trace.convert_global_node_path(v.ref).id
+        k: tracer.trace.convert_global_node_ref(v.ref).id
         for k, v in saved.items()
     }
-    trace.check_consistency()
+    trace.check_roundabout_consistency()
     hresolver.set_reachability_diagnostics(feedback)
     simplifier = br.RefSimplifier(cache, rm)
-    feedback.trace = br.compute_browsable_trace(trace, cache, simplifier)
+    feedback.trace = br.compute_browsable_trace(
+        trace, cache=cache, simplifier=simplifier
+    )
     feedback.answer_refs = {
         trace.convert_answer_ref(k).id: v
         for k, v in hresolver.get_answer_refs().items()
@@ -779,29 +549,27 @@ def evaluate_strategy_demo_and_return_trace(
 
 def evaluate_standalone_query_demo(
     demo: dm.QueryDemo,
-    context: DemoExecutionContext,
     *,
-    extra_objects: dict[str, object],
+    object_loader: ObjectLoader,
 ) -> fb.QueryDemoFeedback:
     feedback = fb.QueryDemoFeedback(
         kind="query", diagnostics=[], answer_diagnostics=[]
     )
     try:
-        loader = ObjectLoader(context, extra_objects)
-        query = loader.load_query(demo.query, demo.args)
+        query = object_loader.load_query(demo.query, demo.args)
     except Exception as e:
         msg = f"Failed to instantiate query:\n{e}"
-        feedback.diagnostics.append(("error", msg))
+        feedback.diagnostics.append(fb.Diagnostic("error", msg))
         return feedback
     # We just check that all the answers parse
     for i, a in enumerate(demo.answers):
         try:
             elt = query.parse_answer(dm.translate_answer(a))
             if isinstance(elt, dp.ParseError):
-                diag = ("error", f"Parse error: {str(elt)}")
+                diag = fb.Diagnostic("error", f"Parse error: {str(elt)}")
                 feedback.answer_diagnostics.append((i, diag))
         except Exception as e:
-            diag = ("error", f"Internal parser error: {str(e)}")
+            diag = fb.Diagnostic("error", f"Internal parser error: {str(e)}")
             feedback.answer_diagnostics.append((i, diag))
     return feedback
 
@@ -813,11 +581,10 @@ def evaluate_standalone_query_demo(
 
 def evaluate_demo(
     demo: dm.Demo,
-    context: DemoExecutionContext,
     *,
-    extra_objects: dict[str, object],
-    answer_database_loader: dp.AnswerDatabaseLoader,
-    load_implicit_answer_generators: ImplicitAnswerGeneratorsLoader,
+    object_loader: ObjectLoader,
+    answer_database_loader: dp.AnswerLoader,
+    implicit_answer_generators: Sequence[ImplicitAnswerGenerator],
 ) -> fb.DemoFeedback:
     """
     Evaluate a query or strategy demonstration.
@@ -826,14 +593,13 @@ def evaluate_demo(
 
     Attributes:
         demo: The demonstration to evaluate.
-        context: The execution context in which to resolve Python
-            identifiers.
+        object_loader: An object loader that can be used to resolve
+            query and strategy names.
         extra_objects: Additional objects that can be resolved by name
             (with higher precedence).
-        load_implicit_answer_generators: Load the implicit answer
+        implicit_answer_generators: Load the implicit answer
             generators (e.g. including the one handling `Compute`
-            nodes). This function is allowed to raise exceptions, which
-            are then reported as errors.
+            nodes).
 
     Returns:
         A feedback object containing the results of the evaluation.
@@ -845,13 +611,63 @@ def evaluate_demo(
     if isinstance(demo, dm.StrategyDemo):
         feedback, _ = evaluate_strategy_demo_and_return_trace(
             demo,
-            context,
-            extra_objects=extra_objects,
+            object_loader=object_loader,
             answer_database_loader=answer_database_loader,
-            load_implicit_answer_generators=load_implicit_answer_generators,
+            implicit_answer_generators=implicit_answer_generators,
         )
         return feedback
     else:
         return evaluate_standalone_query_demo(
-            demo, context, extra_objects=extra_objects
+            demo, object_loader=object_loader
+        )
+
+
+def safe_evaluate_demo(
+    demo: dm.Demo,
+    *,
+    object_loader: Callable[[], ObjectLoader],
+    answer_database_loader: Callable[[ObjectLoader], dp.AnswerLoader],
+    implicit_answer_generators: Callable[
+        [ObjectLoader], Sequence[ImplicitAnswerGenerator]
+    ],
+) -> fb.DemoFeedback:
+    """
+    A version of `evaluate_demo` that internally creates object loaders
+    and implicit answer generators and catches all exceptions.
+    """
+    try:
+        loader = object_loader()
+        return evaluate_demo(
+            demo,
+            object_loader=loader,
+            answer_database_loader=answer_database_loader(loader),
+            implicit_answer_generators=implicit_answer_generators(loader),
+        )
+    except Exception as e:
+        msg = f"{str(e)}\n\n{traceback.format_exc()}"
+        return _error_feedback(demo, msg)
+
+
+def _error_feedback(demo: dm.Demo, msg: str) -> fb.DemoFeedback:
+    """
+    Produce demonstration feedback that only wraps an error message.
+    """
+    diagnostic = fb.Diagnostic("error", msg)
+    if isinstance(demo, dm.StrategyDemo):
+        return fb.StrategyDemoFeedback(
+            kind="strategy",
+            trace=fb.Trace(nodes={}, spaces={}),
+            answer_refs={},
+            saved_nodes={},
+            test_feedback=[],
+            global_diagnostics=[diagnostic],
+            query_diagnostics=[],
+            answer_diagnostics=[],
+            implicit_answers={},
+        )
+    else:
+        return fb.QueryDemoFeedback(
+            kind="query",
+            diagnostics=[diagnostic],
+            answer_diagnostics=[],
         )

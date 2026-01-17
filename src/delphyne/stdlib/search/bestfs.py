@@ -10,7 +10,7 @@ from typing import Any
 import delphyne.core as dp
 from delphyne.core import refs
 from delphyne.stdlib.environments import PolicyEnv
-from delphyne.stdlib.nodes import Branch, Factor, Fail, Value
+from delphyne.stdlib.nodes import Branch, Factor, Fail, Run, Value
 from delphyne.stdlib.policies import search_policy, unsupported_node
 from delphyne.stdlib.streams import Stream
 
@@ -25,7 +25,7 @@ class _NodeState:
     # mutability is not an issue as long as the part that is relevant
     # for comparison is immutable).
     depth: int
-    children: list[refs.GlobalNodePath]  # can be mutated
+    children: list[refs.GlobalNodeRef]  # can be mutated
     confidence: float
     stream: list[Stream[Any] | None]  # using one element (mutated)
     node: Branch  # equal to tree.node, with a more precise type
@@ -111,6 +111,12 @@ def best_first_search[P, T](
                     else:
                         confidence *= penalty_fun(eval.tracked.value)
                 yield from push_fresh_node(tree.child(None), confidence, depth)
+            case Run():
+                cand = yield from tree.node.cands.stream(env, policy).first()
+                if cand is not None:
+                    yield from push_fresh_node(
+                        tree.child(cand.tracked), confidence, depth
+                    )
             case Branch():
                 if max_depth is not None and depth > max_depth:
                     return

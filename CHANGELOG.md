@@ -1,5 +1,28 @@
 # Changelog
 
+## Version 0.14.2 (2025-11-07)
+
+- Fix bug in demonstration interpreter.
+
+## Version 0.14.1 (2025-11-05)
+
+- Fix bug in inference spending computations.
+
+## Version 0.14.0 (2025-11-05)
+
+- VSCode Extension: when a test is stuck on a query, a new command allows seeing diffs with all unreachable queries of the same type, which is very useful for repairing demonstrations after a strategy change.
+- Add `delphyne browse` command for generating browsable traces from raw traces.
+- Add `Run` nodes that subclass `Branch` for extracting a single element from an opaque space without branching.
+- **Breaking**: Overhaul example selectors for better flexibility (see `select_examples` argument of `few_shot`).
+- **Breaking**: Overhaul `Stream` to make it an iterable directly and remove `Stream.gen`.
+- **Breaking**: Overhaul the `Experiment` class to make it more ergonomic.
+- Implement support for embeddings and embedding-based example retrieval (including the standard MMR algorithm).
+- Remove `auto_reload` setting, which is fundamentally unsafe.
+- Experimental: add support for feedback backpropagation.
+- Add `init` key to `delphyne.yaml` to register custom initializers.
+- Remove automatic reloading of Python modules, which is very error prone. Users should manually restart the server instead.
+- Allow replaying failing experiment configurations in a debugger.
+
 ## Version 0.13.0 (2025-09-27)
 
 - **Breaking**: Change signature of `dp.compute` to allow passing additional keyword arguments. You must now write `dp.compute(fun)(*args, **kwargs)` instead of `dp.compute(fun, *args, **kwargs)`.

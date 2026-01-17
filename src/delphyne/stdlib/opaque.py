@@ -70,7 +70,7 @@ class OpaqueSpace(Generic[P, T], dp.Space[T]):
             )
 
         return dp.SpaceBuilder(
-            build=lambda _, spawner, tags: build(spawner, tags),
+            lambda _, spawner, tags: build(spawner, tags),
             tags=query.default_tags(),
         )
 
@@ -93,12 +93,12 @@ class OpaqueSpace(Generic[P, T], dp.Space[T]):
             def stream(env: PolicyEnv, policy: P1) -> Stream[T1]:
                 tree = nested.spawn_tree()
                 sub = get_policy(policy, tags)
-                return sub.search(tree, env, sub.inner)
+                return sub(tree, env)
 
             return OpaqueSpace(stream, nested, tags)
 
         return dp.SpaceBuilder(
-            build=lambda spawner, _, tags: build(spawner, tags),
+            lambda spawner, _, tags: build(spawner, tags),
             tags=strategy.default_tags(),
         )
 

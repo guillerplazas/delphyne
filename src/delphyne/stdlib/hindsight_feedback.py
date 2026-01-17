@@ -1,120 +1,135 @@
 """
-Defining the standard `Hindsight` effect for hindsight feedback.
+Defining the standard `Feedback` effect for hindsight feedback.
 """
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, Literal, Never, overload
+from typing import Any, Generic, Never, TypeVar
 
 import delphyne.core as dp
+import delphyne.stdlib.nodes as nd
 import delphyne.stdlib.policies as pol
-from delphyne.stdlib.environments import HindsightFeedback
-from delphyne.stdlib.nodes import spawn_node
+
+#####
+##### Feedback Messages
+#####
 
 
-@dataclass
-class Hindsight(dp.Node):
+T_co = TypeVar("T_co", covariant=True, contravariant=False)
+
+
+@dataclass(frozen=True)
+class ValueFeedback(Generic[T_co]):
+    pass
+
+
+@dataclass(frozen=True)
+class GoodValue(ValueFeedback[Never]):
+    pass
+
+
+@dataclass(frozen=True)
+class BadValue(ValueFeedback[Never]):
+    error: dp.Error
+
+
+@dataclass(frozen=True)
+class BetterValue[T](ValueFeedback[T]):
+    value: T
+
+
+@dataclass(frozen=True)
+class BadValueAlso[T](ValueFeedback[T]):
+    # This is for BadValue what BetterValue is for GoodValue.
+    # This communicates that a specific answer is another wrong answer,
+    # with a justification.
+    value: T
+    error: dp.Error
+
+
+@dataclass(frozen=True)
+class AttachedFeedback[T]:
+    msg: ValueFeedback[T]
+    dst: nd.TypedSpaceElementRef[T]
+
+
+def send[T](
+    msg: ValueFeedback[T], to: nd.TypedSpaceElementRef[T], /
+) -> AttachedFeedback[T]:
+    return AttachedFeedback(msg, to)
+
+
+#####
+##### Feedback Nodes
+#####
+
+
+@dataclass(frozen=True)
+class Feedback(nd.Skippable):
     """
-    The standard `Hindsight` effect.
-
-    This effect allows annotating the tree with feedback about what the
-    answer to a particular query *should have been*.
+    The standard `Feedback` effect.
     """
 
-    query_name: str
-    query_args: dict[str, object]
-    hindsight_answer: dp.Answer
 
-    def navigate(self) -> dp.Navigation:
-        return None
-        yield
-
-
-# Note: this overloaded type is meaningful because we force
-# `AbstractQuery[T]` to be invariant in `T`.
-@overload
-def hindsight[T](
-    query: dp.AbstractQuery[T],
-    feedback: T,
-) -> dp.Strategy[Hindsight, object, None]: ...
-
-
-@overload
-def hindsight(
-    query: dp.AbstractQuery[Any],
-    feedback: Any,
-    *,
-    as_parsed_answer: Literal[False],
-) -> dp.Strategy[Hindsight, object, None]: ...
-
-
-def hindsight(
-    query: dp.AbstractQuery[Any],
-    feedback: Any,
-    *,
-    as_parsed_answer: bool = True,
-) -> dp.Strategy[Hindsight, object, None]:
+@dataclass(frozen=True)
+class ThrowFeedback(Feedback):
     """
-    Report some hindsight feedback.
-
-    See `Hindsight`.
-
-    Arguments:
-        query: The query for which we provide feedback.
-        feedback: The feedback to provide.
-        as_parsed_answer: If `True`, `feedback` is assumed to be
-            a parsed answer (of type `T` if the query is of type
-            `AbstractQuery[T]`). This argument is only used for type
-            checking and is ignored at runtime.
+    Feedback source.
     """
 
-    answer = query.hindsight_answer(feedback)
-    if answer is None:
-        raise ValueError(
-            "Could not obtained an answer from the provided feedback "
-            f"for query of type {type(query)}:\n\n"
-            f"{feedback}"
-        )
-    parsed = query.parse_answer(answer)
-    if isinstance(parsed, dp.ParseError):
-        raise ValueError(
-            "Could not parse the hindsight answer generated "
-            f"for query of type {type(query)}:\n\n"
-            f"{answer}\n\n"
-            f"Parse error:\n\n"
-            f"{parsed}"
-        )
-    yield spawn_node(
-        Hindsight,
-        query_name=query.query_name(),
-        query_args=query.serialize_args(),
-        hindsight_answer=answer,
-    )
+    label: str
+    messages: Iterable[AttachedFeedback[Any]]
+
+
+@dataclass(frozen=True)
+class BackpropagateFeedback(Feedback):
+    """
+    Handler for backpropagating feedback.
+    """
+
+    label: str
+    back: Callable[[ValueFeedback[Any]], Iterable[AttachedFeedback[Any]]]
+
+
+#####
+##### Triggers
+#####
+
+
+def emit_feedback(
+    label: str, messages: Iterable[AttachedFeedback[Any]]
+) -> dp.Strategy[Feedback, object, None]:
+    yield nd.spawn_node(ThrowFeedback, label=label, messages=messages)
     return None
 
 
+def backward[T](
+    label: str,
+    res: T,
+    back: Callable[[ValueFeedback[T]], Iterable[AttachedFeedback[Any]]],
+) -> dp.Strategy[Feedback, object, None]:
+    yield nd.spawn_node(BackpropagateFeedback, label=label, back=back)
+    return None
+
+
+#####
+##### Transformers
+#####
+
+
 @pol.contextual_tree_transformer
-def elim_hindsight(
+def elim_feedback(
     env: pol.PolicyEnv,
     policy: Any,
-) -> pol.PureTreeTransformerFn[Hindsight, Never]:
+) -> pol.PureTreeTransformerFn[Feedback, Never]:
     """
-    Eliminate the `Hindsight` effect.
-
-    This transformer populates the `hindsight_feedback` field of
-    `PolicyEnv`.
+    Eliminate the `Feedback` effect, by removing all feedback nodes.
     """
 
     def transform[N: dp.Node, P, T](
-        tree: dp.Tree[Hindsight | N, P, T],
+        tree: dp.Tree[Feedback | N, P, T],
     ) -> dp.Tree[N, P, T]:
-        if isinstance(tree.node, Hindsight):
-            node_id = env.tracer.global_node_id(tree.ref).id
-            feedback = HindsightFeedback(
-                query=tree.node.query_name,
-                args=tree.node.query_args,
-                answer=tree.node.hindsight_answer,
-            )
-            env.add_hindsight_feedback(node_id, feedback)
+        if isinstance(tree.node, Feedback):
             return transform(tree.child(None))
         return tree.transform(tree.node, transform)
 

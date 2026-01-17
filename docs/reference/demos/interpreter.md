@@ -56,8 +56,18 @@
 
 ::: delphyne.analysis.demo_interpreter.evaluate_demo
 
-::: delphyne.DemoExecutionContext
-
 ::: delphyne.ObjectLoader
 
+::: delphyne.ObjectLoaderInitializer
+
 ::: delphyne.ImplicitAnswerGenerator
+
+## Object Loader Exceptions
+
+::: delphyne.ModuleNotFound
+
+::: delphyne.ObjectNotFound
+
+::: delphyne.StrategyLoadingError
+
+::: delphyne.AmbiguousObjectIdentifier

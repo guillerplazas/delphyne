@@ -2,9 +2,10 @@
 Standard Nodes and Effects
 """
 
+import typing
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Never, NoReturn, cast, override
+from typing import Any, Generic, Literal, Never, cast, overload, override
 
 import delphyne.core as dp
 import delphyne.stdlib.policies as pol
@@ -55,6 +56,55 @@ class NodeMeta:
 
 
 #####
+##### Typed space references
+#####
+
+
+T_inv = typing.TypeVar("T_inv", contravariant=False, covariant=False)
+
+
+@dataclass(frozen=True)
+class TypedSpaceElementRef(Generic[T_inv]):
+    """
+    A wrapper around a global space element reference that carries
+    phantom type information.
+
+    See `branch` for an example of usage.
+    """
+
+    node: dp.refs.GlobalNodeRef
+    element: dp.refs.SpaceElementRef
+
+
+#####
+##### Skippable Nodes
+#####
+
+
+@dataclass(frozen=True)
+class Skippable(dp.Node):
+    """
+    Base class for skippable nodes that contain meta-information and can
+    be safely skipped by policies.
+
+    Many standard policies such as `dfs` handle such nodes by default.
+    An example child class is `Hindsight. We choose not to make `Value`
+    skippable since eliminating value information must be explicit. The
+    `Message` node is also not skippable, since doing so would risk
+    `elim_messages` not being called and the messages being lost.
+    """
+
+    @override
+    def navigate(self) -> dp.Navigation:
+        return None
+        yield
+
+    @override
+    def valid_action(self, action: object) -> bool:
+        return action is None
+
+
+#####
 ##### Branch Node
 #####
 
@@ -69,7 +119,7 @@ class Branch(dp.Node):
     """
 
     cands: OpaqueSpace[Any, Any]
-    meta: FromPolicy[NodeMeta] | None
+    meta: FromPolicy[NodeMeta | None]
 
     @override
     def navigate(self) -> dp.Navigation:
@@ -80,11 +130,32 @@ class Branch(dp.Node):
         return self.cands
 
 
+@overload
 def branch[P, T](
     cands: Opaque[P, T],
-    meta: Callable[[P], NodeMeta] | None = None,
+    *,
+    meta: Callable[[P], NodeMeta | None] = lambda _: None,
     inner_policy_type: type[P] | None = None,
-) -> dp.Strategy[Branch, P, T]:
+) -> dp.Strategy[Branch, P, T]: ...
+
+
+@overload
+def branch[P, T](
+    cands: Opaque[P, T],
+    *,
+    meta: Callable[[P], NodeMeta | None] = lambda _: None,
+    return_ref: Literal[True],
+    inner_policy_type: type[P] | None = None,
+) -> dp.Strategy[Branch, P, tuple[T, TypedSpaceElementRef[T]]]: ...
+
+
+def branch[P, T](
+    cands: Opaque[P, T],
+    *,
+    meta: Callable[[P], NodeMeta | None] = lambda _: None,
+    return_ref: bool = False,
+    inner_policy_type: type[P] | None = None,
+) -> dp.Strategy[Branch, P, T | tuple[T, TypedSpaceElementRef[T]]]:
     """
     Branch over the elements of an opaque space.
 
@@ -96,9 +167,66 @@ def branch[P, T](
         inner_policy_type: Ambient inner policy type. This information
             is not used at runtime but it can be provided to help type
             inference when necessary.
+        return_ref: Whether to return a typed reference to the
+            space of candidates along with the chosen element.
     """
-    ret = yield spawn_node(Branch, cands=cands, meta=meta)
-    return cast(T, ret)
+    recv = yield spawn_node(Branch, cands=cands, meta=meta)
+    ret = cast(T, recv.action)
+    if not return_ref:
+        return ret
+    if not isinstance(recv.value_ref, dp.refs.SpaceElementRef):
+        # The error below should virtually never happen in practice when
+        # using policies that make no assumptions about the specific
+        # type of candidates (by a parametricity argument).
+        raise ValueError(
+            "When calling `branch` with `return_ref=True`, only space "
+            "elements can be sent back by the policy (and not nontrivial "
+            "assemblies of space elements)."
+        )
+    ref = TypedSpaceElementRef[T](node=recv.node_ref, element=recv.value_ref)
+    return (ret, ref)
+
+
+#####
+##### Run Node
+#####
+
+
+@dataclass(frozen=True)
+class Run(Branch):
+    """
+    A degenerate branching node for which only one candidate is to be
+    explored, allowing to extract an element from an opaque space without
+    actual branching.
+
+    Spawning such a node instead of a `Branch` node provides a
+    semantic hint to search policies that no actual branching should be
+    performed (policies can choose to disregard this hint).
+    """
+
+
+def run[P, T](
+    cands: Opaque[P, T],
+    *,
+    meta: Callable[[P], NodeMeta | None] = lambda _: None,
+    inner_policy_type: type[P] | None = None,
+) -> dp.Strategy[Run, P, T]:
+    """
+    Obtain a single element from an opaque space without branching.
+
+    See `Run` for more details.
+
+    Arguments:
+        cands: An opaque space, which can be defined from either a query
+            or a strategy via the `using` method.
+        meta: An optional mapping from the ambient inner policy to
+            arbitrary metadata accessible to search policies.
+        inner_policy_type: Ambient inner policy type. This information
+            is not used at runtime but it can be provided to help type
+            inference when necessary.
+    """
+    recv = yield spawn_node(Run, cands=cands, meta=meta)
+    return cast(T, recv.action)
 
 
 #####
@@ -147,7 +275,7 @@ def fail(
     *,
     message: str | None = None,
     error: dp.Error | None = None,
-) -> dp.Strategy[Fail, object, NoReturn]:
+) -> dp.Strategy[Fail, object, typing.NoReturn]:
     """
     Fail immediately with an error.
 
@@ -462,7 +590,7 @@ def binarize_values(
                     )
 
             return dp.Tree[Branch | Fail | N, P, T](
-                Branch(node.eval, meta=None), branch_child, tree.ref
+                Branch(node.eval, meta=lambda _: None), branch_child, tree.ref
             )
         return tree.transform(tree.node, transform)
 
@@ -484,7 +612,7 @@ class Join(dp.Node):
     """
 
     subs: Sequence[dp.EmbeddedTree[Any, Any, Any]]
-    meta: FromPolicy[NodeMeta] | None
+    meta: FromPolicy[NodeMeta | None]
 
     @override
     def navigate(self) -> dp.Navigation:
@@ -496,7 +624,7 @@ class Join(dp.Node):
 
 def join[N: dp.Node, P, T](
     subs: Sequence[dp.StrategyComp[N, P, T]],
-    meta: Callable[[P], NodeMeta] | None = None,
+    meta: Callable[[P], NodeMeta | None] = lambda _: None,
 ) -> dp.Strategy[N, P, Sequence[T]]:
     """
     Evaluate a sequence of independent strategy computations, possibly
@@ -510,5 +638,44 @@ def join[N: dp.Node, P, T](
     Returns:
         A sequence featuring all computation results.
     """
-    ret = yield spawn_node(Join, subs=subs, meta=meta)
-    return cast(Sequence[T], ret)
+    recv = yield spawn_node(Join, subs=subs, meta=meta)
+    return cast(Sequence[T], recv.action)
+
+
+@pol.contextual_tree_transformer
+def elim_join(
+    env: PolicyEnv,
+    policy: Any,
+) -> pol.PureTreeTransformerFn[Join, Never]:
+    def transform[N: dp.Node, P, T](
+        tree: dp.Tree[Join | N, P, T],
+    ) -> dp.Tree[N, P, T]:
+        node = tree.node
+        if isinstance(node, Join):
+
+            def aux(computed: tuple[Any, ...]) -> dp.Tree[N, P, T]:
+                if len(computed) == len(node.subs):
+                    # Once all joined values are computed, continue
+                    return transform(tree.child(computed))
+                # Otherwise, compute the next joined value and then all
+                # remaining ones.
+                compute_next = transform(node.subs[len(computed)].spawn_tree())
+                return bind_tree(compute_next, lambda v: aux(computed + (v,)))
+
+            return aux(())
+        return tree.transform(node, transform)
+
+    return transform
+
+
+def bind_tree[N: dp.Node, P, A, B](
+    tree: dp.Tree[N, P, A], f: Callable[[dp.Tracked[A]], dp.Tree[N, P, B]]
+) -> dp.Tree[N, P, B]:
+    node = tree.node
+    if isinstance(node, dp.Success):
+        return f(node.success)
+
+    def child(action: dp.Value) -> dp.Tree[N, P, B]:
+        return bind_tree(tree.child(action), f)
+
+    return dp.Tree[N, P, B](node, child, tree.ref)

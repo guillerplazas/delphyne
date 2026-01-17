@@ -8,11 +8,19 @@
 
 ::: delphyne.stdlib.nodes.NodeMeta
 
+::: delphyne.stdlib.nodes.TypedSpaceElementRef
+
+::: delphyne.stdlib.nodes.Skippable
+
 ## Branch
 
 ::: delphyne.stdlib.nodes.Branch
 
 ::: delphyne.stdlib.nodes.branch
+
+::: delphyne.stdlib.nodes.Run
+
+::: delphyne.stdlib.nodes.run
 
 ## Fail
 
@@ -21,6 +29,32 @@
 ::: delphyne.stdlib.nodes.fail
 
 ::: delphyne.stdlib.nodes.ensure
+
+## Feedback
+
+::: delphyne.stdlib.hindsight_feedback.Feedback
+
+::: delphyne.stdlib.hindsight_feedback.ThrowFeedback
+
+::: delphyne.stdlib.hindsight_feedback.BackpropagateFeedback
+
+::: delphyne.stdlib.hindsight_feedback.AttachedFeedback
+
+::: delphyne.stdlib.hindsight_feedback.ValueFeedback
+
+::: delphyne.stdlib.hindsight_feedback.GoodValue
+
+::: delphyne.stdlib.hindsight_feedback.BadValue
+
+::: delphyne.stdlib.hindsight_feedback.BetterValue
+
+::: delphyne.stdlib.hindsight_feedback.send
+
+::: delphyne.stdlib.hindsight_feedback.emit_feedback
+
+::: delphyne.stdlib.hindsight_feedback.backward
+
+::: delphyne.stdlib.hindsight_feedback.elim_feedback
 
 ## Message
 
@@ -49,6 +83,8 @@
 ::: delphyne.stdlib.nodes.Join
 
 ::: delphyne.stdlib.nodes.join
+
+::: delphyne.stdlib.nodes.elim_join
 
 ## Compute
 

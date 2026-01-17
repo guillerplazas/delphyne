@@ -18,17 +18,13 @@
 
 ::: delphyne.parallel
 
-::: delphyne.or_else
-
 ::: delphyne.nofail
 
 ::: delphyne.iterate
 
+::: delphyne.stdlib.streams.SupportsStreamCombinators
+
 ## Opaque Spaces Sugar
-
-::: delphyne.just_dfs
-
-::: delphyne.just_compute
 
 ::: delphyne.ambient_pp
 

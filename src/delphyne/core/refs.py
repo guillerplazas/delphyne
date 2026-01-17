@@ -12,28 +12,29 @@ query answers (`Tracked`) so as to allow caching and enforce the
 a given tree node. *Global* references are expressed relative to a
 single, global origin.
 
-In addition, three kinds of references can be distinguished:
+References in this module are *full references*, which are produced by
+`reify`. Query answers are stored as strings and elements of spaces
+induced by strategies are denoted by sequences of value references.
 
-- **Full references**: the default kind of references produced by
-      `reify`. Query answers are stored as strings and elements of
-      spaces induced by strategies are denoted by sequences of value
-      references.
-- **Id-based references**: shorter references, where query answers and
-      success values are identified by unique identifiers. This concise
-      format is used for exporting traces (see `Trace`).
-- **Hint-based references**: query answers and success values are
-      identified by sequences of *hints*. This format is used in the
-      demonstration language (e.g. argument of test instruction `go
-      compare(['', 'foo bar'])`) and when visualizing traces resulting
-      from demonstrations.
+See modules `irefs` and `hrefs` for two alternative kinds of references:
+id-based references and hint-based references.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, Literal, TypeVar, overload
+from typing import Any, Generic, Literal, TypeVar, cast, overload
 
 import delphyne.core.inspect as insp
 from delphyne.utils.typing import NoTypeInfo, TypeAnnot
+
+_ANSWER_DIGEST_SIZE = 6
+"""
+Size of the hashes used to represent answers when showing digests of
+references.
+"""
+
+_MAIN_SPACE_DEBUG_NAME = "main"
+
 
 #####
 ##### Query Answers
@@ -132,6 +133,9 @@ class Answer:
     tool_calls: tuple[ToolCall, ...] = ()
     justification: str | None = None
 
+    def digest(self) -> str:
+        return _answer_digest(self)
+
 
 #####
 ##### References
@@ -153,6 +157,12 @@ class SpaceName:
     def __getitem__(self, index: int) -> "SpaceName":
         return SpaceName(self.name, (*self.indices, index))
 
+    def __str__(self) -> str:
+        ret = self.name
+        for i in self.indices:
+            ret += f"[{i}]"
+        return ret
+
 
 type AtomicValueRef = IndexedRef | SpaceElementRef
 """
@@ -169,6 +179,9 @@ class IndexedRef:
 
     ref: AtomicValueRef
     index: int
+
+    def digest(self) -> str:
+        return f"{self.digest()}[{self.index}]"
 
 
 type ValueRef = Assembly[AtomicValueRef]
@@ -192,31 +205,21 @@ hashable and so cannot contain lists, while `Value` can contain lists.
 """
 
 
-type NodePath = tuple[ValueRef, ...]
-"""
-Encodes a sequence of actions leading to a node with respect to a
-given root.
-"""
-
-
 @dataclass(frozen=True)
-class NodeId:
+class NodePath:
     """
-    Global identifier of a node within a trace.
+    Encodes a sequence of actions leading to a node with respect to a
+    given root.
     """
 
-    id: int
+    actions: tuple[ValueRef, ...]
 
+    def append(self, action: ValueRef) -> "NodePath":
+        return NodePath((*self.actions, action))
 
-type NodeRef = NodePath | NodeId
-"""
-A node reference is either a path or a node identifier.
-
-Only one of these forms may be allowed depending on the context (e.g. in
-the id-based references used for exporting traces, only node identifiers
-are used, while in the full references attached to trees by `reify`,
-only paths are used).
-"""
+    def digest(self) -> str:
+        body = ", ".join(value_digest(action) for action in self.actions)
+        return f"<{body}>"
 
 
 @dataclass(frozen=True)
@@ -232,59 +235,44 @@ class SpaceRef:
     name: SpaceName
     args: tuple[ValueRef, ...]
 
-
-MAIN_SPACE = SpaceRef(SpaceName("$main", ()), ())
-"""
-A special space attached to the *global origin* node, and which contains
-the main, top-level strategy tree.
-"""
-
-MAIN_ROOT: "GlobalNodePath" = ((MAIN_SPACE, ()),)
-"""
-Global reference to the root of the main, top-level strategy tree.
-"""
+    def digest(self) -> str:
+        if not self.args:
+            return str(self.name)
+        args_str = ", ".join(value_digest(a) for a in self.args)
+        return f"{self.name}({args_str})"
 
 
 @dataclass(frozen=True)
-class AnswerId:
+class GlobalSpacePath:
     """
-    The identifier to an `Answer` object stored within a trace.
-    """
-
-    id: int
-
-
-type AnswerRef = Answer | AnswerId
-"""
-A reference to a query answer.
-"""
-
-
-type HintValue = str
-"""
-A string that hints at a query answer.
-"""
-
-
-@dataclass(frozen=True)
-class Hint:
-    """A hint for selecting a query answer.
-
-    A hint can be associated to a qualifier, which is the name of an
-    imported demonstration defining the hint.
+    A path to a global space, which alternates between following a path from
+    a local root and entering a space within the reached node.
     """
 
-    qualifier: str | None
-    hint: HintValue
+    steps: tuple[tuple[NodePath, SpaceRef], ...]
 
+    def append(self, path: NodePath, space: SpaceRef) -> "GlobalSpacePath":
+        return GlobalSpacePath((*self.steps, (path, space)))
 
-@dataclass(frozen=True)
-class HintsRef:
-    """
-    References a local space element via a sequence of hints.
-    """
+    def split(self) -> "tuple[GlobalNodeRef, SpaceRef] | tuple[None, None]":
+        if not self.steps:
+            return (None, None)
+        last_path, last_space = self.steps[-1]
+        parent_steps = self.steps[:-1]
+        gsref = GlobalNodeRef(GlobalSpacePath(parent_steps), last_path)
+        return (gsref, last_space)
 
-    hints: tuple[Hint, ...]
+    def parent_node(self) -> "GlobalNodeRef | None":
+        return self.split()[0]
+
+    def local_ref(self) -> "SpaceRef | None":
+        return self.split()[1]
+
+    def digest(self) -> str:
+        elts = [
+            f"{path.digest()} / {space.digest()}" for path, space in self.steps
+        ]
+        return " / ".join([_MAIN_SPACE_DEBUG_NAME, *elts])
 
 
 @dataclass(frozen=True)
@@ -292,60 +280,60 @@ class SpaceElementRef:
     """
     A reference to an element of a local space.
 
-    When the `space` field is `None`, the primary field is considered
-    instead (if it exists).
+    Attributes:
+        space: The space containing the element, or `None` if this is
+            the top-level main space.
+        element: The element pointer.
     """
 
     space: SpaceRef | None
-    element: AnswerRef | NodeRef | HintsRef
+    element: Answer | NodePath
 
-
-type GlobalNodePath = tuple[tuple[SpaceRef, NodePath], ...]
-"""
-Path to a node from the global origin, as a sequence of (space to enter,
-path to follow) instruction pairs.
-"""
-
-type GlobalSpacePath = tuple[GlobalNodePath, SpaceRef]
-"""
-A path to a global node
-"""
-
-
-#####
-##### Node Origins (used in traces)
-#####
-
-
-type NodeOrigin = ChildOf | NestedTreeOf
-"""
-Origin of a tree.
-
-A tree is either the child of another tree or the root of a nested tree.
-Traces can be exported as mappings from node identifiers to node origin
-information featuring id-based references (see `Trace`).
-"""
+    def digest(self) -> str:
+        space = (
+            _MAIN_SPACE_DEBUG_NAME
+            if self.space is None
+            else self.space.digest()
+        )
+        if isinstance(self.element, Answer):
+            element = _answer_digest(self.element)
+        else:
+            element = self.element.digest()
+        return f"{space}{{{element}}}"
 
 
 @dataclass(frozen=True)
-class ChildOf:
+class GlobalNodeRef:
     """
-    The tree of interest is the child of another one.
-    """
-
-    node: NodeId
-    action: ValueRef
-
-
-@dataclass(frozen=True)
-class NestedTreeOf:
-    """
-    The tree of interest is the root of a tree that induces a given
-    space.
+    Global reference to a node.
     """
 
-    node: NodeId
-    space: SpaceRef
+    space: GlobalSpacePath
+    path: NodePath
+
+    def child(self, action: ValueRef) -> "GlobalNodeRef":
+        return GlobalNodeRef(self.space, self.path.append(action))
+
+    def nested_space(self, space: SpaceRef) -> "GlobalSpacePath":
+        return GlobalSpacePath((*self.space.steps, (self.path, space)))
+
+    def nested_tree(self, space: SpaceRef) -> "GlobalNodeRef":
+        return GlobalNodeRef(self.nested_space(space), NodePath(()))
+
+    def digest(self) -> str:
+        return f"{self.space.digest()} / {self.path.digest()}"
+
+
+type GlobalAnswerRef = tuple[GlobalSpacePath, Answer]
+"""
+A global reference to located answer.
+"""
+
+
+type GlobalActionRef = tuple[GlobalNodeRef, ValueRef]
+"""
+A global reference to a located action.
+"""
 
 
 #####
@@ -363,12 +351,9 @@ class Tracked(Generic[T]):
 
     Attributes:
         value: The value being tracked.
-        ref: A local reference to the value, relative to the node
-            reference by the `node` field.
-        node: A global reference to the node to which the space that the
-            value originates from is attached. In particular, this field
-            is useful to check the locality invariant at runtime (e.g.,
-            when passing a tracked value to `Tree.child`).
+        ref: A global reference to the space that the value belongs to.
+        node: A reference to the node that the value is local to, or
+            `None` if the value is a top-level result.
         type_annot: An optional type annotation for the `value` field.
             This is mostly used for improving the rendering of values
             when exporting trace information for external tools.
@@ -380,7 +365,7 @@ class Tracked(Generic[T]):
 
     value: T
     ref: AtomicValueRef
-    node: GlobalNodePath
+    node: GlobalNodeRef | None
     type_annot: TypeAnnot[T] | NoTypeInfo
 
     @overload
@@ -399,12 +384,13 @@ class Tracked(Generic[T]):
     ) -> "Tracked[U]": ...
 
     def __getitem__[U](
-        self: "Tracked[Sequence[U] | tuple[Any, ...]]", index: int
+        self: "Tracked[Sequence[U]] | Tracked[tuple[Any, ...]]", index: int
     ) -> "Tracked[U | Any]":
         return Tracked(
             self.value[index],
             IndexedRef(self.ref, index),
             self.node,
+            # TODO: will not work well for union of tuples for example
             insp.element_type_of_sequence_type(self.type_annot, index),
         )
 
@@ -425,12 +411,12 @@ class LocalityError(Exception):
     See `Tree` and `check_local_value`.
     """
 
-    expected_node_ref: GlobalNodePath
-    node_ref: GlobalNodePath
+    expected_node_ref: GlobalNodeRef | None
+    node_ref: GlobalNodeRef | None
     local_ref: AtomicValueRef
 
 
-def check_local_value(val: Value, node: GlobalNodePath):
+def check_local_value(val: Value, node: GlobalNodeRef | None):
     """
     Raise a `LocalityError` exception if a given value is not a local
     value relative to a given node.
@@ -508,30 +494,35 @@ def value_type(v: Value) -> TypeAnnot[Any] | NoTypeInfo:
 #####
 
 
-def append_node_path(path: NodePath, v: ValueRef) -> NodePath:
-    return (*path, v)
+NONE_REF_REPR = "nil"
 
 
-def child_ref(path: GlobalNodePath, action: ValueRef) -> GlobalNodePath:
-    assert path
-    *init, (space, node_path) = path
-    return (*init, (space, (*node_path, action)))
+def show_assembly[T](show_element: Callable[[T], str], a: Assembly[T]) -> str:
+    """
+    Print an assembly, assuming that T does not intersect with tuple.
+    """
+    if isinstance(a, tuple):
+        a = cast(tuple[Assembly[T], ...], a)
+        return "[" + ", ".join(show_assembly(show_element, x) for x in a) + "]"
+    elif a is None:
+        return NONE_REF_REPR
+    else:
+        return show_element(a)
 
 
-def nested_ref(path: GlobalNodePath, ref: SpaceRef) -> GlobalNodePath:
-    return (*path, (ref, ()))
+def _answer_digest(answer: Answer) -> str:
+    import hashlib
+    import json
+
+    import delphyne.utils.typing as dty
+
+    h = hashlib.sha256(
+        json.dumps(dty.pydantic_dump(Answer, answer), sort_keys=True).encode(
+            "utf-8"
+        )
+    ).hexdigest()
+    return h[:_ANSWER_DIGEST_SIZE]
 
 
-def global_path_origin(
-    path: GlobalNodePath,
-) -> (
-    Literal["global_origin"]
-    | tuple[Literal["child"], GlobalNodePath, ValueRef]
-    | tuple[Literal["nested"], GlobalNodePath, SpaceRef]
-):
-    if not path:
-        return "global_origin"
-    *init, (space, node_path) = path
-    if not node_path:
-        return "nested", tuple(init), space
-    return "child", (*init, (space, node_path[:-1])), node_path[-1]
+def value_digest(vr: ValueRef) -> str:
+    return show_assembly(lambda x: x.digest(), vr)
