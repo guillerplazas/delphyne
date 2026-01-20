@@ -70,8 +70,20 @@ def parse_eq(eq: Eq) -> tuple[sp.Expr, sp.Expr]:
     return parse_term(eq[0]), parse_term(eq[1])
 
 
+class TermParseError(Exception):
+    """Raised when a term cannot be parsed by SymPy."""
+
+    def __init__(self, term: str, original_error: Exception):
+        self.term = term
+        self.original_error = original_error
+        super().__init__(f"Failed to parse term '{term}': {original_error}")
+
+
 def parse_term(term: Term) -> sp.Expr:
-    return sp.sympify(term, locals=SYMPY_LOCALS)  # type: ignore
+    try:
+        return sp.sympify(term, locals=SYMPY_LOCALS)  # type: ignore
+    except Exception as e:
+        raise TermParseError(term, e) from e
 
 
 def rewrite(term: Term, rule: Eq, vars: dict[str, Term]) -> Term:
@@ -163,10 +175,22 @@ def check(eq: Eq, proof: Proof, rules: dict[str, Eq]) -> ProofError | None:
         except ProofError as e:
             e.step = cur_step
             return e
+        except TermParseError as e:
+            return ProofError(
+                f"Invalid term syntax: '{e.term}'. Use standard mathematical "
+                f"notation like 'sin(x)' and '**' for exponentiation.",
+                step=cur_step,
+            )
     if proof:
         last_eq = proof[max(proof.keys())][0]
-        if equal_terms(last_eq[0], eq[0]) and equal_terms(last_eq[1], eq[1]):
-            return None
+        try:
+            if equal_terms(last_eq[0], eq[0]) and equal_terms(last_eq[1], eq[1]):
+                return None
+        except TermParseError as e:
+            return ProofError(
+                f"Invalid term syntax in final step: '{e.term}'. Use standard "
+                f"mathematical notation like 'sin(x)' and '**' for exponentiation.",
+            )
     return ProofError("The proof does not end with the equation to be proved.")
 
 

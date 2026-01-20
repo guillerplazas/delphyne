@@ -36,8 +36,8 @@ configs = [
         max_dollar_budget=0.2,
         seed=seed,
     )
-    # Test on first 10 equations for initial experiments
-    for bench_name in list(meq.BENCHS.keys())[:10]
+    # Run on all equations from benchmark file
+    for bench_name in list(meq.BENCHS.keys())
     # Use different models
     for model in [*SMALL_MODELS, *LARGE_MODELS]
     # Temperature variations (more for small models)
@@ -45,7 +45,7 @@ configs = [
     for temperature in ([1.0] if model in SMALL_MODELS else [1.0]) # KEEP DEFAULT
     # Feedback cycle variations (more for large models)
     #for max_feedback_cycles in ([3] if model in SMALL_MODELS else [0, 1, 3])
-    for max_feedback_cycles in ([3] if model in SMALL_MODELS else [3])
+    for max_feedback_cycles in ([5] if model in SMALL_MODELS else [5])
     # Multiple seeds for reproducibility
     for seed in range(3)
 ]

@@ -13,7 +13,7 @@ import delphyne as dp
 
 # Load benchmark equations
 BENCHMARKS_FOLDER = Path(__file__).parent.parent / "benchmark"
-EQUATIONS_FILE = BENCHMARKS_FOLDER / "other_htps.txt"
+EQUATIONS_FILE = BENCHMARKS_FOLDER / "equations.txt"
 
 
 def load_all_equations() -> dict[str, tuple[str, str]]:

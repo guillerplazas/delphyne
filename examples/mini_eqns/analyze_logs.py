@@ -153,6 +153,32 @@ def analyze_all_results():
     print(f"Total cost: ${total_cost:.4f}")
     print(f"Average cost per experiment: ${total_cost/success_count:.4f}")
     print(f"Average requests per experiment: {avg_requests:.1f}")
+    print()
+
+    # Per-model analysis
+    model_stats: dict[str, list] = defaultdict(list)
+    for analysis in all_analyses:
+        config_name = analysis.get("config_name", "")
+        if "gpt-4o-mini" in config_name:
+            model_stats["gpt-4o-mini"].append(analysis)
+        elif "gpt-4o" in config_name:
+            model_stats["gpt-4o"].append(analysis)
+
+    print(f"=== Per-Model Analysis ===")
+    for model, analyses in model_stats.items():
+        successful = [a for a in analyses if a.get("success")]
+        success_rate = len(successful) / len(analyses) * 100 if analyses else 0
+        first_attempt = sum(1 for a in successful if a.get("first_attempt_success"))
+        first_attempt_rate = first_attempt / len(successful) * 100 if successful else 0
+        total_model_cost = sum(a.get("budget", {}).get("price", 0) for a in successful)
+        avg_model_cost = total_model_cost / len(successful) if successful else 0
+
+        print(f"{model}:")
+        print(f"  Total runs: {len(analyses)}")
+        print(f"  Success rate: {success_rate:.1f}%")
+        print(f"  First-attempt success: {first_attempt_rate:.1f}%")
+        print(f"  Avg cost per run: ${avg_model_cost:.4f}")
+        print(f"  Total cost: ${total_model_cost:.4f}")
 
     return all_analyses
 
