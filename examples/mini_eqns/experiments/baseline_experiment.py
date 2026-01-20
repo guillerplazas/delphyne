@@ -33,7 +33,7 @@ configs = [
         temperature=temperature,
         max_feedback_cycles=max_feedback_cycles,
         loop=True,
-        max_dollar_budget=0.2,
+        max_dollar_budget=0.5,
         seed=seed,
     )
     # Run on all equations from benchmark file
