@@ -1,3 +1,11 @@
+"""
+When running the default checker and running an experiment, some configurations would automatically fail.
+Sympy errors lead directly to experiment crash.
+In this newer version, catches these errors and provides some feedback.
+
+The error handling makes it more convenient to run large experiments.
+"""
+
 from dataclasses import dataclass, field
 from typing import Any
 
