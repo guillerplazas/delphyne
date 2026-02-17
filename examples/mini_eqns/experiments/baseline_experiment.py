@@ -22,8 +22,8 @@ import delphyne as dp
 import mini_eqns_experiments as meq
 
 # Model configurations
-SMALL_MODELS = ["gpt-4o-mini"]
-LARGE_MODELS = ["gpt-4o"]
+SMALL_MODELS = ["gpt-5.2"]
+#LARGE_MODELS = ["gpt-4o"]
 
 # Create experiment configurations
 configs = [
@@ -39,7 +39,8 @@ configs = [
     # Run on all equations from benchmark file
     for bench_name in list(meq.BENCHS.keys())
     # Use different models
-    for model in [*SMALL_MODELS, *LARGE_MODELS]
+    #for model in [*SMALL_MODELS, *LARGE_MODELS]
+    for model in [*SMALL_MODELS]
     # Temperature variations (more for small models)
     #for temperature in ([0.7, 1.0, 1.5] if model in SMALL_MODELS else [0.7, 1.0])
     for temperature in ([1.0] if model in SMALL_MODELS else [1.0]) # KEEP DEFAULT
@@ -47,7 +48,7 @@ configs = [
     #for max_feedback_cycles in ([3] if model in SMALL_MODELS else [0, 1, 3])
     for max_feedback_cycles in ([5] if model in SMALL_MODELS else [5])
     # Multiple seeds for reproducibility
-    for seed in range(3)
+    for seed in range(1)
 ]
 
 if __name__ == "__main__":
