@@ -22,7 +22,8 @@ import delphyne as dp
 import mini_eqns_experiments as meq
 
 # Model configurations
-SMALL_MODELS = ["gpt-5.2"]
+SMALL_MODELS = ["gpt-5-nano-2025-08-07"]
+#SMALL_MODELS = ["gpt-5-mini-2025-08-07"]
 #LARGE_MODELS = ["gpt-4o"]
 
 # Create experiment configurations
@@ -33,7 +34,7 @@ configs = [
         temperature=temperature,
         max_feedback_cycles=max_feedback_cycles,
         loop=True,
-        max_dollar_budget=0.5,
+        max_dollar_budget=0.2,
         seed=seed,
     )
     # Run on all equations from benchmark file
@@ -46,7 +47,7 @@ configs = [
     for temperature in ([1.0] if model in SMALL_MODELS else [1.0]) # KEEP DEFAULT
     # Feedback cycle variations (more for large models)
     #for max_feedback_cycles in ([3] if model in SMALL_MODELS else [0, 1, 3])
-    for max_feedback_cycles in ([5] if model in SMALL_MODELS else [5])
+    for max_feedback_cycles in ([20] if model in SMALL_MODELS else [20])
     # Multiple seeds for reproducibility
     for seed in range(1)
 ]
