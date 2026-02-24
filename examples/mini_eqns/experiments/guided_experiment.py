@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""
+Guided Interactive Experiment for Mini Equations
+
+This experiment runs the guided proof strategy with multiple completions
+and enhanced prompts on both gpt-5-mini and gpt-5-nano.
+
+To run:
+    python experiments/guided_experiment.py run --max_workers=16
+
+To clean the index before re-running with different configs:
+    python experiments/guided_experiment.py clean_index
+
+To list all configurations:
+    python experiments/guided_experiment.py list
+
+To check status:
+    python experiments/guided_experiment.py status
+"""
+
+import delphyne as dp
+import mini_eqns_experiments as meq
+
+#MODELS = ["gpt-5-mini-2025-08-07", "gpt-5-nano-2025-08-07"]
+MODELS = ["gpt-5-nano-2025-08-07"]
+
+configs = [
+    meq.GuidedConfig(
+        bench_name=bench_name,
+        model_name=model,
+        temperature=1.0,
+        num_completions=1,
+        max_feedback_cycles=10,
+        loop=True,
+        max_dollar_budget=0.1,
+        seed=seed,
+    )
+    for bench_name in list(meq.BENCHS.keys())
+    for model in MODELS
+    for seed in range(1)
+]
+
+if __name__ == "__main__":
+    dp.Experiment(
+        config_class=meq.GuidedConfig,
+        context=dp.workspace_execution_context(__file__),
+        configs=configs,
+        output_dir=f"experiments/output/{dp.path_stem(__file__)}",
+    ).run_cli()

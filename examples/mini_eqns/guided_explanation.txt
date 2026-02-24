@@ -1,0 +1,59 @@
+The Guided Strategy: Idea & Design
+                                                                                                                                                                                                          
+  The Problem                                                                       
+
+  The mini_eqns benchmark asks LLMs to produce machine-checkable proofs of trigonometric equalities. Each proof is a sequence of formal steps, where every step must be justified by either applying a
+  rewriting rule (e.g. cos_add, sin_neg), referencing a prior step, flipping an equality (sym), or chaining steps transitively (trans). A deterministic checker verifies the proof — there's no room for
+  hand-waving.
+
+  This is hard for LLMs because the output must be syntactically and semantically precise: a single wrong variable binding, a misordered step reference, or a missing intermediate equality causes the
+  whole proof to fail.
+
+  Baseline vs. Guided: Two Approaches
+
+  Baseline (baseline_interactive.py) uses a simple conversational loop:
+  1. Ask the LLM to produce one proof (num_completions=1, no loop)
+  2. Run the checker
+  3. If it fails, send the raw error message back and ask the LLM to try again
+  4. Repeat up to max_feedback_cycles times
+
+  This relies entirely on the model's own reasoning ability. The system prompt just lists the rules and the output format — no strategic hints.
+
+  Guided (guided_interactive.py) changes two things simultaneously:
+
+  1. Richer prompts with explicit proof patterns
+
+  Compare the two system prompts:
+  - Baseline (ProveEqualityInteractive.system.jinja): Lists the rules and format, then says "look at the examples carefully."
+  - Guided (ProveEqualityGuided.system.jinja): Adds a whole "Common Proof Patterns" section that teaches the model concrete strategies:
+    - Subtraction via addition + negation: How to handle cos(a-b) by rewriting to cos(a+(-b)) then applying cos_neg/sin_neg
+    - Double angle: Use addition formulas with both args equal
+    - Chaining with transitivity: Prove intermediate equalities then combine with trans
+    - Working from both sides: Meet in the middle with sym + trans
+    - Evaluating at specific values: Decompose cos(pi) using addition formulas
+
+  This is essentially prompting the model with a proof-strategy playbook — reducing the reasoning burden by giving it reusable patterns.
+
+  Similarly, the feedback prompt is richer. The baseline just says "your proof didn't check, here's the error." The guided version (ProveEqualityGuided.feedback.jinja) parses the error type and gives
+  targeted hints: if the error says "not found", it explains missing step references; if "Unequal terms", it reminds the model about variable bindings, etc.
+
+  2. Multiple completions with search (num_completions > 1, loop=True)
+
+  The guided policy generates multiple proof candidates per LLM call (e.g. 8 completions at high temperature). Combined with loop=True, this turns the interaction into a search process:
+
+  - dfs(max_depth=2*(max_feedback_cycles+1)) controls depth — each feedback cycle uses 2 levels of depth (one branch for the LLM call, one run for the checker)
+  - dp.loop() @ sp wraps the DFS in an outer loop, so if all branches at a given depth are exhausted, it restarts from scratch
+  - dp.few_shot(model, temperature=1.5, num_completions=8, max_requests=1) samples 8 diverse candidates per LLM call
+
+  The interact combinator (interactive.py) manages the conversation loop: it sends the query, parses the response, runs the checker via process, and if the checker returns an Error, appends the feedback
+   to the conversation prefix and loops. Each call to branch creates a choice point that the DFS policy explores — so with 8 completions, the search tree has branching factor 8 at each step.
+
+  Why This Combination Works
+
+  The insight is that smaller/cheaper models (like GPT-5-nano) can succeed at formal proof if you:
+  1. Reduce the search space by teaching them the right proof patterns upfront (guided prompts), so they don't waste attempts on dead-end strategies
+  2. Compensate for per-attempt unreliability by sampling many candidates (high temperature + multiple completions) and letting the deterministic checker filter
+  3. Give actionable feedback when attempts fail, so subsequent rounds are more likely to converge
+
+  It's the Delphyne philosophy in action: the strategy (business logic) defines what constitutes a correct proof and how to interact with the LLM, while the policy (search logic) defines how hard to
+  search — and you can tune them independently. You can swap models, change num_completions, toggle reasoning_effort, or adjust temperature without touching the strategy code at all.

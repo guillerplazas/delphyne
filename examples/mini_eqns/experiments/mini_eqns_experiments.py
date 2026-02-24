@@ -81,3 +81,43 @@ class BaselineConfig:
             num_generated=1,
             budget=budget,
         )
+
+
+@dataclass
+class GuidedConfig:
+    """Configuration for guided interactive proof experiments."""
+    bench_name: str
+    model_name: str
+    temperature: float
+    num_completions: int
+    max_feedback_cycles: int
+    seed: int
+    loop: bool = True
+    max_dollar_budget: float | None = 0.2
+    reasoning_effort: str | None = None
+
+    def instantiate(self, context: object) -> dp.RunStrategyArgs:
+        """
+        Instantiate the configuration into a run_strategy command.
+        """
+        budget: dict[str, float] = {}
+        if self.max_dollar_budget is not None:
+            budget[dp.DOLLAR_PRICE] = self.max_dollar_budget
+
+        lhs, rhs = BENCHS[self.bench_name]
+
+        return dp.RunStrategyArgs(
+            strategy="prove_equality_guided",
+            args={"equality": [lhs, rhs]},
+            policy="prove_equality_guided_policy",
+            policy_args={
+                "model_name": self.model_name,
+                "temperature": self.temperature,
+                "num_completions": self.num_completions,
+                "max_feedback_cycles": self.max_feedback_cycles,
+                "loop": self.loop,
+                "reasoning_effort": self.reasoning_effort,
+            },
+            num_generated=1,
+            budget=budget,
+        )
