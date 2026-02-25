@@ -1,0 +1,2164 @@
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            ## Task
+
+            You are planning a proof of a trigonometric equality. Your goal is to sketch an INFORMAL strategy—which rules to apply, in what order—that would allow the equality to be proved step by step.
+
+            ## Available rules
+
+            ```
+            - cos_zero: `cos(0) = 1`
+            - sin_zero: `sin(0) = 0`
+            - sin_halfpi: `sin(pi/2) = 1`
+            - cos_halfpi: `cos(pi/2) = 0`
+            - sin_neg: `sin(-x) = -sin(x)`
+            - cos_neg: `cos(-x) = cos(x)`
+            - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+            - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+            ```
+
+            Write your proof strategy as a numbered list inside a code block. Be concise.
+            Each item should name a rule and explain what it simplifies. Example:
+
+            ```
+            1. Apply sin_add with x=a, y=b to expand sin(a+b)
+            2. Use cos_halfpi to simplify cos(pi/2) = 0, dropping that term
+            3. ...
+            ```
+        - role: user
+          content: 'Sketch a proof strategy for: `cos(pi/3) = sin(pi/6)`'
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```
+              1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+              2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+              3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+              4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+              5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+              ```
+        - role: user
+          content: 'Sketch a proof strategy for: `2*sin(x/2)*cos(x/2) = sin(x)`'
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```
+              1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+              2. Flip with sym to get the LHS = RHS direction
+              ```
+        - role: user
+          content: 'Sketch a proof strategy for: `cos(2*x) = 2*cos(x)**2 - 1`'
+      options:
+        model: gpt-5-mini-2025-08-07
+        temperature: 1.0
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```
+          1. Apply cos_add with x=x, y=x to expand cos(2*x) as cos(x)*cos(x) - sin(x)*sin(x) = cos(x)^2 - sin(x)^2
+          2. Use the Pythagorean identity (sin^2(x)+cos^2(x)=1) to rewrite sin(x)^2 as 1 - cos(x)^2
+          3. Substitute that into cos(x)^2 - sin(x)^2 to get cos(x)^2 - (1 - cos(x)^2)
+          4. Simplify algebraically: cos(x)^2 - (1 - cos(x)^2) = 2*cos(x)^2 - 1, yielding cos(2*x) = 2*cos(x)^2 - 1
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 552
+        output_tokens: 1513
+        cached_input_tokens: 0
+        price: 0.003164
+    log_items: []
+    model_name: gpt-5-mini-2025-08-07
+    usage_info:
+      completion_tokens: 1513
+      prompt_tokens: 552
+      total_tokens: 2065
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 1344
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 0
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            ## Task
+
+            You are proving a trigonometric equality one step at a time.
+            A proof strategy has already been provided. Follow it.
+
+            Write exactly ONE new step as a YAML code block. Do not repeat previous steps.
+            The last step of the complete proof must state the target equality.
+
+            ## Step format
+
+            ```yaml
+            <step_id>:
+              - ["<lhs>", "<rhs>"]
+              - <justification>
+            ```
+
+            Justifications can be:
+            - `{rule: <rule_name>, vars: {<var>: "<value>", ...}}` — apply a rewriting rule
+            - `{step: <prev_step_id>}` — substitute a previously obtained equality
+            - `{sym: <prev_step_id>}` — flip lhs and rhs of a previous step
+            - `{trans: [<step_id_1>, ..., <step_id_n>]}` — chain steps transitively
+
+            All expressions must use Python syntax (parsable by `sympy.sympify`). Exponentiation is `**`.
+
+            ## Available rules
+
+            ```
+            - cos_zero: `cos(0) = 1`
+            - sin_zero: `sin(0) = 0`
+            - sin_halfpi: `sin(pi/2) = 1`
+            - cos_halfpi: `cos(pi/2) = 0`
+            - sin_neg: `sin(-x) = -sin(x)`
+            - cos_neg: `cos(-x) = cos(x)`
+            - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+            - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+            ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            No steps yet. Following the strategy, write step **1**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+
+            ```
+            Write step **2**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              2:
+                - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                - {rule: cos_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+
+            ```
+            Write step **3**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              3:
+                - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                - {rule: sin_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(-pi/6)
+                - -sin(-pi/6)
+              - rule: sin_halfpi
+                vars: {}
+
+            ```
+            Write step **4**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              4:
+                - ["-sin(-pi/6)", "sin(pi/6)"]
+                - {rule: sin_neg, vars: {x: "pi/6"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(-pi/6)
+                - -sin(-pi/6)
+              - rule: sin_halfpi
+                vars: {}
+            4:
+              - - -sin(-pi/6)
+                - sin(pi/6)
+              - rule: sin_neg
+                vars:
+                  x: pi/6
+
+            ```
+            Write step **5**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              5:
+                - ["cos(pi/3)", "sin(pi/6)"]
+                - {trans: [1, 2, 3, 4]}
+              ```
+        - role: user
+          content: |
+            **Target**: `2*sin(x/2)*cos(x/2) = sin(x)`
+
+            **Proof strategy**:
+            ```
+            1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+            2. Flip with sym to get the LHS = RHS direction
+
+            ```
+
+            No steps yet. Following the strategy, write step **1**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `2*sin(x/2)*cos(x/2) = sin(x)`
+
+            **Proof strategy**:
+            ```
+            1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+            2. Flip with sym to get the LHS = RHS direction
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - sin(x)
+                - 2*sin(x/2)*cos(x/2)
+              - rule: sin_add
+                vars:
+                  x: x/2
+                  y: x/2
+
+            ```
+            Write step **2**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              2:
+                - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                - {sym: 1}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(2*x) = 2*cos(x)**2 - 1`
+
+            **Proof strategy**:
+            ```
+            1. Apply cos_add with x=x, y=x to expand cos(2*x) as cos(x)*cos(x) - sin(x)*sin(x) = cos(x)^2 - sin(x)^2
+            2. Use the Pythagorean identity (sin^2(x)+cos^2(x)=1) to rewrite sin(x)^2 as 1 - cos(x)^2
+            3. Substitute that into cos(x)^2 - sin(x)^2 to get cos(x)^2 - (1 - cos(x)^2)
+            4. Simplify algebraically: cos(x)^2 - (1 - cos(x)^2) = 2*cos(x)^2 - 1, yielding cos(2*x) = 2*cos(x)^2 - 1
+
+            ```
+
+            No steps yet. Following the strategy, write step **1**.
+      options:
+        model: gpt-5-mini-2025-08-07
+        temperature: 1.0
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```yaml
+          1:
+            - ["cos(2*x)", "cos(x)**2 - sin(x)**2"]
+            - {rule: cos_add, vars: {x: "x", y: "x"}}
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 2641
+        output_tokens: 184
+        cached_input_tokens: 1792
+        price: 0.00062505
+    log_items: []
+    model_name: gpt-5-mini-2025-08-07
+    usage_info:
+      completion_tokens: 184
+      prompt_tokens: 2641
+      total_tokens: 2825
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 128
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 1792
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            ## Task
+
+            You are proving a trigonometric equality one step at a time.
+            A proof strategy has already been provided. Follow it.
+
+            Write exactly ONE new step as a YAML code block. Do not repeat previous steps.
+            The last step of the complete proof must state the target equality.
+
+            ## Step format
+
+            ```yaml
+            <step_id>:
+              - ["<lhs>", "<rhs>"]
+              - <justification>
+            ```
+
+            Justifications can be:
+            - `{rule: <rule_name>, vars: {<var>: "<value>", ...}}` — apply a rewriting rule
+            - `{step: <prev_step_id>}` — substitute a previously obtained equality
+            - `{sym: <prev_step_id>}` — flip lhs and rhs of a previous step
+            - `{trans: [<step_id_1>, ..., <step_id_n>]}` — chain steps transitively
+
+            All expressions must use Python syntax (parsable by `sympy.sympify`). Exponentiation is `**`.
+
+            ## Available rules
+
+            ```
+            - cos_zero: `cos(0) = 1`
+            - sin_zero: `sin(0) = 0`
+            - sin_halfpi: `sin(pi/2) = 1`
+            - cos_halfpi: `cos(pi/2) = 0`
+            - sin_neg: `sin(-x) = -sin(x)`
+            - cos_neg: `cos(-x) = cos(x)`
+            - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+            - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+            ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            No steps yet. Following the strategy, write step **1**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+
+            ```
+            Write step **2**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              2:
+                - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                - {rule: cos_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+
+            ```
+            Write step **3**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              3:
+                - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                - {rule: sin_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(-pi/6)
+                - -sin(-pi/6)
+              - rule: sin_halfpi
+                vars: {}
+
+            ```
+            Write step **4**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              4:
+                - ["-sin(-pi/6)", "sin(pi/6)"]
+                - {rule: sin_neg, vars: {x: "pi/6"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(-pi/6)
+                - -sin(-pi/6)
+              - rule: sin_halfpi
+                vars: {}
+            4:
+              - - -sin(-pi/6)
+                - sin(pi/6)
+              - rule: sin_neg
+                vars:
+                  x: pi/6
+
+            ```
+            Write step **5**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              5:
+                - ["cos(pi/3)", "sin(pi/6)"]
+                - {trans: [1, 2, 3, 4]}
+              ```
+        - role: user
+          content: |
+            **Target**: `2*sin(x/2)*cos(x/2) = sin(x)`
+
+            **Proof strategy**:
+            ```
+            1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+            2. Flip with sym to get the LHS = RHS direction
+
+            ```
+
+            No steps yet. Following the strategy, write step **1**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `2*sin(x/2)*cos(x/2) = sin(x)`
+
+            **Proof strategy**:
+            ```
+            1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+            2. Flip with sym to get the LHS = RHS direction
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - sin(x)
+                - 2*sin(x/2)*cos(x/2)
+              - rule: sin_add
+                vars:
+                  x: x/2
+                  y: x/2
+
+            ```
+            Write step **2**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              2:
+                - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                - {sym: 1}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(2*x) = 2*cos(x)**2 - 1`
+
+            **Proof strategy**:
+            ```
+            1. Apply cos_add with x=x, y=x to expand cos(2*x) as cos(x)*cos(x) - sin(x)*sin(x) = cos(x)^2 - sin(x)^2
+            2. Use the Pythagorean identity (sin^2(x)+cos^2(x)=1) to rewrite sin(x)^2 as 1 - cos(x)^2
+            3. Substitute that into cos(x)^2 - sin(x)^2 to get cos(x)^2 - (1 - cos(x)^2)
+            4. Simplify algebraically: cos(x)^2 - (1 - cos(x)^2) = 2*cos(x)^2 - 1, yielding cos(2*x) = 2*cos(x)^2 - 1
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(2*x)
+                - cos(x)**2 - sin(x)**2
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: x
+
+            ```
+            Write step **2**.
+      options:
+        model: gpt-5-mini-2025-08-07
+        temperature: 1.0
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```yaml
+          2:
+            - ["cos(x)**2 - sin(x)**2", "cos(x)**2 - (1 - cos(x)**2)"]
+            - {rule: pythag, vars: {x: "x"}}
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 2687
+        output_tokens: 957
+        cached_input_tokens: 1792
+        price: 0.00218255
+    log_items: []
+    model_name: gpt-5-mini-2025-08-07
+    usage_info:
+      completion_tokens: 957
+      prompt_tokens: 2687
+      total_tokens: 3644
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 896
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 1792
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                2:
+                  - - cos(x)**2 - sin(x)**2
+                    - cos(x)**2 - (1 - cos(x)**2)
+                  - rule: pythag
+                    vars:
+                      x: x
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: Rule 'pythag' not found
+          step: 2
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            ## Task
+
+            You are proving a trigonometric equality one step at a time.
+            A proof strategy has already been provided. Follow it.
+
+            Write exactly ONE new step as a YAML code block. Do not repeat previous steps.
+            The last step of the complete proof must state the target equality.
+
+            ## Step format
+
+            ```yaml
+            <step_id>:
+              - ["<lhs>", "<rhs>"]
+              - <justification>
+            ```
+
+            Justifications can be:
+            - `{rule: <rule_name>, vars: {<var>: "<value>", ...}}` — apply a rewriting rule
+            - `{step: <prev_step_id>}` — substitute a previously obtained equality
+            - `{sym: <prev_step_id>}` — flip lhs and rhs of a previous step
+            - `{trans: [<step_id_1>, ..., <step_id_n>]}` — chain steps transitively
+
+            All expressions must use Python syntax (parsable by `sympy.sympify`). Exponentiation is `**`.
+
+            ## Available rules
+
+            ```
+            - cos_zero: `cos(0) = 1`
+            - sin_zero: `sin(0) = 0`
+            - sin_halfpi: `sin(pi/2) = 1`
+            - cos_halfpi: `cos(pi/2) = 0`
+            - sin_neg: `sin(-x) = -sin(x)`
+            - cos_neg: `cos(-x) = cos(x)`
+            - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+            - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+            ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            No steps yet. Following the strategy, write step **1**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+
+            ```
+            Write step **2**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              2:
+                - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                - {rule: cos_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+
+            ```
+            Write step **3**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              3:
+                - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                - {rule: sin_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(-pi/6)
+                - -sin(-pi/6)
+              - rule: sin_halfpi
+                vars: {}
+
+            ```
+            Write step **4**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              4:
+                - ["-sin(-pi/6)", "sin(pi/6)"]
+                - {rule: sin_neg, vars: {x: "pi/6"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(-pi/6)
+                - -sin(-pi/6)
+              - rule: sin_halfpi
+                vars: {}
+            4:
+              - - -sin(-pi/6)
+                - sin(pi/6)
+              - rule: sin_neg
+                vars:
+                  x: pi/6
+
+            ```
+            Write step **5**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              5:
+                - ["cos(pi/3)", "sin(pi/6)"]
+                - {trans: [1, 2, 3, 4]}
+              ```
+        - role: user
+          content: |
+            **Target**: `2*sin(x/2)*cos(x/2) = sin(x)`
+
+            **Proof strategy**:
+            ```
+            1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+            2. Flip with sym to get the LHS = RHS direction
+
+            ```
+
+            No steps yet. Following the strategy, write step **1**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `2*sin(x/2)*cos(x/2) = sin(x)`
+
+            **Proof strategy**:
+            ```
+            1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+            2. Flip with sym to get the LHS = RHS direction
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - sin(x)
+                - 2*sin(x/2)*cos(x/2)
+              - rule: sin_add
+                vars:
+                  x: x/2
+                  y: x/2
+
+            ```
+            Write step **2**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              2:
+                - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                - {sym: 1}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(2*x) = 2*cos(x)**2 - 1`
+
+            **Proof strategy**:
+            ```
+            1. Apply cos_add with x=x, y=x to expand cos(2*x) as cos(x)*cos(x) - sin(x)*sin(x) = cos(x)^2 - sin(x)^2
+            2. Use the Pythagorean identity (sin^2(x)+cos^2(x)=1) to rewrite sin(x)^2 as 1 - cos(x)^2
+            3. Substitute that into cos(x)^2 - sin(x)^2 to get cos(x)^2 - (1 - cos(x)^2)
+            4. Simplify algebraically: cos(x)^2 - (1 - cos(x)^2) = 2*cos(x)^2 - 1, yielding cos(2*x) = 2*cos(x)^2 - 1
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(2*x)
+                - cos(x)**2 - sin(x)**2
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: x
+
+            ```
+            Write step **2**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```yaml
+              2:
+                - ["cos(x)**2 - sin(x)**2", "cos(x)**2 - (1 - cos(x)**2)"]
+                - {rule: pythag, vars: {x: "x"}}
+              ```
+        - role: user
+          content: |-
+            Your step was rejected. Fix it and try again.
+
+            ```
+            Error at step 2: Rule 'pythag' not found
+            ```
+      options:
+        model: gpt-5-mini-2025-08-07
+        temperature: 1.0
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```yaml
+          2:
+            - ["cos(0)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+            - {rule: cos_add, vars: {x: "x", y: "-x"}}
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 2778
+        output_tokens: 1405
+        cached_input_tokens: 0
+        price: 0.0035045
+    log_items: []
+    model_name: gpt-5-mini-2025-08-07
+    usage_info:
+      completion_tokens: 1405
+      prompt_tokens: 2778
+      total_tokens: 4183
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 1344
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 0
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                2:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            ## Task
+
+            You are proving a trigonometric equality one step at a time.
+            A proof strategy has already been provided. Follow it.
+
+            Write exactly ONE new step as a YAML code block. Do not repeat previous steps.
+            The last step of the complete proof must state the target equality.
+
+            ## Step format
+
+            ```yaml
+            <step_id>:
+              - ["<lhs>", "<rhs>"]
+              - <justification>
+            ```
+
+            Justifications can be:
+            - `{rule: <rule_name>, vars: {<var>: "<value>", ...}}` — apply a rewriting rule
+            - `{step: <prev_step_id>}` — substitute a previously obtained equality
+            - `{sym: <prev_step_id>}` — flip lhs and rhs of a previous step
+            - `{trans: [<step_id_1>, ..., <step_id_n>]}` — chain steps transitively
+
+            All expressions must use Python syntax (parsable by `sympy.sympify`). Exponentiation is `**`.
+
+            ## Available rules
+
+            ```
+            - cos_zero: `cos(0) = 1`
+            - sin_zero: `sin(0) = 0`
+            - sin_halfpi: `sin(pi/2) = 1`
+            - cos_halfpi: `cos(pi/2) = 0`
+            - sin_neg: `sin(-x) = -sin(x)`
+            - cos_neg: `cos(-x) = cos(x)`
+            - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+            - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+            ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            No steps yet. Following the strategy, write step **1**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+
+            ```
+            Write step **2**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              2:
+                - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                - {rule: cos_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+
+            ```
+            Write step **3**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              3:
+                - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                - {rule: sin_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(-pi/6)
+                - -sin(-pi/6)
+              - rule: sin_halfpi
+                vars: {}
+
+            ```
+            Write step **4**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              4:
+                - ["-sin(-pi/6)", "sin(pi/6)"]
+                - {rule: sin_neg, vars: {x: "pi/6"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(-pi/6)
+                - -sin(-pi/6)
+              - rule: sin_halfpi
+                vars: {}
+            4:
+              - - -sin(-pi/6)
+                - sin(pi/6)
+              - rule: sin_neg
+                vars:
+                  x: pi/6
+
+            ```
+            Write step **5**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              5:
+                - ["cos(pi/3)", "sin(pi/6)"]
+                - {trans: [1, 2, 3, 4]}
+              ```
+        - role: user
+          content: |
+            **Target**: `2*sin(x/2)*cos(x/2) = sin(x)`
+
+            **Proof strategy**:
+            ```
+            1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+            2. Flip with sym to get the LHS = RHS direction
+
+            ```
+
+            No steps yet. Following the strategy, write step **1**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `2*sin(x/2)*cos(x/2) = sin(x)`
+
+            **Proof strategy**:
+            ```
+            1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+            2. Flip with sym to get the LHS = RHS direction
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - sin(x)
+                - 2*sin(x/2)*cos(x/2)
+              - rule: sin_add
+                vars:
+                  x: x/2
+                  y: x/2
+
+            ```
+            Write step **2**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              2:
+                - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                - {sym: 1}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(2*x) = 2*cos(x)**2 - 1`
+
+            **Proof strategy**:
+            ```
+            1. Apply cos_add with x=x, y=x to expand cos(2*x) as cos(x)*cos(x) - sin(x)*sin(x) = cos(x)^2 - sin(x)^2
+            2. Use the Pythagorean identity (sin^2(x)+cos^2(x)=1) to rewrite sin(x)^2 as 1 - cos(x)^2
+            3. Substitute that into cos(x)^2 - sin(x)^2 to get cos(x)^2 - (1 - cos(x)^2)
+            4. Simplify algebraically: cos(x)^2 - (1 - cos(x)^2) = 2*cos(x)^2 - 1, yielding cos(2*x) = 2*cos(x)^2 - 1
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(2*x)
+                - cos(x)**2 - sin(x)**2
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: x
+            2:
+              - - cos(0)
+                - cos(x)*cos(-x) - sin(x)*sin(-x)
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: -x
+
+            ```
+            Write step **3**.
+      options:
+        model: gpt-5-mini-2025-08-07
+        temperature: 1.0
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```yaml
+          3:
+            - ["1", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+            - {rule: cos_zero, vars: {}}
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 2734
+        output_tokens: 1585
+        cached_input_tokens: 2304
+        price: 0.0033350999999999997
+    log_items: []
+    model_name: gpt-5-mini-2025-08-07
+    usage_info:
+      completion_tokens: 1585
+      prompt_tokens: 2734
+      total_tokens: 4319
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 1536
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 2304
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                2:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                3:
+                  - - '1'
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_zero
+                    vars: {}
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: 'Rule application failed. Obtained: ''1'' instead of the expected right-hand side.'
+          step: 3
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            ## Task
+
+            You are proving a trigonometric equality one step at a time.
+            A proof strategy has already been provided. Follow it.
+
+            Write exactly ONE new step as a YAML code block. Do not repeat previous steps.
+            The last step of the complete proof must state the target equality.
+
+            ## Step format
+
+            ```yaml
+            <step_id>:
+              - ["<lhs>", "<rhs>"]
+              - <justification>
+            ```
+
+            Justifications can be:
+            - `{rule: <rule_name>, vars: {<var>: "<value>", ...}}` — apply a rewriting rule
+            - `{step: <prev_step_id>}` — substitute a previously obtained equality
+            - `{sym: <prev_step_id>}` — flip lhs and rhs of a previous step
+            - `{trans: [<step_id_1>, ..., <step_id_n>]}` — chain steps transitively
+
+            All expressions must use Python syntax (parsable by `sympy.sympify`). Exponentiation is `**`.
+
+            ## Available rules
+
+            ```
+            - cos_zero: `cos(0) = 1`
+            - sin_zero: `sin(0) = 0`
+            - sin_halfpi: `sin(pi/2) = 1`
+            - cos_halfpi: `cos(pi/2) = 0`
+            - sin_neg: `sin(-x) = -sin(x)`
+            - cos_neg: `cos(-x) = cos(x)`
+            - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+            - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+            ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            No steps yet. Following the strategy, write step **1**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+
+            ```
+            Write step **2**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              2:
+                - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                - {rule: cos_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+
+            ```
+            Write step **3**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              3:
+                - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                - {rule: sin_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(-pi/6)
+                - -sin(-pi/6)
+              - rule: sin_halfpi
+                vars: {}
+
+            ```
+            Write step **4**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              4:
+                - ["-sin(-pi/6)", "sin(pi/6)"]
+                - {rule: sin_neg, vars: {x: "pi/6"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/3) = sin(pi/6)`
+
+            **Proof strategy**:
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(pi/3)
+                - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: -pi/6
+            2:
+              - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                - -sin(pi/2)*sin(-pi/6)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(-pi/6)
+                - -sin(-pi/6)
+              - rule: sin_halfpi
+                vars: {}
+            4:
+              - - -sin(-pi/6)
+                - sin(pi/6)
+              - rule: sin_neg
+                vars:
+                  x: pi/6
+
+            ```
+            Write step **5**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              5:
+                - ["cos(pi/3)", "sin(pi/6)"]
+                - {trans: [1, 2, 3, 4]}
+              ```
+        - role: user
+          content: |
+            **Target**: `2*sin(x/2)*cos(x/2) = sin(x)`
+
+            **Proof strategy**:
+            ```
+            1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+            2. Flip with sym to get the LHS = RHS direction
+
+            ```
+
+            No steps yet. Following the strategy, write step **1**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+              ```
+        - role: user
+          content: |
+            **Target**: `2*sin(x/2)*cos(x/2) = sin(x)`
+
+            **Proof strategy**:
+            ```
+            1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+            2. Flip with sym to get the LHS = RHS direction
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - sin(x)
+                - 2*sin(x/2)*cos(x/2)
+              - rule: sin_add
+                vars:
+                  x: x/2
+                  y: x/2
+
+            ```
+            Write step **2**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              2:
+                - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                - {sym: 1}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(2*x) = 2*cos(x)**2 - 1`
+
+            **Proof strategy**:
+            ```
+            1. Apply cos_add with x=x, y=x to expand cos(2*x) as cos(x)*cos(x) - sin(x)*sin(x) = cos(x)^2 - sin(x)^2
+            2. Use the Pythagorean identity (sin^2(x)+cos^2(x)=1) to rewrite sin(x)^2 as 1 - cos(x)^2
+            3. Substitute that into cos(x)^2 - sin(x)^2 to get cos(x)^2 - (1 - cos(x)^2)
+            4. Simplify algebraically: cos(x)^2 - (1 - cos(x)^2) = 2*cos(x)^2 - 1, yielding cos(2*x) = 2*cos(x)^2 - 1
+
+            ```
+
+            **Steps proven so far**:
+            ```yaml
+            1:
+              - - cos(2*x)
+                - cos(x)**2 - sin(x)**2
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: x
+            2:
+              - - cos(0)
+                - cos(x)*cos(-x) - sin(x)*sin(-x)
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: -x
+
+            ```
+            Write step **3**.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```yaml
+              3:
+                - ["1", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                - {rule: cos_zero, vars: {}}
+              ```
+        - role: user
+          content: |-
+            Your step was rejected. Fix it and try again.
+
+            ```
+            Error at step 3: Rule application failed. Obtained: '1' instead of the expected right-hand side.
+            ```
+      options:
+        model: gpt-5-mini-2025-08-07
+        temperature: 1.0
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```yaml
+          3:
+            - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+            - {rule: cos_neg, vars: {x: "x"}}
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 2822
+        output_tokens: 1794
+        cached_input_tokens: 1792
+        price: 0.0038903
+    log_items: []
+    model_name: gpt-5-mini-2025-08-07
+    usage_info:
+      completion_tokens: 1794
+      prompt_tokens: 2822
+      total_tokens: 4616
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 1728
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 1792
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                2:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                3:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)*cos(x) - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null

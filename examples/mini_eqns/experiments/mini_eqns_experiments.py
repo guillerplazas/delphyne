@@ -121,3 +121,39 @@ class GuidedConfig:
             num_generated=1,
             budget=budget,
         )
+
+
+@dataclass
+class StepByStepConfig:
+    """Configuration for sketch-guided step-by-step proof experiments."""
+    bench_name: str
+    model_name: str
+    temperature: float
+    max_feedback_cycles_per_step: int
+    max_steps: int
+    seed: int
+    loop: bool = False
+    max_dollar_budget: float | None = 0.2
+    reasoning_effort: str | None = None
+
+    def instantiate(self, context: object) -> dp.RunStrategyArgs:
+        budget: dict[str, float] = {}
+        if self.max_dollar_budget is not None:
+            budget[dp.DOLLAR_PRICE] = self.max_dollar_budget
+
+        lhs, rhs = BENCHS[self.bench_name]
+
+        return dp.RunStrategyArgs(
+            strategy="prove_step_by_step",
+            args={"equality": [lhs, rhs], "max_steps": self.max_steps},
+            policy="prove_step_by_step_policy",
+            policy_args={
+                "model_name": self.model_name,
+                "temperature": self.temperature,
+                "max_feedback_cycles_per_step": self.max_feedback_cycles_per_step,
+                "loop": self.loop,
+                "reasoning_effort": self.reasoning_effort,
+            },
+            num_generated=1,
+            budget=budget,
+        )

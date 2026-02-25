@@ -1,0 +1,202 @@
+# Demonstrations for the sketch-guided step-by-step strategy
+
+- strategy: prove_step_by_step
+  args:
+    equality: ["cos(pi/3)", "sin(pi/6)"]
+  tests:
+    - run | success
+
+  queries:
+    # Phase 1: Sketch generation
+    - query: GenerateProofSketch
+      args:
+        equality: ["cos(pi/3)", "sin(pi/6)"]
+      answers:
+        - answer: |
+            ```
+            1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+            2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+            3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+            4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+            5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+            ```
+
+    # Phase 2: Step 1 (empty partial proof)
+    - query: ProposeNextStep
+      args:
+        equality: ["cos(pi/3)", "sin(pi/6)"]
+        sketch: |
+          1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+          2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+          3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+          4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+          5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+        partial_proof: {}
+        prefix: []
+      answers:
+        - answer: |
+            ```yaml
+            1:
+              - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+              - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+            ```
+
+    # Step 2
+    - query: ProposeNextStep
+      args:
+        equality: ["cos(pi/3)", "sin(pi/6)"]
+        sketch: |
+          1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+          2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+          3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+          4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+          5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+        partial_proof:
+          1:
+            - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+            - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+        prefix: []
+      answers:
+        - answer: |
+            ```yaml
+            2:
+              - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+              - {rule: cos_halfpi, vars: {}}
+            ```
+
+    # Step 3
+    - query: ProposeNextStep
+      args:
+        equality: ["cos(pi/3)", "sin(pi/6)"]
+        sketch: |
+          1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+          2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+          3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+          4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+          5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+        partial_proof:
+          1:
+            - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+            - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+          2:
+            - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+            - {rule: cos_halfpi, vars: {}}
+        prefix: []
+      answers:
+        - answer: |
+            ```yaml
+            3:
+              - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+              - {rule: sin_halfpi, vars: {}}
+            ```
+
+    # Step 4
+    - query: ProposeNextStep
+      args:
+        equality: ["cos(pi/3)", "sin(pi/6)"]
+        sketch: |
+          1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+          2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+          3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+          4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+          5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+        partial_proof:
+          1:
+            - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+            - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+          2:
+            - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+            - {rule: cos_halfpi, vars: {}}
+          3:
+            - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+            - {rule: sin_halfpi, vars: {}}
+        prefix: []
+      answers:
+        - answer: |
+            ```yaml
+            4:
+              - ["-sin(-pi/6)", "sin(pi/6)"]
+              - {rule: sin_neg, vars: {x: "pi/6"}}
+            ```
+
+    # Step 5: trans completes the proof
+    - query: ProposeNextStep
+      args:
+        equality: ["cos(pi/3)", "sin(pi/6)"]
+        sketch: |
+          1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+          2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+          3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+          4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+          5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+        partial_proof:
+          1:
+            - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+            - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+          2:
+            - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+            - {rule: cos_halfpi, vars: {}}
+          3:
+            - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+            - {rule: sin_halfpi, vars: {}}
+          4:
+            - ["-sin(-pi/6)", "sin(pi/6)"]
+            - {rule: sin_neg, vars: {x: "pi/6"}}
+        prefix: []
+      answers:
+        - answer: |
+            ```yaml
+            5:
+              - ["cos(pi/3)", "sin(pi/6)"]
+              - {trans: [1, 2, 3, 4]}
+            ```
+
+
+- strategy: prove_step_by_step
+  args:
+    equality: ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+  tests:
+    - run | success
+  queries:
+    - query: GenerateProofSketch
+      args:
+        equality: ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+      answers:
+        - answer: |
+            ```
+            1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+            2. Flip with sym to get the LHS = RHS direction
+            ```
+    - query: ProposeNextStep
+      args:
+        equality: ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+        sketch: |
+          1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+          2. Flip with sym to get the LHS = RHS direction
+        partial_proof: {}
+        prefix: []
+      answers:
+        - answer: |
+            ```yaml
+            1:
+              - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+              - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+            ```
+    - query: ProposeNextStep
+      args:
+        equality: ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+        sketch: |
+          1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+          2. Flip with sym to get the LHS = RHS direction
+        partial_proof:
+          1:
+            - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+            - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+        prefix: []
+      answers:
+        - answer: |
+            ```yaml
+            2:
+              - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+              - {sym: 1}
+            ```
