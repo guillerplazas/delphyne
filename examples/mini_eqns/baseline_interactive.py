@@ -73,6 +73,7 @@ def prove_equality_interactive_policy(
     temperature: float | None = None,
     max_feedback_cycles: int = 3,
     loop: bool = False,
+    reasoning_effort: str | None = None,
 ):
     """
     Policy for the interactive proof strategy.
@@ -82,8 +83,12 @@ def prove_equality_interactive_policy(
         temperature: Temperature for sampling
         max_feedback_cycles: Maximum number of feedback rounds
         loop: Whether to loop the search
+        reasoning_effort: Optional reasoning effort level (e.g. "low", "medium", "high")
     """
-    model = dp.standard_model(model_name)
+    options: dict[str, object] = {}
+    if reasoning_effort is not None:
+        options["reasoning_effort"] = reasoning_effort
+    model = dp.standard_model(model_name, options or None)
 
     # `interact` branches twice per feedback cycle
     sp = dfs(max_depth=2*(max_feedback_cycles+1))

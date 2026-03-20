@@ -57,6 +57,7 @@ class BaselineConfig:
     seed: int
     loop: bool = False
     max_dollar_budget: float | None = 0.2
+    reasoning_effort: str | None = None
 
     def instantiate(self, context: object) -> dp.RunStrategyArgs:
         """
@@ -77,6 +78,7 @@ class BaselineConfig:
                 "temperature": self.temperature,
                 "max_feedback_cycles": self.max_feedback_cycles,
                 "loop": self.loop,
+                "reasoning_effort": self.reasoning_effort,
             },
             num_generated=1,
             budget=budget,

@@ -1,0 +1,3534 @@
+# delphyne-command
+
+command: run_strategy
+args:
+  strategy: prove_equality_interactive
+  args:
+    equality:
+      - cos(x)**2 + sin(x)**2
+      - '1'
+  policy: prove_equality_interactive_policy
+  policy_args:
+    model_name: gpt-5.4-nano
+    temperature: 1.0
+    max_feedback_cycles: 10
+    loop: true
+    reasoning_effort: low
+  budget:
+    price: 0.2
+  cache_file: configs/dafd05f0-5afe-4928-abc8-50e85963c71e/cache.yaml
+  embeddings_cache_file: configs/dafd05f0-5afe-4928-abc8-50e85963c71e/embeddings.cache.h5
+  cache_mode: create
+outcome:
+  diagnostics: []
+  result:
+    success: true
+    values:
+      - 1:
+          - - cos(x + -x)
+            - '1'
+          - rule: cos_zero
+        2:
+          - - cos(x + -x)
+            - cos(x)*cos(-x) - sin(x)*sin(-x)
+          - rule: cos_add
+            vars:
+              x: x
+              y: -x
+        3:
+          - - cos(x)*cos(-x) - sin(x)*sin(-x)
+            - cos(x)*cos(x) - sin(x)*sin(-x)
+          - rule: cos_neg
+            vars:
+              x: x
+        4:
+          - - cos(x)*cos(x) - sin(x)*sin(-x)
+            - cos(x)*cos(x) - sin(x)*(-sin(x))
+          - rule: sin_neg
+            vars:
+              x: x
+        5:
+          - - cos(x + -x)
+            - cos(x)**2 + sin(x)**2
+          - trans:
+              - 2
+              - 3
+              - 4
+        6:
+          - - cos(x)**2 + sin(x)**2
+            - cos(x + -x)
+          - sym: 5
+        7:
+          - - cos(x)**2 + sin(x)**2
+            - '1'
+          - trans:
+              - 6
+              - 1
+    spent_budget:
+      num_requests: 7
+      num_completions: 7
+      input_tokens: 14250
+      output_tokens: 6982
+      cached_input_tokens: 10752
+      price: 0.07553649999999999
+    success_nodes:
+      - 13
+    raw_trace:
+      nodes:
+        1: nested($0)
+        2: child(%1, $1{@5})
+        3: nested($2)
+        4: child(%3, $3{@6})
+        5: child(%2, $2{%4})
+        6: child(%5, $4{@7})
+        7: nested($5)
+        8: child(%7, $6{@8})
+        9: child(%6, $5{%8})
+        10: child(%9, $7{@9})
+        11: nested($8)
+        12: child(%11, $9{@10})
+        13: child(%10, $8{%12})
+      spaces:
+        0: main
+        1: local(%1, cands)
+        2: local(%2, cands)
+        3: local(%3, query)
+        4: local(%5, cands)
+        5: local(%6, cands)
+        6: local(%7, query)
+        7: local(%9, cands)
+        8: local(%10, cands)
+        9: local(%11, query)
+      answers:
+        1:
+          space: 1
+          answer:
+            mode: null
+            content: |-
+              ```yaml
+              steps:
+                1:
+                  - ["cos(x + (-x))", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                  - {rule: cos_add, vars: {x: "x", y: "-x"}}
+                2:
+                  - ["cos(x + (-x))", "1"]
+                  - {rule: cos_zero, vars: {}}
+                3:
+                  - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "1"]
+                  - {trans: [1, 2]}
+                4:
+                  - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                  - {rule: cos_neg, vars: {x: "x"}}
+                5:
+                  - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)**2 + sin(x)**2"]
+                  - {rule: sin_neg, vars: {x: "x"}}
+                6:
+                  - ["cos(x)**2 + sin(x)**2", "1"]
+                  - {step: 3}
+              ```
+        2:
+          space: 1
+          answer:
+            mode: null
+            content: |
+              Informal idea: use the cosine addition formula on the angle \(x+(-x)=0\):
+              \[
+              \cos(x+(-x))=\cos x\cos(-x)-\sin x\sin(-x).
+              \]
+              Then use \(\cos(-x)=\cos x\) and \(\sin(-x)=-\sin x\), and finally use \(\cos(0)=1\).
+
+              ```yaml
+              steps:
+                1:
+                  - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                  - {rule: cos_add, vars: {x: "x", y: "-x"}}
+                2:
+                  - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                  - {rule: cos_neg, vars: {}}
+                3:
+                  - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]
+                  - {rule: sin_neg, vars: {x: "x"}}
+                4:
+                  - ["cos(x)*cos(x) - sin(x)*(-sin(x))", "cos(x)**2 + sin(x)**2"]
+                  - {trans: [2, 3]}
+                5:
+                  - ["cos(x + -x)", "1"]
+                  - {rule: cos_zero, vars: {}}
+                6:
+                  - ["cos(x)**2 + sin(x)**2", "1"]
+                  - {trans: [1, 2, 3, 4, 5]}
+              ```
+        3:
+          space: 1
+          answer:
+            mode: null
+            content: "I can’t produce a valid machine-checkable proof of  \n`cos(x)**2 + sin(x)**2 = 1`\
+              \  \nusing **only** the provided rewriting rules.\n\nThose rules include:\n- angle addition\
+              \ formulas (`cos_add`, `sin_add`)\n- parity (`sin_neg`, `cos_neg`)\n- special values at\
+              \ `0` and `pi/2`\n\nBut none of them is strong enough to derive the Pythagorean identity\
+              \ `cos^2(x)+sin^2(x)=1` without additional axioms/rules (e.g., a direct Pythagorean identity,\
+              \ or the cofunction identities like `sin(pi/2 - x)=cos(x)`).\n\nIf you can add one extra\
+              \ permitted rule/axiom (common options: `sin(pi/2 - x)=cos(x)` / `cos(pi/2 - x)=sin(x)`\
+              \ or directly `cos(x)**2+sin(x)**2=1`), I can immediately build a formal proof in the required\
+              \ YAML format."
+        4:
+          space: 1
+          answer:
+            mode: null
+            content: "I can’t produce a valid machine-checkable proof of  \n`cos(x)**2 + sin(x)**2 = 1`\
+              \  \nwith the **given** rule set.\n\nThe provided axioms/rules only include:\n- special\
+              \ values at `0`, `pi/2`,\n- negation rules for `sin(-x)`, `cos(-x)`,\n- angle addition formulas\
+              \ for `sin(x+y)` and `cos(x+y)`.\n\nNone of these allow deriving the Pythagorean identity\
+              \ `cos(x)^2 + sin(x)^2 = 1` for a general symbol `x` without an additional axiom (or a rule)\
+              \ establishing that identity.\n\nIf you can add one more allowed rule/axiom such as `cos^2(x)+sin^2(x)=1`\
+              \ (or anything equivalent), I can then formalize the proof in the required YAML format."
+        5:
+          space: 1
+          answer:
+            mode: null
+            content: |-
+              ```yaml
+              1:
+                - ["cos(x + -x)", "1"]
+                - {rule: cos_zero, vars: {}}
+              2:
+                - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                - {rule: cos_add, vars: {x: "x", y: "-x"}}
+              3:
+                - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                - {rule: cos_neg, vars: {x: "x"}}
+              4:
+                - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]
+                - {rule: sin_neg, vars: {x: "x"}}
+              5:
+                - ["cos(x)**2 + sin(x)**2", "1"]
+                - {trans: [2, 3, 4, 1]}
+              ```
+        6:
+          space: 3
+          answer:
+            mode: null
+            content: |
+              feedback: 'Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)'''
+              step: 5
+        7:
+          space: 4
+          answer:
+            mode: null
+            content: |-
+              ```yaml
+              1:
+                - ["cos(x + -x)", "1"]
+                - {rule: cos_zero, vars: {}}
+              2:
+                - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                - {rule: cos_add, vars: {x: "x", y: "-x"}}
+              3:
+                - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                - {rule: cos_neg, vars: {x: "x"}}
+              4:
+                - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]
+                - {rule: sin_neg, vars: {x: "x"}}
+              5:
+                - ["cos(x + -x)", "cos(x)**2 + sin(x)**2"]
+                - {trans: [2, 3, 4]}
+              6:
+                - ["cos(x)**2 + sin(x)**2", "1"]
+                - {trans: [5, 1]}
+              ```
+        8:
+          space: 6
+          answer:
+            mode: null
+            content: |
+              feedback: 'Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)'''
+              step: 6
+        9:
+          space: 7
+          answer:
+            mode: null
+            content: |-
+              ```yaml
+              1:
+                - ["cos(x + -x)", "1"]
+                - {rule: cos_zero, vars: {}}
+
+              2:
+                - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                - {rule: cos_add, vars: {x: "x", y: "-x"}}
+
+              3:
+                - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                - {rule: cos_neg, vars: {x: "x"}}
+
+              4:
+                - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]
+                - {rule: sin_neg, vars: {x: "x"}}
+
+              5:
+                - ["cos(x + -x)", "cos(x)**2 + sin(x)**2"]
+                - {trans: [2, 3, 4]}
+
+              6:
+                - ["cos(x)**2 + sin(x)**2", "cos(x + -x)"]
+                - {sym: 5}
+
+              7:
+                - ["cos(x)**2 + sin(x)**2", "1"]
+                - {trans: [6, 1]}
+              ```
+        10:
+          space: 9
+          answer:
+            mode: null
+            content: |
+              null
+              ...
+    log:
+      - message: llm_request
+        level: info
+        message_id: 0
+        time: 2026-03-20 13:43:10.931959
+        space: 1
+        metadata:
+          query: ProveEqualityInteractive
+          request:
+            chat:
+              - role: system
+                content: |-
+                  ## Task Description
+
+                  The goal is to produce machine-checkable proofs of simple trigonometric equalities. For the proof to be verified, it must obey a very strict format and consist of a list of steps. Each step states an equality and is attached a justification for how the equality was obtained, which can be either:
+
+                  - Applying a predefined rewriting rule (see list below): `{rule: <rule_name>, vars: {<var_1>: "<value_1>", ..., <var_n>: "value_n"}}`.
+                  - Substituting a previously obtained equality: `{step: {prev_step_id}}`.
+                  - Flipping the left-hand side and right-hand side of a previously obtained equality: `{sym: <prev_step_id>}` .
+                  - Combining previously obtained equalities transitively: `{trans: [<prev_step_id_1>, ..., <prev_step_id_n>]}`.
+
+                  The last step of the proof must feature the target equality that you were tasked to prove.
+
+                  Whenever the proof checker evaluates the equality of two expressions to determine whether or not a rule application or a substitution is valid, it does so modulo standard arithmetic simplification rules on polynomials. Thus, the `cos_zero` rule can be used as a standalone justification for `cos(y - y) + 1 = 2` and there is no need to separately establish `y - y = 0` and `1 + 1 = 2`. However, **no** fact about trigonometry should be ever taken for granted.
+
+                  You should organize your answer in the following way. Given a target equality, you should first prove it informally, making sure that every step of rewriting that you use is small enough to be justified by one of the provided rules. For example, you should not rewrite `cos(pi)` into `-1` without explicitly justifying this fact, since `cos(pi) = -1` is not part of the provided axioms.
+
+                  Once you've done that, you should end your answer with a triple-quoted code block containing a valid YAML object that describes a machine-checkable proof formalizing your former reasoning. All expressions must be written as strings using Python syntax (and thus parsable using `sympy.sympyfy`). In particular, exponentiation is written `**`.
+
+                  **Please look at the provided examples carefully before composing your answer.**
+
+                  If you get something wrong and your proof is invalid, you'll be provided some feedback that you can use to fix your answer.
+
+                  ## List of allowed rewriting rules
+
+                  ```
+                  - cos_zero: `cos(0) = 1`
+                  - sin_zero: `sin(0) = 0`
+                  - sin_halfpi: `sin(pi/2) = 1`
+                  - cos_halfpi: `cos(pi/2) = 0`
+                  - sin_neg: `sin(-x) = -sin(x)`
+                  - cos_neg: `cos(-x) = cos(x)`
+                  - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+                  - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+                  ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    The equality can be derived as follows:
+                    ```
+                    cos(pi/3)
+                    = cos(pi/2-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    However, the second step uses property `cos(pi/2-x) = sin(x)`, which is not part of the allowed set of rules. Thus, we provide a longer derivation that uses `cos_add`.
+
+                    ```
+                    cos(pi/2-pi/6)
+                    = cos(pi/2+(-pi/6))
+                    = cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                    = -sin(-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    The second step uses that `cos(pi/2) = 0` and `sin(pi/2)` = 1, which we can get via the `sin_halfpi` and `cos_halfpi` rules. The last step uses `sin_neg`, so we should be done. Let's formalize this reasoning as a proof.
+
+                    ```yaml
+                    # We start establishing `cos(pi/2-pi/6) = sin(pi/6)`
+                    1:
+                      - ["cos(pi/2-pi/6)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/2-pi/6)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+
+                    # We establish our main result.
+                    # Step 5 applies directly since "cos(pi/3)" and "cos(pi/2-pi/6)" are treated as identical by the rule matcher, which performs simple simplification (as long as the required simplification does not require trigonometry).
+                    6:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {step: 5}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    Let me just propose a simple proof:
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    ```
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  {'error': None, 'feedback': "Error at step 1: Rule application failed. Obtained: '0' instead of the expected right-hand side."}
+                  ```
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    I see the error. The `cos_halfpi` rule says `cos(pi/2) = 0`, but I'm trying to prove `cos(pi/3) = sin(pi/6)`. Let me fix this by using the correct approach.
+
+                    Since `pi/3 = pi/2 - pi/6`, I can rewrite `cos(pi/3)` as `cos(pi/2 - pi/6)` and use the angle addition formula.
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `2*sin(x/2)*cos(x/2) = sin(x)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |-
+                    It is easier to start with the right-hand side here:
+
+                    ```
+                    sin(x)
+                    = sin(x/2+x/2)
+                    = sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                    = 2*sin(x/2)*cos(x/2)
+                    ```
+
+                    The first and last steps are just elementary simplifications so the only real rule to apply here is `sin_add`.
+
+                    ```yaml
+                    1:
+                      - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                      - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+                    2:
+                      - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                      - {sym: 1}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(x)**2 + sin(x)**2 = 1`.'
+            options:
+              temperature: 1.0
+      - message: llm_response
+        level: info
+        message_id: 1
+        related:
+          - 0
+        time: 2026-03-20 13:43:19.900519
+        space: 1
+        metadata:
+          response:
+            outputs:
+              - content: |-
+                  ```yaml
+                  steps:
+                    1:
+                      - ["cos(x + (-x))", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                      - {rule: cos_add, vars: {x: "x", y: "-x"}}
+                    2:
+                      - ["cos(x + (-x))", "1"]
+                      - {rule: cos_zero, vars: {}}
+                    3:
+                      - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "1"]
+                      - {trans: [1, 2]}
+                    4:
+                      - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                      - {rule: cos_neg, vars: {x: "x"}}
+                    5:
+                      - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)**2 + sin(x)**2"]
+                      - {rule: sin_neg, vars: {x: "x"}}
+                    6:
+                      - ["cos(x)**2 + sin(x)**2", "1"]
+                      - {step: 3}
+                  ```
+                tool_calls: []
+            budget:
+              values:
+                num_requests: 1
+                num_completions: 1
+                input_tokens: 1911
+                output_tokens: 1602
+                cached_input_tokens: 1792
+                price: 0.01639275
+            log_items: []
+            model_name: gpt-5.4-nano-2026-03-17
+            usage_info:
+              completion_tokens: 1602
+              prompt_tokens: 1911
+              total_tokens: 3513
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 1337
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+          usage:
+            model: gpt-5.4-nano-2026-03-17
+            usage:
+              completion_tokens: 1602
+              prompt_tokens: 1911
+              total_tokens: 3513
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 1337
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+      - message: parse_error
+        level: info
+        message_id: 2
+        time: 2026-03-20 13:43:19.902982
+        space: 1
+        metadata:
+          error:
+            label: parse_error
+            description: |-
+              2 validation errors for dict[int,tuple[tuple[str, str], union[Sym,Trans,Rule,RewritePrev]]]
+              steps.[key]
+                Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='steps', input_type=str]
+                  For further information visit https://errors.pydantic.dev/2.11/v/int_parsing
+              steps
+                Input should be a valid tuple [type=tuple_type, input_value={1: [['cos(x + (-x))', 'c...*2', '1'], {'step': 3}]}, input_type=dict]
+                  For further information visit https://errors.pydantic.dev/2.11/v/tuple_type
+            meta: null
+      - message: llm_request
+        level: info
+        message_id: 3
+        time: 2026-03-20 13:43:19.907907
+        space: 1
+        metadata:
+          query: ProveEqualityInteractive
+          request:
+            chat:
+              - role: system
+                content: |-
+                  ## Task Description
+
+                  The goal is to produce machine-checkable proofs of simple trigonometric equalities. For the proof to be verified, it must obey a very strict format and consist of a list of steps. Each step states an equality and is attached a justification for how the equality was obtained, which can be either:
+
+                  - Applying a predefined rewriting rule (see list below): `{rule: <rule_name>, vars: {<var_1>: "<value_1>", ..., <var_n>: "value_n"}}`.
+                  - Substituting a previously obtained equality: `{step: {prev_step_id}}`.
+                  - Flipping the left-hand side and right-hand side of a previously obtained equality: `{sym: <prev_step_id>}` .
+                  - Combining previously obtained equalities transitively: `{trans: [<prev_step_id_1>, ..., <prev_step_id_n>]}`.
+
+                  The last step of the proof must feature the target equality that you were tasked to prove.
+
+                  Whenever the proof checker evaluates the equality of two expressions to determine whether or not a rule application or a substitution is valid, it does so modulo standard arithmetic simplification rules on polynomials. Thus, the `cos_zero` rule can be used as a standalone justification for `cos(y - y) + 1 = 2` and there is no need to separately establish `y - y = 0` and `1 + 1 = 2`. However, **no** fact about trigonometry should be ever taken for granted.
+
+                  You should organize your answer in the following way. Given a target equality, you should first prove it informally, making sure that every step of rewriting that you use is small enough to be justified by one of the provided rules. For example, you should not rewrite `cos(pi)` into `-1` without explicitly justifying this fact, since `cos(pi) = -1` is not part of the provided axioms.
+
+                  Once you've done that, you should end your answer with a triple-quoted code block containing a valid YAML object that describes a machine-checkable proof formalizing your former reasoning. All expressions must be written as strings using Python syntax (and thus parsable using `sympy.sympyfy`). In particular, exponentiation is written `**`.
+
+                  **Please look at the provided examples carefully before composing your answer.**
+
+                  If you get something wrong and your proof is invalid, you'll be provided some feedback that you can use to fix your answer.
+
+                  ## List of allowed rewriting rules
+
+                  ```
+                  - cos_zero: `cos(0) = 1`
+                  - sin_zero: `sin(0) = 0`
+                  - sin_halfpi: `sin(pi/2) = 1`
+                  - cos_halfpi: `cos(pi/2) = 0`
+                  - sin_neg: `sin(-x) = -sin(x)`
+                  - cos_neg: `cos(-x) = cos(x)`
+                  - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+                  - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+                  ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    The equality can be derived as follows:
+                    ```
+                    cos(pi/3)
+                    = cos(pi/2-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    However, the second step uses property `cos(pi/2-x) = sin(x)`, which is not part of the allowed set of rules. Thus, we provide a longer derivation that uses `cos_add`.
+
+                    ```
+                    cos(pi/2-pi/6)
+                    = cos(pi/2+(-pi/6))
+                    = cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                    = -sin(-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    The second step uses that `cos(pi/2) = 0` and `sin(pi/2)` = 1, which we can get via the `sin_halfpi` and `cos_halfpi` rules. The last step uses `sin_neg`, so we should be done. Let's formalize this reasoning as a proof.
+
+                    ```yaml
+                    # We start establishing `cos(pi/2-pi/6) = sin(pi/6)`
+                    1:
+                      - ["cos(pi/2-pi/6)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/2-pi/6)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+
+                    # We establish our main result.
+                    # Step 5 applies directly since "cos(pi/3)" and "cos(pi/2-pi/6)" are treated as identical by the rule matcher, which performs simple simplification (as long as the required simplification does not require trigonometry).
+                    6:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {step: 5}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    Let me just propose a simple proof:
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    ```
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  {'error': None, 'feedback': "Error at step 1: Rule application failed. Obtained: '0' instead of the expected right-hand side."}
+                  ```
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    I see the error. The `cos_halfpi` rule says `cos(pi/2) = 0`, but I'm trying to prove `cos(pi/3) = sin(pi/6)`. Let me fix this by using the correct approach.
+
+                    Since `pi/3 = pi/2 - pi/6`, I can rewrite `cos(pi/3)` as `cos(pi/2 - pi/6)` and use the angle addition formula.
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `2*sin(x/2)*cos(x/2) = sin(x)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |-
+                    It is easier to start with the right-hand side here:
+
+                    ```
+                    sin(x)
+                    = sin(x/2+x/2)
+                    = sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                    = 2*sin(x/2)*cos(x/2)
+                    ```
+
+                    The first and last steps are just elementary simplifications so the only real rule to apply here is `sin_add`.
+
+                    ```yaml
+                    1:
+                      - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                      - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+                    2:
+                      - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                      - {sym: 1}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(x)**2 + sin(x)**2 = 1`.'
+            options:
+              temperature: 1.0
+      - message: llm_response
+        level: info
+        message_id: 4
+        related:
+          - 3
+        time: 2026-03-20 13:43:25.691692
+        space: 1
+        metadata:
+          response:
+            outputs:
+              - content: |
+                  Informal idea: use the cosine addition formula on the angle \(x+(-x)=0\):
+                  \[
+                  \cos(x+(-x))=\cos x\cos(-x)-\sin x\sin(-x).
+                  \]
+                  Then use \(\cos(-x)=\cos x\) and \(\sin(-x)=-\sin x\), and finally use \(\cos(0)=1\).
+
+                  ```yaml
+                  steps:
+                    1:
+                      - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                      - {rule: cos_add, vars: {x: "x", y: "-x"}}
+                    2:
+                      - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                      - {rule: cos_neg, vars: {}}
+                    3:
+                      - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]
+                      - {rule: sin_neg, vars: {x: "x"}}
+                    4:
+                      - ["cos(x)*cos(x) - sin(x)*(-sin(x))", "cos(x)**2 + sin(x)**2"]
+                      - {trans: [2, 3]}
+                    5:
+                      - ["cos(x + -x)", "1"]
+                      - {rule: cos_zero, vars: {}}
+                    6:
+                      - ["cos(x)**2 + sin(x)**2", "1"]
+                      - {trans: [1, 2, 3, 4, 5]}
+                  ```
+                tool_calls: []
+            budget:
+              values:
+                num_requests: 1
+                num_completions: 1
+                input_tokens: 1911
+                output_tokens: 1156
+                cached_input_tokens: 0
+                price: 0.01394875
+            log_items: []
+            model_name: gpt-5.4-nano-2026-03-17
+            usage_info:
+              completion_tokens: 1156
+              prompt_tokens: 1911
+              total_tokens: 3067
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 786
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 0
+          usage:
+            model: gpt-5.4-nano-2026-03-17
+            usage:
+              completion_tokens: 1156
+              prompt_tokens: 1911
+              total_tokens: 3067
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 786
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 0
+      - message: parse_error
+        level: info
+        message_id: 5
+        time: 2026-03-20 13:43:25.694057
+        space: 1
+        metadata:
+          error:
+            label: parse_error
+            description: |-
+              2 validation errors for dict[int,tuple[tuple[str, str], union[Sym,Trans,Rule,RewritePrev]]]
+              steps.[key]
+                Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='steps', input_type=str]
+                  For further information visit https://errors.pydantic.dev/2.11/v/int_parsing
+              steps
+                Input should be a valid tuple [type=tuple_type, input_value={1: [['cos(x + -x)', 'cos...ans': [1, 2, 3, 4, 5]}]}, input_type=dict]
+                  For further information visit https://errors.pydantic.dev/2.11/v/tuple_type
+            meta: null
+      - message: llm_request
+        level: info
+        message_id: 6
+        time: 2026-03-20 13:43:25.698832
+        space: 1
+        metadata:
+          query: ProveEqualityInteractive
+          request:
+            chat:
+              - role: system
+                content: |-
+                  ## Task Description
+
+                  The goal is to produce machine-checkable proofs of simple trigonometric equalities. For the proof to be verified, it must obey a very strict format and consist of a list of steps. Each step states an equality and is attached a justification for how the equality was obtained, which can be either:
+
+                  - Applying a predefined rewriting rule (see list below): `{rule: <rule_name>, vars: {<var_1>: "<value_1>", ..., <var_n>: "value_n"}}`.
+                  - Substituting a previously obtained equality: `{step: {prev_step_id}}`.
+                  - Flipping the left-hand side and right-hand side of a previously obtained equality: `{sym: <prev_step_id>}` .
+                  - Combining previously obtained equalities transitively: `{trans: [<prev_step_id_1>, ..., <prev_step_id_n>]}`.
+
+                  The last step of the proof must feature the target equality that you were tasked to prove.
+
+                  Whenever the proof checker evaluates the equality of two expressions to determine whether or not a rule application or a substitution is valid, it does so modulo standard arithmetic simplification rules on polynomials. Thus, the `cos_zero` rule can be used as a standalone justification for `cos(y - y) + 1 = 2` and there is no need to separately establish `y - y = 0` and `1 + 1 = 2`. However, **no** fact about trigonometry should be ever taken for granted.
+
+                  You should organize your answer in the following way. Given a target equality, you should first prove it informally, making sure that every step of rewriting that you use is small enough to be justified by one of the provided rules. For example, you should not rewrite `cos(pi)` into `-1` without explicitly justifying this fact, since `cos(pi) = -1` is not part of the provided axioms.
+
+                  Once you've done that, you should end your answer with a triple-quoted code block containing a valid YAML object that describes a machine-checkable proof formalizing your former reasoning. All expressions must be written as strings using Python syntax (and thus parsable using `sympy.sympyfy`). In particular, exponentiation is written `**`.
+
+                  **Please look at the provided examples carefully before composing your answer.**
+
+                  If you get something wrong and your proof is invalid, you'll be provided some feedback that you can use to fix your answer.
+
+                  ## List of allowed rewriting rules
+
+                  ```
+                  - cos_zero: `cos(0) = 1`
+                  - sin_zero: `sin(0) = 0`
+                  - sin_halfpi: `sin(pi/2) = 1`
+                  - cos_halfpi: `cos(pi/2) = 0`
+                  - sin_neg: `sin(-x) = -sin(x)`
+                  - cos_neg: `cos(-x) = cos(x)`
+                  - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+                  - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+                  ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    The equality can be derived as follows:
+                    ```
+                    cos(pi/3)
+                    = cos(pi/2-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    However, the second step uses property `cos(pi/2-x) = sin(x)`, which is not part of the allowed set of rules. Thus, we provide a longer derivation that uses `cos_add`.
+
+                    ```
+                    cos(pi/2-pi/6)
+                    = cos(pi/2+(-pi/6))
+                    = cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                    = -sin(-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    The second step uses that `cos(pi/2) = 0` and `sin(pi/2)` = 1, which we can get via the `sin_halfpi` and `cos_halfpi` rules. The last step uses `sin_neg`, so we should be done. Let's formalize this reasoning as a proof.
+
+                    ```yaml
+                    # We start establishing `cos(pi/2-pi/6) = sin(pi/6)`
+                    1:
+                      - ["cos(pi/2-pi/6)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/2-pi/6)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+
+                    # We establish our main result.
+                    # Step 5 applies directly since "cos(pi/3)" and "cos(pi/2-pi/6)" are treated as identical by the rule matcher, which performs simple simplification (as long as the required simplification does not require trigonometry).
+                    6:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {step: 5}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    Let me just propose a simple proof:
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    ```
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  {'error': None, 'feedback': "Error at step 1: Rule application failed. Obtained: '0' instead of the expected right-hand side."}
+                  ```
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    I see the error. The `cos_halfpi` rule says `cos(pi/2) = 0`, but I'm trying to prove `cos(pi/3) = sin(pi/6)`. Let me fix this by using the correct approach.
+
+                    Since `pi/3 = pi/2 - pi/6`, I can rewrite `cos(pi/3)` as `cos(pi/2 - pi/6)` and use the angle addition formula.
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `2*sin(x/2)*cos(x/2) = sin(x)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |-
+                    It is easier to start with the right-hand side here:
+
+                    ```
+                    sin(x)
+                    = sin(x/2+x/2)
+                    = sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                    = 2*sin(x/2)*cos(x/2)
+                    ```
+
+                    The first and last steps are just elementary simplifications so the only real rule to apply here is `sin_add`.
+
+                    ```yaml
+                    1:
+                      - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                      - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+                    2:
+                      - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                      - {sym: 1}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(x)**2 + sin(x)**2 = 1`.'
+            options:
+              temperature: 1.0
+      - message: llm_response
+        level: info
+        message_id: 7
+        related:
+          - 6
+        time: 2026-03-20 13:43:29.882441
+        space: 1
+        metadata:
+          response:
+            outputs:
+              - content: "I can’t produce a valid machine-checkable proof of  \n`cos(x)**2 + sin(x)**2\
+                  \ = 1`  \nusing **only** the provided rewriting rules.\n\nThose rules include:\n- angle\
+                  \ addition formulas (`cos_add`, `sin_add`)\n- parity (`sin_neg`, `cos_neg`)\n- special\
+                  \ values at `0` and `pi/2`\n\nBut none of them is strong enough to derive the Pythagorean\
+                  \ identity `cos^2(x)+sin^2(x)=1` without additional axioms/rules (e.g., a direct Pythagorean\
+                  \ identity, or the cofunction identities like `sin(pi/2 - x)=cos(x)`).\n\nIf you can\
+                  \ add one extra permitted rule/axiom (common options: `sin(pi/2 - x)=cos(x)` / `cos(pi/2\
+                  \ - x)=sin(x)` or directly `cos(x)**2+sin(x)**2=1`), I can immediately build a formal\
+                  \ proof in the required YAML format."
+                tool_calls: []
+            budget:
+              values:
+                num_requests: 1
+                num_completions: 1
+                input_tokens: 1911
+                output_tokens: 788
+                cached_input_tokens: 1792
+                price: 0.00825275
+            log_items: []
+            model_name: gpt-5.4-nano-2026-03-17
+            usage_info:
+              completion_tokens: 788
+              prompt_tokens: 1911
+              total_tokens: 2699
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 573
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+          usage:
+            model: gpt-5.4-nano-2026-03-17
+            usage:
+              completion_tokens: 788
+              prompt_tokens: 1911
+              total_tokens: 2699
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 573
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+      - message: parse_error
+        level: info
+        message_id: 8
+        time: 2026-03-20 13:43:29.882639
+        space: 1
+        metadata:
+          error:
+            label: parse_error
+            description: No code block found.
+            meta:
+              source: "I can’t produce a valid machine-checkable proof of  \n`cos(x)**2 + sin(x)**2 =\
+                \ 1`  \nusing **only** the provided rewriting rules.\n\nThose rules include:\n- angle\
+                \ addition formulas (`cos_add`, `sin_add`)\n- parity (`sin_neg`, `cos_neg`)\n- special\
+                \ values at `0` and `pi/2`\n\nBut none of them is strong enough to derive the Pythagorean\
+                \ identity `cos^2(x)+sin^2(x)=1` without additional axioms/rules (e.g., a direct Pythagorean\
+                \ identity, or the cofunction identities like `sin(pi/2 - x)=cos(x)`).\n\nIf you can add\
+                \ one extra permitted rule/axiom (common options: `sin(pi/2 - x)=cos(x)` / `cos(pi/2 -\
+                \ x)=sin(x)` or directly `cos(x)**2+sin(x)**2=1`), I can immediately build a formal proof\
+                \ in the required YAML format."
+      - message: llm_request
+        level: info
+        message_id: 9
+        time: 2026-03-20 13:43:29.887120
+        space: 1
+        metadata:
+          query: ProveEqualityInteractive
+          request:
+            chat:
+              - role: system
+                content: |-
+                  ## Task Description
+
+                  The goal is to produce machine-checkable proofs of simple trigonometric equalities. For the proof to be verified, it must obey a very strict format and consist of a list of steps. Each step states an equality and is attached a justification for how the equality was obtained, which can be either:
+
+                  - Applying a predefined rewriting rule (see list below): `{rule: <rule_name>, vars: {<var_1>: "<value_1>", ..., <var_n>: "value_n"}}`.
+                  - Substituting a previously obtained equality: `{step: {prev_step_id}}`.
+                  - Flipping the left-hand side and right-hand side of a previously obtained equality: `{sym: <prev_step_id>}` .
+                  - Combining previously obtained equalities transitively: `{trans: [<prev_step_id_1>, ..., <prev_step_id_n>]}`.
+
+                  The last step of the proof must feature the target equality that you were tasked to prove.
+
+                  Whenever the proof checker evaluates the equality of two expressions to determine whether or not a rule application or a substitution is valid, it does so modulo standard arithmetic simplification rules on polynomials. Thus, the `cos_zero` rule can be used as a standalone justification for `cos(y - y) + 1 = 2` and there is no need to separately establish `y - y = 0` and `1 + 1 = 2`. However, **no** fact about trigonometry should be ever taken for granted.
+
+                  You should organize your answer in the following way. Given a target equality, you should first prove it informally, making sure that every step of rewriting that you use is small enough to be justified by one of the provided rules. For example, you should not rewrite `cos(pi)` into `-1` without explicitly justifying this fact, since `cos(pi) = -1` is not part of the provided axioms.
+
+                  Once you've done that, you should end your answer with a triple-quoted code block containing a valid YAML object that describes a machine-checkable proof formalizing your former reasoning. All expressions must be written as strings using Python syntax (and thus parsable using `sympy.sympyfy`). In particular, exponentiation is written `**`.
+
+                  **Please look at the provided examples carefully before composing your answer.**
+
+                  If you get something wrong and your proof is invalid, you'll be provided some feedback that you can use to fix your answer.
+
+                  ## List of allowed rewriting rules
+
+                  ```
+                  - cos_zero: `cos(0) = 1`
+                  - sin_zero: `sin(0) = 0`
+                  - sin_halfpi: `sin(pi/2) = 1`
+                  - cos_halfpi: `cos(pi/2) = 0`
+                  - sin_neg: `sin(-x) = -sin(x)`
+                  - cos_neg: `cos(-x) = cos(x)`
+                  - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+                  - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+                  ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    The equality can be derived as follows:
+                    ```
+                    cos(pi/3)
+                    = cos(pi/2-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    However, the second step uses property `cos(pi/2-x) = sin(x)`, which is not part of the allowed set of rules. Thus, we provide a longer derivation that uses `cos_add`.
+
+                    ```
+                    cos(pi/2-pi/6)
+                    = cos(pi/2+(-pi/6))
+                    = cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                    = -sin(-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    The second step uses that `cos(pi/2) = 0` and `sin(pi/2)` = 1, which we can get via the `sin_halfpi` and `cos_halfpi` rules. The last step uses `sin_neg`, so we should be done. Let's formalize this reasoning as a proof.
+
+                    ```yaml
+                    # We start establishing `cos(pi/2-pi/6) = sin(pi/6)`
+                    1:
+                      - ["cos(pi/2-pi/6)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/2-pi/6)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+
+                    # We establish our main result.
+                    # Step 5 applies directly since "cos(pi/3)" and "cos(pi/2-pi/6)" are treated as identical by the rule matcher, which performs simple simplification (as long as the required simplification does not require trigonometry).
+                    6:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {step: 5}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    Let me just propose a simple proof:
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    ```
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  {'error': None, 'feedback': "Error at step 1: Rule application failed. Obtained: '0' instead of the expected right-hand side."}
+                  ```
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    I see the error. The `cos_halfpi` rule says `cos(pi/2) = 0`, but I'm trying to prove `cos(pi/3) = sin(pi/6)`. Let me fix this by using the correct approach.
+
+                    Since `pi/3 = pi/2 - pi/6`, I can rewrite `cos(pi/3)` as `cos(pi/2 - pi/6)` and use the angle addition formula.
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `2*sin(x/2)*cos(x/2) = sin(x)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |-
+                    It is easier to start with the right-hand side here:
+
+                    ```
+                    sin(x)
+                    = sin(x/2+x/2)
+                    = sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                    = 2*sin(x/2)*cos(x/2)
+                    ```
+
+                    The first and last steps are just elementary simplifications so the only real rule to apply here is `sin_add`.
+
+                    ```yaml
+                    1:
+                      - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                      - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+                    2:
+                      - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                      - {sym: 1}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(x)**2 + sin(x)**2 = 1`.'
+            options:
+              temperature: 1.0
+      - message: llm_response
+        level: info
+        message_id: 10
+        related:
+          - 9
+        time: 2026-03-20 13:43:32.516141
+        space: 1
+        metadata:
+          response:
+            outputs:
+              - content: "I can’t produce a valid machine-checkable proof of  \n`cos(x)**2 + sin(x)**2\
+                  \ = 1`  \nwith the **given** rule set.\n\nThe provided axioms/rules only include:\n\
+                  - special values at `0`, `pi/2`,\n- negation rules for `sin(-x)`, `cos(-x)`,\n- angle\
+                  \ addition formulas for `sin(x+y)` and `cos(x+y)`.\n\nNone of these allow deriving the\
+                  \ Pythagorean identity `cos(x)^2 + sin(x)^2 = 1` for a general symbol `x` without an\
+                  \ additional axiom (or a rule) establishing that identity.\n\nIf you can add one more\
+                  \ allowed rule/axiom such as `cos^2(x)+sin^2(x)=1` (or anything equivalent), I can then\
+                  \ formalize the proof in the required YAML format."
+                tool_calls: []
+            budget:
+              values:
+                num_requests: 1
+                num_completions: 1
+                input_tokens: 1911
+                output_tokens: 319
+                cached_input_tokens: 1792
+                price: 0.0035627499999999995
+            log_items: []
+            model_name: gpt-5.4-nano-2026-03-17
+            usage_info:
+              completion_tokens: 319
+              prompt_tokens: 1911
+              total_tokens: 2230
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 130
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+          usage:
+            model: gpt-5.4-nano-2026-03-17
+            usage:
+              completion_tokens: 319
+              prompt_tokens: 1911
+              total_tokens: 2230
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 130
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+      - message: parse_error
+        level: info
+        message_id: 11
+        time: 2026-03-20 13:43:32.516312
+        space: 1
+        metadata:
+          error:
+            label: parse_error
+            description: No code block found.
+            meta:
+              source: "I can’t produce a valid machine-checkable proof of  \n`cos(x)**2 + sin(x)**2 =\
+                \ 1`  \nwith the **given** rule set.\n\nThe provided axioms/rules only include:\n- special\
+                \ values at `0`, `pi/2`,\n- negation rules for `sin(-x)`, `cos(-x)`,\n- angle addition\
+                \ formulas for `sin(x+y)` and `cos(x+y)`.\n\nNone of these allow deriving the Pythagorean\
+                \ identity `cos(x)^2 + sin(x)^2 = 1` for a general symbol `x` without an additional axiom\
+                \ (or a rule) establishing that identity.\n\nIf you can add one more allowed rule/axiom\
+                \ such as `cos^2(x)+sin^2(x)=1` (or anything equivalent), I can then formalize the proof\
+                \ in the required YAML format."
+      - message: llm_request
+        level: info
+        message_id: 12
+        time: 2026-03-20 13:43:32.520882
+        space: 1
+        metadata:
+          query: ProveEqualityInteractive
+          request:
+            chat:
+              - role: system
+                content: |-
+                  ## Task Description
+
+                  The goal is to produce machine-checkable proofs of simple trigonometric equalities. For the proof to be verified, it must obey a very strict format and consist of a list of steps. Each step states an equality and is attached a justification for how the equality was obtained, which can be either:
+
+                  - Applying a predefined rewriting rule (see list below): `{rule: <rule_name>, vars: {<var_1>: "<value_1>", ..., <var_n>: "value_n"}}`.
+                  - Substituting a previously obtained equality: `{step: {prev_step_id}}`.
+                  - Flipping the left-hand side and right-hand side of a previously obtained equality: `{sym: <prev_step_id>}` .
+                  - Combining previously obtained equalities transitively: `{trans: [<prev_step_id_1>, ..., <prev_step_id_n>]}`.
+
+                  The last step of the proof must feature the target equality that you were tasked to prove.
+
+                  Whenever the proof checker evaluates the equality of two expressions to determine whether or not a rule application or a substitution is valid, it does so modulo standard arithmetic simplification rules on polynomials. Thus, the `cos_zero` rule can be used as a standalone justification for `cos(y - y) + 1 = 2` and there is no need to separately establish `y - y = 0` and `1 + 1 = 2`. However, **no** fact about trigonometry should be ever taken for granted.
+
+                  You should organize your answer in the following way. Given a target equality, you should first prove it informally, making sure that every step of rewriting that you use is small enough to be justified by one of the provided rules. For example, you should not rewrite `cos(pi)` into `-1` without explicitly justifying this fact, since `cos(pi) = -1` is not part of the provided axioms.
+
+                  Once you've done that, you should end your answer with a triple-quoted code block containing a valid YAML object that describes a machine-checkable proof formalizing your former reasoning. All expressions must be written as strings using Python syntax (and thus parsable using `sympy.sympyfy`). In particular, exponentiation is written `**`.
+
+                  **Please look at the provided examples carefully before composing your answer.**
+
+                  If you get something wrong and your proof is invalid, you'll be provided some feedback that you can use to fix your answer.
+
+                  ## List of allowed rewriting rules
+
+                  ```
+                  - cos_zero: `cos(0) = 1`
+                  - sin_zero: `sin(0) = 0`
+                  - sin_halfpi: `sin(pi/2) = 1`
+                  - cos_halfpi: `cos(pi/2) = 0`
+                  - sin_neg: `sin(-x) = -sin(x)`
+                  - cos_neg: `cos(-x) = cos(x)`
+                  - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+                  - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+                  ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    The equality can be derived as follows:
+                    ```
+                    cos(pi/3)
+                    = cos(pi/2-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    However, the second step uses property `cos(pi/2-x) = sin(x)`, which is not part of the allowed set of rules. Thus, we provide a longer derivation that uses `cos_add`.
+
+                    ```
+                    cos(pi/2-pi/6)
+                    = cos(pi/2+(-pi/6))
+                    = cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                    = -sin(-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    The second step uses that `cos(pi/2) = 0` and `sin(pi/2)` = 1, which we can get via the `sin_halfpi` and `cos_halfpi` rules. The last step uses `sin_neg`, so we should be done. Let's formalize this reasoning as a proof.
+
+                    ```yaml
+                    # We start establishing `cos(pi/2-pi/6) = sin(pi/6)`
+                    1:
+                      - ["cos(pi/2-pi/6)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/2-pi/6)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+
+                    # We establish our main result.
+                    # Step 5 applies directly since "cos(pi/3)" and "cos(pi/2-pi/6)" are treated as identical by the rule matcher, which performs simple simplification (as long as the required simplification does not require trigonometry).
+                    6:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {step: 5}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    Let me just propose a simple proof:
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    ```
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  {'error': None, 'feedback': "Error at step 1: Rule application failed. Obtained: '0' instead of the expected right-hand side."}
+                  ```
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    I see the error. The `cos_halfpi` rule says `cos(pi/2) = 0`, but I'm trying to prove `cos(pi/3) = sin(pi/6)`. Let me fix this by using the correct approach.
+
+                    Since `pi/3 = pi/2 - pi/6`, I can rewrite `cos(pi/3)` as `cos(pi/2 - pi/6)` and use the angle addition formula.
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `2*sin(x/2)*cos(x/2) = sin(x)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |-
+                    It is easier to start with the right-hand side here:
+
+                    ```
+                    sin(x)
+                    = sin(x/2+x/2)
+                    = sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                    = 2*sin(x/2)*cos(x/2)
+                    ```
+
+                    The first and last steps are just elementary simplifications so the only real rule to apply here is `sin_add`.
+
+                    ```yaml
+                    1:
+                      - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                      - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+                    2:
+                      - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                      - {sym: 1}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(x)**2 + sin(x)**2 = 1`.'
+            options:
+              temperature: 1.0
+      - message: llm_response
+        level: info
+        message_id: 13
+        related:
+          - 12
+        time: 2026-03-20 13:43:40.471660
+        space: 1
+        metadata:
+          response:
+            outputs:
+              - content: |-
+                  ```yaml
+                  1:
+                    - ["cos(x + -x)", "1"]
+                    - {rule: cos_zero, vars: {}}
+                  2:
+                    - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                    - {rule: cos_add, vars: {x: "x", y: "-x"}}
+                  3:
+                    - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                    - {rule: cos_neg, vars: {x: "x"}}
+                  4:
+                    - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]
+                    - {rule: sin_neg, vars: {x: "x"}}
+                  5:
+                    - ["cos(x)**2 + sin(x)**2", "1"]
+                    - {trans: [2, 3, 4, 1]}
+                  ```
+                tool_calls: []
+            budget:
+              values:
+                num_requests: 1
+                num_completions: 1
+                input_tokens: 1911
+                output_tokens: 1547
+                cached_input_tokens: 1792
+                price: 0.01584275
+            log_items: []
+            model_name: gpt-5.4-nano-2026-03-17
+            usage_info:
+              completion_tokens: 1547
+              prompt_tokens: 1911
+              total_tokens: 3458
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 1318
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+          usage:
+            model: gpt-5.4-nano-2026-03-17
+            usage:
+              completion_tokens: 1547
+              prompt_tokens: 1911
+              total_tokens: 3458
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 1318
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+      - message: llm_request
+        level: info
+        message_id: 14
+        time: 2026-03-20 13:43:40.510656
+        space: 4
+        metadata:
+          query: ProveEqualityInteractive
+          request:
+            chat:
+              - role: system
+                content: |-
+                  ## Task Description
+
+                  The goal is to produce machine-checkable proofs of simple trigonometric equalities. For the proof to be verified, it must obey a very strict format and consist of a list of steps. Each step states an equality and is attached a justification for how the equality was obtained, which can be either:
+
+                  - Applying a predefined rewriting rule (see list below): `{rule: <rule_name>, vars: {<var_1>: "<value_1>", ..., <var_n>: "value_n"}}`.
+                  - Substituting a previously obtained equality: `{step: {prev_step_id}}`.
+                  - Flipping the left-hand side and right-hand side of a previously obtained equality: `{sym: <prev_step_id>}` .
+                  - Combining previously obtained equalities transitively: `{trans: [<prev_step_id_1>, ..., <prev_step_id_n>]}`.
+
+                  The last step of the proof must feature the target equality that you were tasked to prove.
+
+                  Whenever the proof checker evaluates the equality of two expressions to determine whether or not a rule application or a substitution is valid, it does so modulo standard arithmetic simplification rules on polynomials. Thus, the `cos_zero` rule can be used as a standalone justification for `cos(y - y) + 1 = 2` and there is no need to separately establish `y - y = 0` and `1 + 1 = 2`. However, **no** fact about trigonometry should be ever taken for granted.
+
+                  You should organize your answer in the following way. Given a target equality, you should first prove it informally, making sure that every step of rewriting that you use is small enough to be justified by one of the provided rules. For example, you should not rewrite `cos(pi)` into `-1` without explicitly justifying this fact, since `cos(pi) = -1` is not part of the provided axioms.
+
+                  Once you've done that, you should end your answer with a triple-quoted code block containing a valid YAML object that describes a machine-checkable proof formalizing your former reasoning. All expressions must be written as strings using Python syntax (and thus parsable using `sympy.sympyfy`). In particular, exponentiation is written `**`.
+
+                  **Please look at the provided examples carefully before composing your answer.**
+
+                  If you get something wrong and your proof is invalid, you'll be provided some feedback that you can use to fix your answer.
+
+                  ## List of allowed rewriting rules
+
+                  ```
+                  - cos_zero: `cos(0) = 1`
+                  - sin_zero: `sin(0) = 0`
+                  - sin_halfpi: `sin(pi/2) = 1`
+                  - cos_halfpi: `cos(pi/2) = 0`
+                  - sin_neg: `sin(-x) = -sin(x)`
+                  - cos_neg: `cos(-x) = cos(x)`
+                  - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+                  - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+                  ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    The equality can be derived as follows:
+                    ```
+                    cos(pi/3)
+                    = cos(pi/2-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    However, the second step uses property `cos(pi/2-x) = sin(x)`, which is not part of the allowed set of rules. Thus, we provide a longer derivation that uses `cos_add`.
+
+                    ```
+                    cos(pi/2-pi/6)
+                    = cos(pi/2+(-pi/6))
+                    = cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                    = -sin(-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    The second step uses that `cos(pi/2) = 0` and `sin(pi/2)` = 1, which we can get via the `sin_halfpi` and `cos_halfpi` rules. The last step uses `sin_neg`, so we should be done. Let's formalize this reasoning as a proof.
+
+                    ```yaml
+                    # We start establishing `cos(pi/2-pi/6) = sin(pi/6)`
+                    1:
+                      - ["cos(pi/2-pi/6)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/2-pi/6)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+
+                    # We establish our main result.
+                    # Step 5 applies directly since "cos(pi/3)" and "cos(pi/2-pi/6)" are treated as identical by the rule matcher, which performs simple simplification (as long as the required simplification does not require trigonometry).
+                    6:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {step: 5}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    Let me just propose a simple proof:
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    ```
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  {'error': None, 'feedback': "Error at step 1: Rule application failed. Obtained: '0' instead of the expected right-hand side."}
+                  ```
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    I see the error. The `cos_halfpi` rule says `cos(pi/2) = 0`, but I'm trying to prove `cos(pi/3) = sin(pi/6)`. Let me fix this by using the correct approach.
+
+                    Since `pi/3 = pi/2 - pi/6`, I can rewrite `cos(pi/3)` as `cos(pi/2 - pi/6)` and use the angle addition formula.
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `2*sin(x/2)*cos(x/2) = sin(x)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |-
+                    It is easier to start with the right-hand side here:
+
+                    ```
+                    sin(x)
+                    = sin(x/2+x/2)
+                    = sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                    = 2*sin(x/2)*cos(x/2)
+                    ```
+
+                    The first and last steps are just elementary simplifications so the only real rule to apply here is `sin_add`.
+
+                    ```yaml
+                    1:
+                      - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                      - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+                    2:
+                      - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                      - {sym: 1}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(x)**2 + sin(x)**2 = 1`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |-
+                    ```yaml
+                    1:
+                      - ["cos(x + -x)", "1"]
+                      - {rule: cos_zero, vars: {}}
+                    2:
+                      - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                      - {rule: cos_add, vars: {x: "x", y: "-x"}}
+                    3:
+                      - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                      - {rule: cos_neg, vars: {x: "x"}}
+                    4:
+                      - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]
+                      - {rule: sin_neg, vars: {x: "x"}}
+                    5:
+                      - ["cos(x)**2 + sin(x)**2", "1"]
+                      - {trans: [2, 3, 4, 1]}
+                    ```
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  Error at step 5: Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x + -x)'
+                  ```
+            options:
+              temperature: 1.0
+      - message: llm_response
+        level: info
+        message_id: 15
+        related:
+          - 14
+        time: 2026-03-20 13:43:46.151914
+        space: 4
+        metadata:
+          response:
+            outputs:
+              - content: |-
+                  ```yaml
+                  1:
+                    - ["cos(x + -x)", "1"]
+                    - {rule: cos_zero, vars: {}}
+                  2:
+                    - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                    - {rule: cos_add, vars: {x: "x", y: "-x"}}
+                  3:
+                    - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                    - {rule: cos_neg, vars: {x: "x"}}
+                  4:
+                    - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]
+                    - {rule: sin_neg, vars: {x: "x"}}
+                  5:
+                    - ["cos(x + -x)", "cos(x)**2 + sin(x)**2"]
+                    - {trans: [2, 3, 4]}
+                  6:
+                    - ["cos(x)**2 + sin(x)**2", "1"]
+                    - {trans: [5, 1]}
+                  ```
+                tool_calls: []
+            budget:
+              values:
+                num_requests: 1
+                num_completions: 1
+                input_tokens: 2192
+                output_tokens: 1117
+                cached_input_tokens: 1792
+                price: 0.011894
+            log_items: []
+            model_name: gpt-5.4-nano-2026-03-17
+            usage_info:
+              completion_tokens: 1117
+              prompt_tokens: 2192
+              total_tokens: 3309
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 858
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+          usage:
+            model: gpt-5.4-nano-2026-03-17
+            usage:
+              completion_tokens: 1117
+              prompt_tokens: 2192
+              total_tokens: 3309
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 858
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+      - message: llm_request
+        level: info
+        message_id: 16
+        time: 2026-03-20 13:43:46.171720
+        space: 7
+        metadata:
+          query: ProveEqualityInteractive
+          request:
+            chat:
+              - role: system
+                content: |-
+                  ## Task Description
+
+                  The goal is to produce machine-checkable proofs of simple trigonometric equalities. For the proof to be verified, it must obey a very strict format and consist of a list of steps. Each step states an equality and is attached a justification for how the equality was obtained, which can be either:
+
+                  - Applying a predefined rewriting rule (see list below): `{rule: <rule_name>, vars: {<var_1>: "<value_1>", ..., <var_n>: "value_n"}}`.
+                  - Substituting a previously obtained equality: `{step: {prev_step_id}}`.
+                  - Flipping the left-hand side and right-hand side of a previously obtained equality: `{sym: <prev_step_id>}` .
+                  - Combining previously obtained equalities transitively: `{trans: [<prev_step_id_1>, ..., <prev_step_id_n>]}`.
+
+                  The last step of the proof must feature the target equality that you were tasked to prove.
+
+                  Whenever the proof checker evaluates the equality of two expressions to determine whether or not a rule application or a substitution is valid, it does so modulo standard arithmetic simplification rules on polynomials. Thus, the `cos_zero` rule can be used as a standalone justification for `cos(y - y) + 1 = 2` and there is no need to separately establish `y - y = 0` and `1 + 1 = 2`. However, **no** fact about trigonometry should be ever taken for granted.
+
+                  You should organize your answer in the following way. Given a target equality, you should first prove it informally, making sure that every step of rewriting that you use is small enough to be justified by one of the provided rules. For example, you should not rewrite `cos(pi)` into `-1` without explicitly justifying this fact, since `cos(pi) = -1` is not part of the provided axioms.
+
+                  Once you've done that, you should end your answer with a triple-quoted code block containing a valid YAML object that describes a machine-checkable proof formalizing your former reasoning. All expressions must be written as strings using Python syntax (and thus parsable using `sympy.sympyfy`). In particular, exponentiation is written `**`.
+
+                  **Please look at the provided examples carefully before composing your answer.**
+
+                  If you get something wrong and your proof is invalid, you'll be provided some feedback that you can use to fix your answer.
+
+                  ## List of allowed rewriting rules
+
+                  ```
+                  - cos_zero: `cos(0) = 1`
+                  - sin_zero: `sin(0) = 0`
+                  - sin_halfpi: `sin(pi/2) = 1`
+                  - cos_halfpi: `cos(pi/2) = 0`
+                  - sin_neg: `sin(-x) = -sin(x)`
+                  - cos_neg: `cos(-x) = cos(x)`
+                  - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+                  - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+                  ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    The equality can be derived as follows:
+                    ```
+                    cos(pi/3)
+                    = cos(pi/2-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    However, the second step uses property `cos(pi/2-x) = sin(x)`, which is not part of the allowed set of rules. Thus, we provide a longer derivation that uses `cos_add`.
+
+                    ```
+                    cos(pi/2-pi/6)
+                    = cos(pi/2+(-pi/6))
+                    = cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                    = -sin(-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    The second step uses that `cos(pi/2) = 0` and `sin(pi/2)` = 1, which we can get via the `sin_halfpi` and `cos_halfpi` rules. The last step uses `sin_neg`, so we should be done. Let's formalize this reasoning as a proof.
+
+                    ```yaml
+                    # We start establishing `cos(pi/2-pi/6) = sin(pi/6)`
+                    1:
+                      - ["cos(pi/2-pi/6)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/2-pi/6)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+
+                    # We establish our main result.
+                    # Step 5 applies directly since "cos(pi/3)" and "cos(pi/2-pi/6)" are treated as identical by the rule matcher, which performs simple simplification (as long as the required simplification does not require trigonometry).
+                    6:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {step: 5}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    Let me just propose a simple proof:
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    ```
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  {'error': None, 'feedback': "Error at step 1: Rule application failed. Obtained: '0' instead of the expected right-hand side."}
+                  ```
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    I see the error. The `cos_halfpi` rule says `cos(pi/2) = 0`, but I'm trying to prove `cos(pi/3) = sin(pi/6)`. Let me fix this by using the correct approach.
+
+                    Since `pi/3 = pi/2 - pi/6`, I can rewrite `cos(pi/3)` as `cos(pi/2 - pi/6)` and use the angle addition formula.
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `2*sin(x/2)*cos(x/2) = sin(x)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |-
+                    It is easier to start with the right-hand side here:
+
+                    ```
+                    sin(x)
+                    = sin(x/2+x/2)
+                    = sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                    = 2*sin(x/2)*cos(x/2)
+                    ```
+
+                    The first and last steps are just elementary simplifications so the only real rule to apply here is `sin_add`.
+
+                    ```yaml
+                    1:
+                      - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                      - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+                    2:
+                      - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                      - {sym: 1}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(x)**2 + sin(x)**2 = 1`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |-
+                    ```yaml
+                    1:
+                      - ["cos(x + -x)", "1"]
+                      - {rule: cos_zero, vars: {}}
+                    2:
+                      - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                      - {rule: cos_add, vars: {x: "x", y: "-x"}}
+                    3:
+                      - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                      - {rule: cos_neg, vars: {x: "x"}}
+                    4:
+                      - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]
+                      - {rule: sin_neg, vars: {x: "x"}}
+                    5:
+                      - ["cos(x)**2 + sin(x)**2", "1"]
+                      - {trans: [2, 3, 4, 1]}
+                    ```
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  Error at step 5: Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x + -x)'
+                  ```
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |-
+                    ```yaml
+                    1:
+                      - ["cos(x + -x)", "1"]
+                      - {rule: cos_zero, vars: {}}
+                    2:
+                      - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                      - {rule: cos_add, vars: {x: "x", y: "-x"}}
+                    3:
+                      - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                      - {rule: cos_neg, vars: {x: "x"}}
+                    4:
+                      - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]
+                      - {rule: sin_neg, vars: {x: "x"}}
+                    5:
+                      - ["cos(x + -x)", "cos(x)**2 + sin(x)**2"]
+                      - {trans: [2, 3, 4]}
+                    6:
+                      - ["cos(x)**2 + sin(x)**2", "1"]
+                      - {trans: [5, 1]}
+                    ```
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  Error at step 6: Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x + -x)'
+                  ```
+            options:
+              temperature: 1.0
+      - message: llm_response
+        level: info
+        message_id: 17
+        related:
+          - 16
+        time: 2026-03-20 13:43:48.916474
+        space: 7
+        metadata:
+          response:
+            outputs:
+              - content: |-
+                  ```yaml
+                  1:
+                    - ["cos(x + -x)", "1"]
+                    - {rule: cos_zero, vars: {}}
+
+                  2:
+                    - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                    - {rule: cos_add, vars: {x: "x", y: "-x"}}
+
+                  3:
+                    - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                    - {rule: cos_neg, vars: {x: "x"}}
+
+                  4:
+                    - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]
+                    - {rule: sin_neg, vars: {x: "x"}}
+
+                  5:
+                    - ["cos(x + -x)", "cos(x)**2 + sin(x)**2"]
+                    - {trans: [2, 3, 4]}
+
+                  6:
+                    - ["cos(x)**2 + sin(x)**2", "cos(x + -x)"]
+                    - {sym: 5}
+
+                  7:
+                    - ["cos(x)**2 + sin(x)**2", "1"]
+                    - {trans: [6, 1]}
+                  ```
+                tool_calls: []
+            budget:
+              values:
+                num_requests: 1
+                num_completions: 1
+                input_tokens: 2503
+                output_tokens: 453
+                cached_input_tokens: 1792
+                price: 0.005642749999999999
+            log_items: []
+            model_name: gpt-5.4-nano-2026-03-17
+            usage_info:
+              completion_tokens: 453
+              prompt_tokens: 2503
+              total_tokens: 2956
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 162
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+          usage:
+            model: gpt-5.4-nano-2026-03-17
+            usage:
+              completion_tokens: 453
+              prompt_tokens: 2503
+              total_tokens: 2956
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 162
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+    browsable_trace:
+      nodes:
+        1:
+          kind: Branch
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: ProveEqualityInteractive
+          tags:
+            - ProveEqualityInteractive
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 1
+              - kind: query
+                name: ProveEqualityInteractive
+                args:
+                  equality:
+                    - cos(x)**2 + sin(x)**2
+                    - '1'
+                  prefix: []
+                tags:
+                  - ProveEqualityInteractive
+                answers:
+                  - id: 1
+                    hint: null
+                    value:
+                      short: |-
+                        parse_error
+
+                        2 validation errors for dict[int,tuple[tuple[str, str], union[Sym,Trans,Rule,RewritePrev]]]
+                        steps.[key]
+                          Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='steps', input_type=str]
+                            For further information visit https://errors.pydantic.dev/2.11/v/int_parsing
+                        steps
+                          Input should be a valid tuple [type=tuple_type, input_value={1: [['cos(x + (-x))', 'c...*2', '1'], {'step': 3}]}, input_type=dict]
+                            For further information visit https://errors.pydantic.dev/2.11/v/tuple_type
+                      long: |-
+                        ParseError(label='parse_error',
+                                   description='2 validation errors for dict[int,tuple[tuple[str, '
+                                               'str], union[Sym,Trans,Rule,RewritePrev]]]\n'
+                                               'steps.[key]\n'
+                                               '  Input should be a valid integer, unable to parse '
+                                               'string as an integer [type=int_parsing, '
+                                               "input_value='steps', input_type=str]\n"
+                                               '    For further information visit '
+                                               'https://errors.pydantic.dev/2.11/v/int_parsing\n'
+                                               'steps\n'
+                                               '  Input should be a valid tuple [type=tuple_type, '
+                                               "input_value={1: [['cos(x + (-x))', 'c...*2', '1'], "
+                                               "{'step': 3}]}, input_type=dict]\n"
+                                               '    For further information visit '
+                                               'https://errors.pydantic.dev/2.11/v/tuple_type',
+                                   meta=None)
+                      json_provided: false
+                      json: null
+                  - id: 2
+                    hint: null
+                    value:
+                      short: |-
+                        parse_error
+
+                        2 validation errors for dict[int,tuple[tuple[str, str], union[Sym,Trans,Rule,RewritePrev]]]
+                        steps.[key]
+                          Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='steps', input_type=str]
+                            For further information visit https://errors.pydantic.dev/2.11/v/int_parsing
+                        steps
+                          Input should be a valid tuple [type=tuple_type, input_value={1: [['cos(x + -x)', 'cos...ans': [1, 2, 3, 4, 5]}]}, input_type=dict]
+                            For further information visit https://errors.pydantic.dev/2.11/v/tuple_type
+                      long: |-
+                        ParseError(label='parse_error',
+                                   description='2 validation errors for dict[int,tuple[tuple[str, '
+                                               'str], union[Sym,Trans,Rule,RewritePrev]]]\n'
+                                               'steps.[key]\n'
+                                               '  Input should be a valid integer, unable to parse '
+                                               'string as an integer [type=int_parsing, '
+                                               "input_value='steps', input_type=str]\n"
+                                               '    For further information visit '
+                                               'https://errors.pydantic.dev/2.11/v/int_parsing\n'
+                                               'steps\n'
+                                               '  Input should be a valid tuple [type=tuple_type, '
+                                               "input_value={1: [['cos(x + -x)', 'cos...ans': [1, 2, "
+                                               '3, 4, 5]}]}, input_type=dict]\n'
+                                               '    For further information visit '
+                                               'https://errors.pydantic.dev/2.11/v/tuple_type',
+                                   meta=None)
+                      json_provided: false
+                      json: null
+                  - id: 3
+                    hint: null
+                    value:
+                      short: |-
+                        parse_error
+
+                        No code block found.
+
+                        {'source': 'I can’t produce a valid machine-checkable proof of  \n'
+                                   '`cos(x)**2 + sin(x)**2 = 1`  \n'
+                                   'using **only** the provided rewriting rules.\n'
+                                   '\n'
+                                   'Those rules include:\n'
+                                   '- angle addition formulas (`cos_add`, `sin_add`)\n'
+                                   '- parity (`sin_neg`, `cos_neg`)\n'
+                                   '- special values at `0` and `pi/2`\n'
+                                   '\n'
+                                   'But none of them is strong enough to derive the Pythagorean '
+                                   'identity `cos^2(x)+sin^2(x)=1` without additional axioms/rules '
+                                   '(e.g., a direct Pythagorean identity, or the cofunction identities '
+                                   'like `sin(pi/2 - x)=cos(x)`).\n'
+                                   '\n'
+                                   'If you can add one extra permitted rule/axiom (common options: '
+                                   '`sin(pi/2 - x)=cos(x)` / `cos(pi/2 - x)=sin(x)` or directly '
+                                   '`cos(x)**2+sin(x)**2=1`), I can immediately build a formal proof '
+                                   'in the required YAML format.'}
+                      long: |-
+                        ParseError(label='parse_error',
+                                   description='No code block found.',
+                                   meta={'source': 'I can’t produce a valid machine-checkable proof '
+                                                   'of  \n'
+                                                   '`cos(x)**2 + sin(x)**2 = 1`  \n'
+                                                   'using **only** the provided rewriting rules.\n'
+                                                   '\n'
+                                                   'Those rules include:\n'
+                                                   '- angle addition formulas (`cos_add`, `sin_add`)\n'
+                                                   '- parity (`sin_neg`, `cos_neg`)\n'
+                                                   '- special values at `0` and `pi/2`\n'
+                                                   '\n'
+                                                   'But none of them is strong enough to derive the '
+                                                   'Pythagorean identity `cos^2(x)+sin^2(x)=1` without '
+                                                   'additional axioms/rules (e.g., a direct '
+                                                   'Pythagorean identity, or the cofunction identities '
+                                                   'like `sin(pi/2 - x)=cos(x)`).\n'
+                                                   '\n'
+                                                   'If you can add one extra permitted rule/axiom '
+                                                   '(common options: `sin(pi/2 - x)=cos(x)` / '
+                                                   '`cos(pi/2 - x)=sin(x)` or directly '
+                                                   '`cos(x)**2+sin(x)**2=1`), I can immediately build '
+                                                   'a formal proof in the required YAML format.'})
+                      json_provided: false
+                      json: null
+                  - id: 4
+                    hint: null
+                    value:
+                      short: |-
+                        parse_error
+
+                        No code block found.
+
+                        {'source': 'I can’t produce a valid machine-checkable proof of  \n'
+                                   '`cos(x)**2 + sin(x)**2 = 1`  \n'
+                                   'with the **given** rule set.\n'
+                                   '\n'
+                                   'The provided axioms/rules only include:\n'
+                                   '- special values at `0`, `pi/2`,\n'
+                                   '- negation rules for `sin(-x)`, `cos(-x)`,\n'
+                                   '- angle addition formulas for `sin(x+y)` and `cos(x+y)`.\n'
+                                   '\n'
+                                   'None of these allow deriving the Pythagorean identity `cos(x)^2 + '
+                                   'sin(x)^2 = 1` for a general symbol `x` without an additional axiom '
+                                   '(or a rule) establishing that identity.\n'
+                                   '\n'
+                                   'If you can add one more allowed rule/axiom such as '
+                                   '`cos^2(x)+sin^2(x)=1` (or anything equivalent), I can then '
+                                   'formalize the proof in the required YAML format.'}
+                      long: |-
+                        ParseError(label='parse_error',
+                                   description='No code block found.',
+                                   meta={'source': 'I can’t produce a valid machine-checkable proof '
+                                                   'of  \n'
+                                                   '`cos(x)**2 + sin(x)**2 = 1`  \n'
+                                                   'with the **given** rule set.\n'
+                                                   '\n'
+                                                   'The provided axioms/rules only include:\n'
+                                                   '- special values at `0`, `pi/2`,\n'
+                                                   '- negation rules for `sin(-x)`, `cos(-x)`,\n'
+                                                   '- angle addition formulas for `sin(x+y)` and '
+                                                   '`cos(x+y)`.\n'
+                                                   '\n'
+                                                   'None of these allow deriving the Pythagorean '
+                                                   'identity `cos(x)^2 + sin(x)^2 = 1` for a general '
+                                                   'symbol `x` without an additional axiom (or a rule) '
+                                                   'establishing that identity.\n'
+                                                   '\n'
+                                                   'If you can add one more allowed rule/axiom such as '
+                                                   '`cos^2(x)+sin^2(x)=1` (or anything equivalent), I '
+                                                   'can then formalize the proof in the required YAML '
+                                                   'format.'})
+                      json_provided: false
+                      json: null
+                  - id: 5
+                    hint: null
+                    value:
+                      short: 'Response(answer=Answer(mode=None, content=''```yaml\n1:\n  - ["cos(x + -x)",
+                        "1"]\n  - {rule: cos_zero, vars: {}}\n2:\n  - ["cos(x + -x)", "cos(x)*cos(-x)
+                        - sin(x)*sin(-x)"]\n  - {rule: cos_add, vars: {x: "x", y: "-x"}}\n3:\n  - ["cos(x)*cos(-x)
+                        - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]\n  - {rule: cos_neg, vars:
+                        {x: "x"}}\n4:\n  - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]\n  -
+                        {rule: sin_neg, vars: {x: "x"}}\n5:\n  - ["cos(x)**2 + sin(x)**2", "1"]\n  - {trans:
+                        [2, 3, 4, 1]}\n```'', tool_calls=(), justification=None), parsed=FinalAnswer(final={1:
+                        ((''cos(x + -x)'', ''1''), Rule(rule=''cos_zero'', vars={})), 2: ((''cos(x + -x)'',
+                        ''cos(x)*cos(-x) - sin(x)*sin(-x)''), Rule(rule=''cos_add'', vars={''x'': ''x'',
+                        ''y'': ''-x''})), 3: ((''cos(x)*cos(-x) - sin(x)*sin(-x)'', ''cos(x)*cos(x) -
+                        sin(x)*sin(-x)''), Rule(rule=''cos_neg'', vars={''x'': ''x''})), 4: ((''cos(x)*cos(x)
+                        - sin(x)*sin(-x)'', ''cos(x)*cos(x) - sin(x)*(-sin(x))''), Rule(rule=''sin_neg'',
+                        vars={''x'': ''x''})), 5: ((''cos(x)**2 + sin(x)**2'', ''1''), Trans(trans=[2,
+                        3, 4, 1]))}))'
+                      long: |-
+                        Response(answer=Answer(mode=None,
+                                               content='```yaml\n'
+                                                       '1:\n'
+                                                       '  - ["cos(x + -x)", "1"]\n'
+                                                       '  - {rule: cos_zero, vars: {}}\n'
+                                                       '2:\n'
+                                                       '  - ["cos(x + -x)", "cos(x)*cos(-x) - '
+                                                       'sin(x)*sin(-x)"]\n'
+                                                       '  - {rule: cos_add, vars: {x: "x", y: "-x"}}\n'
+                                                       '3:\n'
+                                                       '  - ["cos(x)*cos(-x) - sin(x)*sin(-x)", '
+                                                       '"cos(x)*cos(x) - sin(x)*sin(-x)"]\n'
+                                                       '  - {rule: cos_neg, vars: {x: "x"}}\n'
+                                                       '4:\n'
+                                                       '  - ["cos(x)*cos(x) - sin(x)*sin(-x)", '
+                                                       '"cos(x)*cos(x) - sin(x)*(-sin(x))"]\n'
+                                                       '  - {rule: sin_neg, vars: {x: "x"}}\n'
+                                                       '5:\n'
+                                                       '  - ["cos(x)**2 + sin(x)**2", "1"]\n'
+                                                       '  - {trans: [2, 3, 4, 1]}\n'
+                                                       '```',
+                                               tool_calls=(),
+                                               justification=None),
+                                 parsed=FinalAnswer(final={1: (('cos(x + -x)', '1'),
+                                                               Rule(rule='cos_zero', vars={})),
+                                                           2: (('cos(x + -x)',
+                                                                'cos(x)*cos(-x) - sin(x)*sin(-x)'),
+                                                               Rule(rule='cos_add',
+                                                                    vars={'x': 'x', 'y': '-x'})),
+                                                           3: (('cos(x)*cos(-x) - sin(x)*sin(-x)',
+                                                                'cos(x)*cos(x) - sin(x)*sin(-x)'),
+                                                               Rule(rule='cos_neg', vars={'x': 'x'})),
+                                                           4: (('cos(x)*cos(x) - sin(x)*sin(-x)',
+                                                                'cos(x)*cos(x) - sin(x)*(-sin(x))'),
+                                                               Rule(rule='sin_neg', vars={'x': 'x'})),
+                                                           5: (('cos(x)**2 + sin(x)**2', '1'),
+                                                               Trans(trans=[2, 3, 4, 1]))}))
+                      json_provided: false
+                      json: null
+          actions:
+            - ref:
+                with_ids: $1{@5}
+                with_hints: null
+              hints: null
+              related_success_nodes: []
+              related_answers:
+                - 5
+              value:
+                short: 'Response(answer=Answer(mode=None, content=''```yaml\n1:\n  - ["cos(x + -x)", "1"]\n  -
+                  {rule: cos_zero, vars: {}}\n2:\n  - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]\n  -
+                  {rule: cos_add, vars: {x: "x", y: "-x"}}\n3:\n  - ["cos(x)*cos(-x) - sin(x)*sin(-x)",
+                  "cos(x)*cos(x) - sin(x)*sin(-x)"]\n  - {rule: cos_neg, vars: {x: "x"}}\n4:\n  - ["cos(x)*cos(x)
+                  - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]\n  - {rule: sin_neg, vars: {x:
+                  "x"}}\n5:\n  - ["cos(x)**2 + sin(x)**2", "1"]\n  - {trans: [2, 3, 4, 1]}\n```'', tool_calls=(),
+                  justification=None), parsed=FinalAnswer(final={1: ((''cos(x + -x)'', ''1''), Rule(rule=''cos_zero'',
+                  vars={})), 2: ((''cos(x + -x)'', ''cos(x)*cos(-x) - sin(x)*sin(-x)''), Rule(rule=''cos_add'',
+                  vars={''x'': ''x'', ''y'': ''-x''})), 3: ((''cos(x)*cos(-x) - sin(x)*sin(-x)'', ''cos(x)*cos(x)
+                  - sin(x)*sin(-x)''), Rule(rule=''cos_neg'', vars={''x'': ''x''})), 4: ((''cos(x)*cos(x)
+                  - sin(x)*sin(-x)'', ''cos(x)*cos(x) - sin(x)*(-sin(x))''), Rule(rule=''sin_neg'', vars={''x'':
+                  ''x''})), 5: ((''cos(x)**2 + sin(x)**2'', ''1''), Trans(trans=[2, 3, 4, 1]))}))'
+                long: |-
+                  Response(answer=Answer(mode=None,
+                                         content='```yaml\n'
+                                                 '1:\n'
+                                                 '  - ["cos(x + -x)", "1"]\n'
+                                                 '  - {rule: cos_zero, vars: {}}\n'
+                                                 '2:\n'
+                                                 '  - ["cos(x + -x)", "cos(x)*cos(-x) - '
+                                                 'sin(x)*sin(-x)"]\n'
+                                                 '  - {rule: cos_add, vars: {x: "x", y: "-x"}}\n'
+                                                 '3:\n'
+                                                 '  - ["cos(x)*cos(-x) - sin(x)*sin(-x)", '
+                                                 '"cos(x)*cos(x) - sin(x)*sin(-x)"]\n'
+                                                 '  - {rule: cos_neg, vars: {x: "x"}}\n'
+                                                 '4:\n'
+                                                 '  - ["cos(x)*cos(x) - sin(x)*sin(-x)", '
+                                                 '"cos(x)*cos(x) - sin(x)*(-sin(x))"]\n'
+                                                 '  - {rule: sin_neg, vars: {x: "x"}}\n'
+                                                 '5:\n'
+                                                 '  - ["cos(x)**2 + sin(x)**2", "1"]\n'
+                                                 '  - {trans: [2, 3, 4, 1]}\n'
+                                                 '```',
+                                         tool_calls=(),
+                                         justification=None),
+                           parsed=FinalAnswer(final={1: (('cos(x + -x)', '1'),
+                                                         Rule(rule='cos_zero', vars={})),
+                                                     2: (('cos(x + -x)',
+                                                          'cos(x)*cos(-x) - sin(x)*sin(-x)'),
+                                                         Rule(rule='cos_add',
+                                                              vars={'x': 'x', 'y': '-x'})),
+                                                     3: (('cos(x)*cos(-x) - sin(x)*sin(-x)',
+                                                          'cos(x)*cos(x) - sin(x)*sin(-x)'),
+                                                         Rule(rule='cos_neg', vars={'x': 'x'})),
+                                                     4: (('cos(x)*cos(x) - sin(x)*sin(-x)',
+                                                          'cos(x)*cos(x) - sin(x)*(-sin(x))'),
+                                                         Rule(rule='sin_neg', vars={'x': 'x'})),
+                                                     5: (('cos(x)**2 + sin(x)**2', '1'),
+                                                         Trans(trans=[2, 3, 4, 1]))}))
+                json_provided: false
+                json: null
+              destination: 2
+          origin: root
+        2:
+          kind: Run
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: check_equality
+          tags:
+            - check_equality
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 2
+              - kind: nested
+                strategy: check_equality
+                args:
+                  equality:
+                    short: ('cos(x)**2 + sin(x)**2', '1')
+                    long: ('cos(x)**2 + sin(x)**2', '1')
+                    json_provided: true
+                    json:
+                      - cos(x)**2 + sin(x)**2
+                      - '1'
+                  proof:
+                    short: '{1: ((''cos(x + -x)'', ''1''), Rule(rule=''cos_zero'', vars={})), 2: ((''cos(x
+                      + -x)'', ''cos(x)*cos(-x) - sin(x)*sin(-x)''), Rule(rule=''cos_add'', vars={''x'':
+                      ''x'', ''y'': ''-x''})), 3: ((''cos(x)*cos(-x) - sin(x)*sin(-x)'', ''cos(x)*cos(x)
+                      - sin(x)*sin(-x)''), Rule(rule=''cos_neg'', vars={''x'': ''x''})), 4: ((''cos(x)*cos(x)
+                      - sin(x)*sin(-x)'', ''cos(x)*cos(x) - sin(x)*(-sin(x))''), Rule(rule=''sin_neg'',
+                      vars={''x'': ''x''})), 5: ((''cos(x)**2 + sin(x)**2'', ''1''), Trans(trans=[2, 3,
+                      4, 1]))}'
+                    long: |-
+                      {1: (('cos(x + -x)', '1'), Rule(rule='cos_zero', vars={})),
+                       2: (('cos(x + -x)', 'cos(x)*cos(-x) - sin(x)*sin(-x)'),
+                           Rule(rule='cos_add', vars={'x': 'x', 'y': '-x'})),
+                       3: (('cos(x)*cos(-x) - sin(x)*sin(-x)', 'cos(x)*cos(x) - sin(x)*sin(-x)'),
+                           Rule(rule='cos_neg', vars={'x': 'x'})),
+                       4: (('cos(x)*cos(x) - sin(x)*sin(-x)', 'cos(x)*cos(x) - sin(x)*(-sin(x))'),
+                           Rule(rule='sin_neg', vars={'x': 'x'})),
+                       5: (('cos(x)**2 + sin(x)**2', '1'), Trans(trans=[2, 3, 4, 1]))}
+                    json_provided: false
+                    json: null
+                tags:
+                  - check_equality
+                node_id: 3
+          actions:
+            - ref:
+                with_ids: $2{%4}
+                with_hints: null
+              hints: null
+              related_success_nodes:
+                - 4
+              related_answers: []
+              value:
+                short: |-
+                  feedback
+
+                  "Error at step 5: Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x + -x)'"
+                long: |-
+                  Error(label='feedback',
+                        description=None,
+                        meta="Error at step 5: Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x "
+                             "+ -x)'")
+                json_provided: true
+                json:
+                  label: feedback
+                  meta: 'Error at step 5: Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)'''
+              destination: 5
+          origin:
+            - child
+            - 1
+            - 0
+        3:
+          kind: Compute
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: null
+          tags: []
+          properties:
+            - - with_ids: query
+                with_hints: null
+              - 3
+              - kind: query
+                name: __Computation__
+                args:
+                  fun: check
+                  args:
+                    eq:
+                      - cos(x)**2 + sin(x)**2
+                      - '1'
+                    proof:
+                      1:
+                        - - cos(x + -x)
+                          - '1'
+                        - rule: cos_zero
+                          vars: {}
+                      2:
+                        - - cos(x + -x)
+                          - cos(x)*cos(-x) - sin(x)*sin(-x)
+                        - rule: cos_add
+                          vars:
+                            x: x
+                            y: -x
+                      3:
+                        - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                          - cos(x)*cos(x) - sin(x)*sin(-x)
+                        - rule: cos_neg
+                          vars:
+                            x: x
+                      4:
+                        - - cos(x)*cos(x) - sin(x)*sin(-x)
+                          - cos(x)*cos(x) - sin(x)*(-sin(x))
+                        - rule: sin_neg
+                          vars:
+                            x: x
+                      5:
+                        - - cos(x)**2 + sin(x)**2
+                          - '1'
+                        - trans:
+                            - 2
+                            - 3
+                            - 4
+                            - 1
+                    rules:
+                      cos_zero:
+                        - cos(0)
+                        - '1'
+                      sin_zero:
+                        - sin(0)
+                        - '0'
+                      sin_halfpi:
+                        - sin(pi/2)
+                        - '1'
+                      cos_halfpi:
+                        - cos(pi/2)
+                        - '0'
+                      sin_neg:
+                        - sin(-x)
+                        - -sin(x)
+                      cos_neg:
+                        - cos(-x)
+                        - cos(x)
+                      cos_add:
+                        - cos(x + y)
+                        - cos(x)*cos(y) - sin(x)*sin(y)
+                      sin_add:
+                        - sin(x + y)
+                        - sin(x)*cos(y) + cos(x)*sin(y)
+                tags:
+                  - __Computation__
+                answers:
+                  - id: 6
+                    hint: null
+                    value:
+                      short: '{''feedback'': "Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)''",
+                        ''step'': 5}'
+                      long: |-
+                        {'feedback': "Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x + -x)'",
+                         'step': 5}
+                      json_provided: true
+                      json:
+                        feedback: 'Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)'''
+                        step: 5
+          actions:
+            - ref:
+                with_ids: $3{@6}
+                with_hints: null
+              hints: null
+              related_success_nodes: []
+              related_answers:
+                - 6
+              value:
+                short: '{''feedback'': "Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)''",
+                  ''step'': 5}'
+                long: |-
+                  {'feedback': "Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x + -x)'",
+                   'step': 5}
+                json_provided: true
+                json:
+                  feedback: 'Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)'''
+                  step: 5
+              destination: 4
+          origin:
+            - nested
+            - 2
+            - 0
+        4:
+          kind: Success
+          success_value:
+            short: |-
+              feedback
+
+              "Error at step 5: Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x + -x)'"
+            long: |-
+              Error(label='feedback',
+                    description=None,
+                    meta="Error at step 5: Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x "
+                         "+ -x)'")
+            json_provided: true
+            json:
+              label: feedback
+              meta: 'Error at step 5: Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)'''
+          summary_message: null
+          leaf_node: true
+          label: null
+          tags: []
+          properties: []
+          actions: []
+          origin:
+            - child
+            - 3
+            - 0
+        5:
+          kind: Branch
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: ProveEqualityInteractive
+          tags:
+            - ProveEqualityInteractive
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 4
+              - kind: query
+                name: ProveEqualityInteractive
+                args:
+                  equality:
+                    - cos(x)**2 + sin(x)**2
+                    - '1'
+                  prefix:
+                    - kind: oracle
+                      answer:
+                        mode: null
+                        content: |-
+                          ```yaml
+                          1:
+                            - ["cos(x + -x)", "1"]
+                            - {rule: cos_zero, vars: {}}
+                          2:
+                            - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                            - {rule: cos_add, vars: {x: "x", y: "-x"}}
+                          3:
+                            - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                            - {rule: cos_neg, vars: {x: "x"}}
+                          4:
+                            - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]
+                            - {rule: sin_neg, vars: {x: "x"}}
+                          5:
+                            - ["cos(x)**2 + sin(x)**2", "1"]
+                            - {trans: [2, 3, 4, 1]}
+                          ```
+                        tool_calls: []
+                        justification: null
+                    - kind: feedback
+                      label: feedback
+                      description: null
+                      meta: 'Error at step 5: Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)'''
+                tags:
+                  - ProveEqualityInteractive
+                answers:
+                  - id: 7
+                    hint: null
+                    value:
+                      short: 'Response(answer=Answer(mode=None, content=''```yaml\n1:\n  - ["cos(x + -x)",
+                        "1"]\n  - {rule: cos_zero, vars: {}}\n2:\n  - ["cos(x + -x)", "cos(x)*cos(-x)
+                        - sin(x)*sin(-x)"]\n  - {rule: cos_add, vars: {x: "x", y: "-x"}}\n3:\n  - ["cos(x)*cos(-x)
+                        - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]\n  - {rule: cos_neg, vars:
+                        {x: "x"}}\n4:\n  - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]\n  -
+                        {rule: sin_neg, vars: {x: "x"}}\n5:\n  - ["cos(x + -x)", "cos(x)**2 + sin(x)**2"]\n  -
+                        {trans: [2, 3, 4]}\n6:\n  - ["cos(x)**2 + sin(x)**2", "1"]\n  - {trans: [5, 1]}\n```'',
+                        tool_calls=(), justification=None), parsed=FinalAnswer(final={1: ((''cos(x + -x)'',
+                        ''1''), Rule(rule=''cos_zero'', vars={})), 2: ((''cos(x + -x)'', ''cos(x)*cos(-x)
+                        - sin(x)*sin(-x)''), Rule(rule=''cos_add'', vars={''x'': ''x'', ''y'': ''-x''})),
+                        3: ((''cos(x)*cos(-x) - sin(x)*sin(-x)'', ''cos(x)*cos(x) - sin(x)*sin(-x)''),
+                        Rule(rule=''cos_neg'', vars={''x'': ''x''})), 4: ((''cos(x)*cos(x) - sin(x)*sin(-x)'',
+                        ''cos(x)*cos(x) - sin(x)*(-sin(x))''), Rule(rule=''sin_neg'', vars={''x'': ''x''})),
+                        5: ((''cos(x + -x)'', ''cos(x)**2 + sin(x)**2''), Trans(trans=[2, 3, 4])), 6:
+                        ((''cos(x)**2 + sin(x)**2'', ''1''), Trans(trans=[5, 1]))}))'
+                      long: |-
+                        Response(answer=Answer(mode=None,
+                                               content='```yaml\n'
+                                                       '1:\n'
+                                                       '  - ["cos(x + -x)", "1"]\n'
+                                                       '  - {rule: cos_zero, vars: {}}\n'
+                                                       '2:\n'
+                                                       '  - ["cos(x + -x)", "cos(x)*cos(-x) - '
+                                                       'sin(x)*sin(-x)"]\n'
+                                                       '  - {rule: cos_add, vars: {x: "x", y: "-x"}}\n'
+                                                       '3:\n'
+                                                       '  - ["cos(x)*cos(-x) - sin(x)*sin(-x)", '
+                                                       '"cos(x)*cos(x) - sin(x)*sin(-x)"]\n'
+                                                       '  - {rule: cos_neg, vars: {x: "x"}}\n'
+                                                       '4:\n'
+                                                       '  - ["cos(x)*cos(x) - sin(x)*sin(-x)", '
+                                                       '"cos(x)*cos(x) - sin(x)*(-sin(x))"]\n'
+                                                       '  - {rule: sin_neg, vars: {x: "x"}}\n'
+                                                       '5:\n'
+                                                       '  - ["cos(x + -x)", "cos(x)**2 + sin(x)**2"]\n'
+                                                       '  - {trans: [2, 3, 4]}\n'
+                                                       '6:\n'
+                                                       '  - ["cos(x)**2 + sin(x)**2", "1"]\n'
+                                                       '  - {trans: [5, 1]}\n'
+                                                       '```',
+                                               tool_calls=(),
+                                               justification=None),
+                                 parsed=FinalAnswer(final={1: (('cos(x + -x)', '1'),
+                                                               Rule(rule='cos_zero', vars={})),
+                                                           2: (('cos(x + -x)',
+                                                                'cos(x)*cos(-x) - sin(x)*sin(-x)'),
+                                                               Rule(rule='cos_add',
+                                                                    vars={'x': 'x', 'y': '-x'})),
+                                                           3: (('cos(x)*cos(-x) - sin(x)*sin(-x)',
+                                                                'cos(x)*cos(x) - sin(x)*sin(-x)'),
+                                                               Rule(rule='cos_neg', vars={'x': 'x'})),
+                                                           4: (('cos(x)*cos(x) - sin(x)*sin(-x)',
+                                                                'cos(x)*cos(x) - sin(x)*(-sin(x))'),
+                                                               Rule(rule='sin_neg', vars={'x': 'x'})),
+                                                           5: (('cos(x + -x)', 'cos(x)**2 + sin(x)**2'),
+                                                               Trans(trans=[2, 3, 4])),
+                                                           6: (('cos(x)**2 + sin(x)**2', '1'),
+                                                               Trans(trans=[5, 1]))}))
+                      json_provided: false
+                      json: null
+          actions:
+            - ref:
+                with_ids: $4{@7}
+                with_hints: null
+              hints: null
+              related_success_nodes: []
+              related_answers:
+                - 7
+              value:
+                short: 'Response(answer=Answer(mode=None, content=''```yaml\n1:\n  - ["cos(x + -x)", "1"]\n  -
+                  {rule: cos_zero, vars: {}}\n2:\n  - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]\n  -
+                  {rule: cos_add, vars: {x: "x", y: "-x"}}\n3:\n  - ["cos(x)*cos(-x) - sin(x)*sin(-x)",
+                  "cos(x)*cos(x) - sin(x)*sin(-x)"]\n  - {rule: cos_neg, vars: {x: "x"}}\n4:\n  - ["cos(x)*cos(x)
+                  - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]\n  - {rule: sin_neg, vars: {x:
+                  "x"}}\n5:\n  - ["cos(x + -x)", "cos(x)**2 + sin(x)**2"]\n  - {trans: [2, 3, 4]}\n6:\n  -
+                  ["cos(x)**2 + sin(x)**2", "1"]\n  - {trans: [5, 1]}\n```'', tool_calls=(), justification=None),
+                  parsed=FinalAnswer(final={1: ((''cos(x + -x)'', ''1''), Rule(rule=''cos_zero'', vars={})),
+                  2: ((''cos(x + -x)'', ''cos(x)*cos(-x) - sin(x)*sin(-x)''), Rule(rule=''cos_add'', vars={''x'':
+                  ''x'', ''y'': ''-x''})), 3: ((''cos(x)*cos(-x) - sin(x)*sin(-x)'', ''cos(x)*cos(x) -
+                  sin(x)*sin(-x)''), Rule(rule=''cos_neg'', vars={''x'': ''x''})), 4: ((''cos(x)*cos(x)
+                  - sin(x)*sin(-x)'', ''cos(x)*cos(x) - sin(x)*(-sin(x))''), Rule(rule=''sin_neg'', vars={''x'':
+                  ''x''})), 5: ((''cos(x + -x)'', ''cos(x)**2 + sin(x)**2''), Trans(trans=[2, 3, 4])),
+                  6: ((''cos(x)**2 + sin(x)**2'', ''1''), Trans(trans=[5, 1]))}))'
+                long: |-
+                  Response(answer=Answer(mode=None,
+                                         content='```yaml\n'
+                                                 '1:\n'
+                                                 '  - ["cos(x + -x)", "1"]\n'
+                                                 '  - {rule: cos_zero, vars: {}}\n'
+                                                 '2:\n'
+                                                 '  - ["cos(x + -x)", "cos(x)*cos(-x) - '
+                                                 'sin(x)*sin(-x)"]\n'
+                                                 '  - {rule: cos_add, vars: {x: "x", y: "-x"}}\n'
+                                                 '3:\n'
+                                                 '  - ["cos(x)*cos(-x) - sin(x)*sin(-x)", '
+                                                 '"cos(x)*cos(x) - sin(x)*sin(-x)"]\n'
+                                                 '  - {rule: cos_neg, vars: {x: "x"}}\n'
+                                                 '4:\n'
+                                                 '  - ["cos(x)*cos(x) - sin(x)*sin(-x)", '
+                                                 '"cos(x)*cos(x) - sin(x)*(-sin(x))"]\n'
+                                                 '  - {rule: sin_neg, vars: {x: "x"}}\n'
+                                                 '5:\n'
+                                                 '  - ["cos(x + -x)", "cos(x)**2 + sin(x)**2"]\n'
+                                                 '  - {trans: [2, 3, 4]}\n'
+                                                 '6:\n'
+                                                 '  - ["cos(x)**2 + sin(x)**2", "1"]\n'
+                                                 '  - {trans: [5, 1]}\n'
+                                                 '```',
+                                         tool_calls=(),
+                                         justification=None),
+                           parsed=FinalAnswer(final={1: (('cos(x + -x)', '1'),
+                                                         Rule(rule='cos_zero', vars={})),
+                                                     2: (('cos(x + -x)',
+                                                          'cos(x)*cos(-x) - sin(x)*sin(-x)'),
+                                                         Rule(rule='cos_add',
+                                                              vars={'x': 'x', 'y': '-x'})),
+                                                     3: (('cos(x)*cos(-x) - sin(x)*sin(-x)',
+                                                          'cos(x)*cos(x) - sin(x)*sin(-x)'),
+                                                         Rule(rule='cos_neg', vars={'x': 'x'})),
+                                                     4: (('cos(x)*cos(x) - sin(x)*sin(-x)',
+                                                          'cos(x)*cos(x) - sin(x)*(-sin(x))'),
+                                                         Rule(rule='sin_neg', vars={'x': 'x'})),
+                                                     5: (('cos(x + -x)', 'cos(x)**2 + sin(x)**2'),
+                                                         Trans(trans=[2, 3, 4])),
+                                                     6: (('cos(x)**2 + sin(x)**2', '1'),
+                                                         Trans(trans=[5, 1]))}))
+                json_provided: false
+                json: null
+              destination: 6
+          origin:
+            - child
+            - 2
+            - 0
+        6:
+          kind: Run
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: check_equality
+          tags:
+            - check_equality
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 5
+              - kind: nested
+                strategy: check_equality
+                args:
+                  equality:
+                    short: ('cos(x)**2 + sin(x)**2', '1')
+                    long: ('cos(x)**2 + sin(x)**2', '1')
+                    json_provided: true
+                    json:
+                      - cos(x)**2 + sin(x)**2
+                      - '1'
+                  proof:
+                    short: '{1: ((''cos(x + -x)'', ''1''), Rule(rule=''cos_zero'', vars={})), 2: ((''cos(x
+                      + -x)'', ''cos(x)*cos(-x) - sin(x)*sin(-x)''), Rule(rule=''cos_add'', vars={''x'':
+                      ''x'', ''y'': ''-x''})), 3: ((''cos(x)*cos(-x) - sin(x)*sin(-x)'', ''cos(x)*cos(x)
+                      - sin(x)*sin(-x)''), Rule(rule=''cos_neg'', vars={''x'': ''x''})), 4: ((''cos(x)*cos(x)
+                      - sin(x)*sin(-x)'', ''cos(x)*cos(x) - sin(x)*(-sin(x))''), Rule(rule=''sin_neg'',
+                      vars={''x'': ''x''})), 5: ((''cos(x + -x)'', ''cos(x)**2 + sin(x)**2''), Trans(trans=[2,
+                      3, 4])), 6: ((''cos(x)**2 + sin(x)**2'', ''1''), Trans(trans=[5, 1]))}'
+                    long: |-
+                      {1: (('cos(x + -x)', '1'), Rule(rule='cos_zero', vars={})),
+                       2: (('cos(x + -x)', 'cos(x)*cos(-x) - sin(x)*sin(-x)'),
+                           Rule(rule='cos_add', vars={'x': 'x', 'y': '-x'})),
+                       3: (('cos(x)*cos(-x) - sin(x)*sin(-x)', 'cos(x)*cos(x) - sin(x)*sin(-x)'),
+                           Rule(rule='cos_neg', vars={'x': 'x'})),
+                       4: (('cos(x)*cos(x) - sin(x)*sin(-x)', 'cos(x)*cos(x) - sin(x)*(-sin(x))'),
+                           Rule(rule='sin_neg', vars={'x': 'x'})),
+                       5: (('cos(x + -x)', 'cos(x)**2 + sin(x)**2'), Trans(trans=[2, 3, 4])),
+                       6: (('cos(x)**2 + sin(x)**2', '1'), Trans(trans=[5, 1]))}
+                    json_provided: false
+                    json: null
+                tags:
+                  - check_equality
+                node_id: 7
+          actions:
+            - ref:
+                with_ids: $5{%8}
+                with_hints: null
+              hints: null
+              related_success_nodes:
+                - 8
+              related_answers: []
+              value:
+                short: |-
+                  feedback
+
+                  "Error at step 6: Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x + -x)'"
+                long: |-
+                  Error(label='feedback',
+                        description=None,
+                        meta="Error at step 6: Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x "
+                             "+ -x)'")
+                json_provided: true
+                json:
+                  label: feedback
+                  meta: 'Error at step 6: Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)'''
+              destination: 9
+          origin:
+            - child
+            - 5
+            - 0
+        7:
+          kind: Compute
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: null
+          tags: []
+          properties:
+            - - with_ids: query
+                with_hints: null
+              - 6
+              - kind: query
+                name: __Computation__
+                args:
+                  fun: check
+                  args:
+                    eq:
+                      - cos(x)**2 + sin(x)**2
+                      - '1'
+                    proof:
+                      1:
+                        - - cos(x + -x)
+                          - '1'
+                        - rule: cos_zero
+                          vars: {}
+                      2:
+                        - - cos(x + -x)
+                          - cos(x)*cos(-x) - sin(x)*sin(-x)
+                        - rule: cos_add
+                          vars:
+                            x: x
+                            y: -x
+                      3:
+                        - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                          - cos(x)*cos(x) - sin(x)*sin(-x)
+                        - rule: cos_neg
+                          vars:
+                            x: x
+                      4:
+                        - - cos(x)*cos(x) - sin(x)*sin(-x)
+                          - cos(x)*cos(x) - sin(x)*(-sin(x))
+                        - rule: sin_neg
+                          vars:
+                            x: x
+                      5:
+                        - - cos(x + -x)
+                          - cos(x)**2 + sin(x)**2
+                        - trans:
+                            - 2
+                            - 3
+                            - 4
+                      6:
+                        - - cos(x)**2 + sin(x)**2
+                          - '1'
+                        - trans:
+                            - 5
+                            - 1
+                    rules:
+                      cos_zero:
+                        - cos(0)
+                        - '1'
+                      sin_zero:
+                        - sin(0)
+                        - '0'
+                      sin_halfpi:
+                        - sin(pi/2)
+                        - '1'
+                      cos_halfpi:
+                        - cos(pi/2)
+                        - '0'
+                      sin_neg:
+                        - sin(-x)
+                        - -sin(x)
+                      cos_neg:
+                        - cos(-x)
+                        - cos(x)
+                      cos_add:
+                        - cos(x + y)
+                        - cos(x)*cos(y) - sin(x)*sin(y)
+                      sin_add:
+                        - sin(x + y)
+                        - sin(x)*cos(y) + cos(x)*sin(y)
+                tags:
+                  - __Computation__
+                answers:
+                  - id: 8
+                    hint: null
+                    value:
+                      short: '{''feedback'': "Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)''",
+                        ''step'': 6}'
+                      long: |-
+                        {'feedback': "Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x + -x)'",
+                         'step': 6}
+                      json_provided: true
+                      json:
+                        feedback: 'Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)'''
+                        step: 6
+          actions:
+            - ref:
+                with_ids: $6{@8}
+                with_hints: null
+              hints: null
+              related_success_nodes: []
+              related_answers:
+                - 8
+              value:
+                short: '{''feedback'': "Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)''",
+                  ''step'': 6}'
+                long: |-
+                  {'feedback': "Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x + -x)'",
+                   'step': 6}
+                json_provided: true
+                json:
+                  feedback: 'Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)'''
+                  step: 6
+              destination: 8
+          origin:
+            - nested
+            - 6
+            - 0
+        8:
+          kind: Success
+          success_value:
+            short: |-
+              feedback
+
+              "Error at step 6: Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x + -x)'"
+            long: |-
+              Error(label='feedback',
+                    description=None,
+                    meta="Error at step 6: Unequal terms: 'cos(x)**2 + sin(x)**2' and 'cos(x "
+                         "+ -x)'")
+            json_provided: true
+            json:
+              label: feedback
+              meta: 'Error at step 6: Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)'''
+          summary_message: null
+          leaf_node: true
+          label: null
+          tags: []
+          properties: []
+          actions: []
+          origin:
+            - child
+            - 7
+            - 0
+        9:
+          kind: Branch
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: ProveEqualityInteractive
+          tags:
+            - ProveEqualityInteractive
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 7
+              - kind: query
+                name: ProveEqualityInteractive
+                args:
+                  equality:
+                    - cos(x)**2 + sin(x)**2
+                    - '1'
+                  prefix:
+                    - kind: oracle
+                      answer:
+                        mode: null
+                        content: |-
+                          ```yaml
+                          1:
+                            - ["cos(x + -x)", "1"]
+                            - {rule: cos_zero, vars: {}}
+                          2:
+                            - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                            - {rule: cos_add, vars: {x: "x", y: "-x"}}
+                          3:
+                            - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                            - {rule: cos_neg, vars: {x: "x"}}
+                          4:
+                            - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]
+                            - {rule: sin_neg, vars: {x: "x"}}
+                          5:
+                            - ["cos(x)**2 + sin(x)**2", "1"]
+                            - {trans: [2, 3, 4, 1]}
+                          ```
+                        tool_calls: []
+                        justification: null
+                    - kind: feedback
+                      label: feedback
+                      description: null
+                      meta: 'Error at step 5: Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)'''
+                    - kind: oracle
+                      answer:
+                        mode: null
+                        content: |-
+                          ```yaml
+                          1:
+                            - ["cos(x + -x)", "1"]
+                            - {rule: cos_zero, vars: {}}
+                          2:
+                            - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+                            - {rule: cos_add, vars: {x: "x", y: "-x"}}
+                          3:
+                            - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]
+                            - {rule: cos_neg, vars: {x: "x"}}
+                          4:
+                            - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]
+                            - {rule: sin_neg, vars: {x: "x"}}
+                          5:
+                            - ["cos(x + -x)", "cos(x)**2 + sin(x)**2"]
+                            - {trans: [2, 3, 4]}
+                          6:
+                            - ["cos(x)**2 + sin(x)**2", "1"]
+                            - {trans: [5, 1]}
+                          ```
+                        tool_calls: []
+                        justification: null
+                    - kind: feedback
+                      label: feedback
+                      description: null
+                      meta: 'Error at step 6: Unequal terms: ''cos(x)**2 + sin(x)**2'' and ''cos(x + -x)'''
+                tags:
+                  - ProveEqualityInteractive
+                answers:
+                  - id: 9
+                    hint: null
+                    value:
+                      short: 'Response(answer=Answer(mode=None, content=''```yaml\n1:\n  - ["cos(x + -x)",
+                        "1"]\n  - {rule: cos_zero, vars: {}}\n\n2:\n  - ["cos(x + -x)", "cos(x)*cos(-x)
+                        - sin(x)*sin(-x)"]\n  - {rule: cos_add, vars: {x: "x", y: "-x"}}\n\n3:\n  - ["cos(x)*cos(-x)
+                        - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*sin(-x)"]\n  - {rule: cos_neg, vars:
+                        {x: "x"}}\n\n4:\n  - ["cos(x)*cos(x) - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]\n  -
+                        {rule: sin_neg, vars: {x: "x"}}\n\n5:\n  - ["cos(x + -x)", "cos(x)**2 + sin(x)**2"]\n  -
+                        {trans: [2, 3, 4]}\n\n6:\n  - ["cos(x)**2 + sin(x)**2", "cos(x + -x)"]\n  - {sym:
+                        5}\n\n7:\n  - ["cos(x)**2 + sin(x)**2", "1"]\n  - {trans: [6, 1]}\n```'', tool_calls=(),
+                        justification=None), parsed=FinalAnswer(final={1: ((''cos(x + -x)'', ''1''), Rule(rule=''cos_zero'',
+                        vars={})), 2: ((''cos(x + -x)'', ''cos(x)*cos(-x) - sin(x)*sin(-x)''), Rule(rule=''cos_add'',
+                        vars={''x'': ''x'', ''y'': ''-x''})), 3: ((''cos(x)*cos(-x) - sin(x)*sin(-x)'',
+                        ''cos(x)*cos(x) - sin(x)*sin(-x)''), Rule(rule=''cos_neg'', vars={''x'': ''x''})),
+                        4: ((''cos(x)*cos(x) - sin(x)*sin(-x)'', ''cos(x)*cos(x) - sin(x)*(-sin(x))''),
+                        Rule(rule=''sin_neg'', vars={''x'': ''x''})), 5: ((''cos(x + -x)'', ''cos(x)**2
+                        + sin(x)**2''), Trans(trans=[2, 3, 4])), 6: ((''cos(x)**2 + sin(x)**2'', ''cos(x
+                        + -x)''), Sym(sym=5)), 7: ((''cos(x)**2 + sin(x)**2'', ''1''), Trans(trans=[6,
+                        1]))}))'
+                      long: |-
+                        Response(answer=Answer(mode=None,
+                                               content='```yaml\n'
+                                                       '1:\n'
+                                                       '  - ["cos(x + -x)", "1"]\n'
+                                                       '  - {rule: cos_zero, vars: {}}\n'
+                                                       '\n'
+                                                       '2:\n'
+                                                       '  - ["cos(x + -x)", "cos(x)*cos(-x) - '
+                                                       'sin(x)*sin(-x)"]\n'
+                                                       '  - {rule: cos_add, vars: {x: "x", y: "-x"}}\n'
+                                                       '\n'
+                                                       '3:\n'
+                                                       '  - ["cos(x)*cos(-x) - sin(x)*sin(-x)", '
+                                                       '"cos(x)*cos(x) - sin(x)*sin(-x)"]\n'
+                                                       '  - {rule: cos_neg, vars: {x: "x"}}\n'
+                                                       '\n'
+                                                       '4:\n'
+                                                       '  - ["cos(x)*cos(x) - sin(x)*sin(-x)", '
+                                                       '"cos(x)*cos(x) - sin(x)*(-sin(x))"]\n'
+                                                       '  - {rule: sin_neg, vars: {x: "x"}}\n'
+                                                       '\n'
+                                                       '5:\n'
+                                                       '  - ["cos(x + -x)", "cos(x)**2 + sin(x)**2"]\n'
+                                                       '  - {trans: [2, 3, 4]}\n'
+                                                       '\n'
+                                                       '6:\n'
+                                                       '  - ["cos(x)**2 + sin(x)**2", "cos(x + -x)"]\n'
+                                                       '  - {sym: 5}\n'
+                                                       '\n'
+                                                       '7:\n'
+                                                       '  - ["cos(x)**2 + sin(x)**2", "1"]\n'
+                                                       '  - {trans: [6, 1]}\n'
+                                                       '```',
+                                               tool_calls=(),
+                                               justification=None),
+                                 parsed=FinalAnswer(final={1: (('cos(x + -x)', '1'),
+                                                               Rule(rule='cos_zero', vars={})),
+                                                           2: (('cos(x + -x)',
+                                                                'cos(x)*cos(-x) - sin(x)*sin(-x)'),
+                                                               Rule(rule='cos_add',
+                                                                    vars={'x': 'x', 'y': '-x'})),
+                                                           3: (('cos(x)*cos(-x) - sin(x)*sin(-x)',
+                                                                'cos(x)*cos(x) - sin(x)*sin(-x)'),
+                                                               Rule(rule='cos_neg', vars={'x': 'x'})),
+                                                           4: (('cos(x)*cos(x) - sin(x)*sin(-x)',
+                                                                'cos(x)*cos(x) - sin(x)*(-sin(x))'),
+                                                               Rule(rule='sin_neg', vars={'x': 'x'})),
+                                                           5: (('cos(x + -x)', 'cos(x)**2 + sin(x)**2'),
+                                                               Trans(trans=[2, 3, 4])),
+                                                           6: (('cos(x)**2 + sin(x)**2', 'cos(x + -x)'),
+                                                               Sym(sym=5)),
+                                                           7: (('cos(x)**2 + sin(x)**2', '1'),
+                                                               Trans(trans=[6, 1]))}))
+                      json_provided: false
+                      json: null
+          actions:
+            - ref:
+                with_ids: $7{@9}
+                with_hints: null
+              hints: null
+              related_success_nodes: []
+              related_answers:
+                - 9
+              value:
+                short: 'Response(answer=Answer(mode=None, content=''```yaml\n1:\n  - ["cos(x + -x)", "1"]\n  -
+                  {rule: cos_zero, vars: {}}\n\n2:\n  - ["cos(x + -x)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]\n  -
+                  {rule: cos_add, vars: {x: "x", y: "-x"}}\n\n3:\n  - ["cos(x)*cos(-x) - sin(x)*sin(-x)",
+                  "cos(x)*cos(x) - sin(x)*sin(-x)"]\n  - {rule: cos_neg, vars: {x: "x"}}\n\n4:\n  - ["cos(x)*cos(x)
+                  - sin(x)*sin(-x)", "cos(x)*cos(x) - sin(x)*(-sin(x))"]\n  - {rule: sin_neg, vars: {x:
+                  "x"}}\n\n5:\n  - ["cos(x + -x)", "cos(x)**2 + sin(x)**2"]\n  - {trans: [2, 3, 4]}\n\n6:\n  -
+                  ["cos(x)**2 + sin(x)**2", "cos(x + -x)"]\n  - {sym: 5}\n\n7:\n  - ["cos(x)**2 + sin(x)**2",
+                  "1"]\n  - {trans: [6, 1]}\n```'', tool_calls=(), justification=None), parsed=FinalAnswer(final={1:
+                  ((''cos(x + -x)'', ''1''), Rule(rule=''cos_zero'', vars={})), 2: ((''cos(x + -x)'',
+                  ''cos(x)*cos(-x) - sin(x)*sin(-x)''), Rule(rule=''cos_add'', vars={''x'': ''x'', ''y'':
+                  ''-x''})), 3: ((''cos(x)*cos(-x) - sin(x)*sin(-x)'', ''cos(x)*cos(x) - sin(x)*sin(-x)''),
+                  Rule(rule=''cos_neg'', vars={''x'': ''x''})), 4: ((''cos(x)*cos(x) - sin(x)*sin(-x)'',
+                  ''cos(x)*cos(x) - sin(x)*(-sin(x))''), Rule(rule=''sin_neg'', vars={''x'': ''x''})),
+                  5: ((''cos(x + -x)'', ''cos(x)**2 + sin(x)**2''), Trans(trans=[2, 3, 4])), 6: ((''cos(x)**2
+                  + sin(x)**2'', ''cos(x + -x)''), Sym(sym=5)), 7: ((''cos(x)**2 + sin(x)**2'', ''1''),
+                  Trans(trans=[6, 1]))}))'
+                long: |-
+                  Response(answer=Answer(mode=None,
+                                         content='```yaml\n'
+                                                 '1:\n'
+                                                 '  - ["cos(x + -x)", "1"]\n'
+                                                 '  - {rule: cos_zero, vars: {}}\n'
+                                                 '\n'
+                                                 '2:\n'
+                                                 '  - ["cos(x + -x)", "cos(x)*cos(-x) - '
+                                                 'sin(x)*sin(-x)"]\n'
+                                                 '  - {rule: cos_add, vars: {x: "x", y: "-x"}}\n'
+                                                 '\n'
+                                                 '3:\n'
+                                                 '  - ["cos(x)*cos(-x) - sin(x)*sin(-x)", '
+                                                 '"cos(x)*cos(x) - sin(x)*sin(-x)"]\n'
+                                                 '  - {rule: cos_neg, vars: {x: "x"}}\n'
+                                                 '\n'
+                                                 '4:\n'
+                                                 '  - ["cos(x)*cos(x) - sin(x)*sin(-x)", '
+                                                 '"cos(x)*cos(x) - sin(x)*(-sin(x))"]\n'
+                                                 '  - {rule: sin_neg, vars: {x: "x"}}\n'
+                                                 '\n'
+                                                 '5:\n'
+                                                 '  - ["cos(x + -x)", "cos(x)**2 + sin(x)**2"]\n'
+                                                 '  - {trans: [2, 3, 4]}\n'
+                                                 '\n'
+                                                 '6:\n'
+                                                 '  - ["cos(x)**2 + sin(x)**2", "cos(x + -x)"]\n'
+                                                 '  - {sym: 5}\n'
+                                                 '\n'
+                                                 '7:\n'
+                                                 '  - ["cos(x)**2 + sin(x)**2", "1"]\n'
+                                                 '  - {trans: [6, 1]}\n'
+                                                 '```',
+                                         tool_calls=(),
+                                         justification=None),
+                           parsed=FinalAnswer(final={1: (('cos(x + -x)', '1'),
+                                                         Rule(rule='cos_zero', vars={})),
+                                                     2: (('cos(x + -x)',
+                                                          'cos(x)*cos(-x) - sin(x)*sin(-x)'),
+                                                         Rule(rule='cos_add',
+                                                              vars={'x': 'x', 'y': '-x'})),
+                                                     3: (('cos(x)*cos(-x) - sin(x)*sin(-x)',
+                                                          'cos(x)*cos(x) - sin(x)*sin(-x)'),
+                                                         Rule(rule='cos_neg', vars={'x': 'x'})),
+                                                     4: (('cos(x)*cos(x) - sin(x)*sin(-x)',
+                                                          'cos(x)*cos(x) - sin(x)*(-sin(x))'),
+                                                         Rule(rule='sin_neg', vars={'x': 'x'})),
+                                                     5: (('cos(x + -x)', 'cos(x)**2 + sin(x)**2'),
+                                                         Trans(trans=[2, 3, 4])),
+                                                     6: (('cos(x)**2 + sin(x)**2', 'cos(x + -x)'),
+                                                         Sym(sym=5)),
+                                                     7: (('cos(x)**2 + sin(x)**2', '1'),
+                                                         Trans(trans=[6, 1]))}))
+                json_provided: false
+                json: null
+              destination: 10
+          origin:
+            - child
+            - 6
+            - 0
+        10:
+          kind: Run
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: check_equality
+          tags:
+            - check_equality
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 8
+              - kind: nested
+                strategy: check_equality
+                args:
+                  equality:
+                    short: ('cos(x)**2 + sin(x)**2', '1')
+                    long: ('cos(x)**2 + sin(x)**2', '1')
+                    json_provided: true
+                    json:
+                      - cos(x)**2 + sin(x)**2
+                      - '1'
+                  proof:
+                    short: '{1: ((''cos(x + -x)'', ''1''), Rule(rule=''cos_zero'', vars={})), 2: ((''cos(x
+                      + -x)'', ''cos(x)*cos(-x) - sin(x)*sin(-x)''), Rule(rule=''cos_add'', vars={''x'':
+                      ''x'', ''y'': ''-x''})), 3: ((''cos(x)*cos(-x) - sin(x)*sin(-x)'', ''cos(x)*cos(x)
+                      - sin(x)*sin(-x)''), Rule(rule=''cos_neg'', vars={''x'': ''x''})), 4: ((''cos(x)*cos(x)
+                      - sin(x)*sin(-x)'', ''cos(x)*cos(x) - sin(x)*(-sin(x))''), Rule(rule=''sin_neg'',
+                      vars={''x'': ''x''})), 5: ((''cos(x + -x)'', ''cos(x)**2 + sin(x)**2''), Trans(trans=[2,
+                      3, 4])), 6: ((''cos(x)**2 + sin(x)**2'', ''cos(x + -x)''), Sym(sym=5)), 7: ((''cos(x)**2
+                      + sin(x)**2'', ''1''), Trans(trans=[6, 1]))}'
+                    long: |-
+                      {1: (('cos(x + -x)', '1'), Rule(rule='cos_zero', vars={})),
+                       2: (('cos(x + -x)', 'cos(x)*cos(-x) - sin(x)*sin(-x)'),
+                           Rule(rule='cos_add', vars={'x': 'x', 'y': '-x'})),
+                       3: (('cos(x)*cos(-x) - sin(x)*sin(-x)', 'cos(x)*cos(x) - sin(x)*sin(-x)'),
+                           Rule(rule='cos_neg', vars={'x': 'x'})),
+                       4: (('cos(x)*cos(x) - sin(x)*sin(-x)', 'cos(x)*cos(x) - sin(x)*(-sin(x))'),
+                           Rule(rule='sin_neg', vars={'x': 'x'})),
+                       5: (('cos(x + -x)', 'cos(x)**2 + sin(x)**2'), Trans(trans=[2, 3, 4])),
+                       6: (('cos(x)**2 + sin(x)**2', 'cos(x + -x)'), Sym(sym=5)),
+                       7: (('cos(x)**2 + sin(x)**2', '1'), Trans(trans=[6, 1]))}
+                    json_provided: false
+                    json: null
+                tags:
+                  - check_equality
+                node_id: 11
+          actions:
+            - ref:
+                with_ids: $8{%12}
+                with_hints: null
+              hints: null
+              related_success_nodes:
+                - 12
+              related_answers: []
+              value:
+                short: '{1: ((''cos(x + -x)'', ''1''), Rule(rule=''cos_zero'', vars={})), 2: ((''cos(x
+                  + -x)'', ''cos(x)*cos(-x) - sin(x)*sin(-x)''), Rule(rule=''cos_add'', vars={''x'': ''x'',
+                  ''y'': ''-x''})), 3: ((''cos(x)*cos(-x) - sin(x)*sin(-x)'', ''cos(x)*cos(x) - sin(x)*sin(-x)''),
+                  Rule(rule=''cos_neg'', vars={''x'': ''x''})), 4: ((''cos(x)*cos(x) - sin(x)*sin(-x)'',
+                  ''cos(x)*cos(x) - sin(x)*(-sin(x))''), Rule(rule=''sin_neg'', vars={''x'': ''x''})),
+                  5: ((''cos(x + -x)'', ''cos(x)**2 + sin(x)**2''), Trans(trans=[2, 3, 4])), 6: ((''cos(x)**2
+                  + sin(x)**2'', ''cos(x + -x)''), Sym(sym=5)), 7: ((''cos(x)**2 + sin(x)**2'', ''1''),
+                  Trans(trans=[6, 1]))}'
+                long: |-
+                  {1: (('cos(x + -x)', '1'), Rule(rule='cos_zero', vars={})),
+                   2: (('cos(x + -x)', 'cos(x)*cos(-x) - sin(x)*sin(-x)'),
+                       Rule(rule='cos_add', vars={'x': 'x', 'y': '-x'})),
+                   3: (('cos(x)*cos(-x) - sin(x)*sin(-x)', 'cos(x)*cos(x) - sin(x)*sin(-x)'),
+                       Rule(rule='cos_neg', vars={'x': 'x'})),
+                   4: (('cos(x)*cos(x) - sin(x)*sin(-x)', 'cos(x)*cos(x) - sin(x)*(-sin(x))'),
+                       Rule(rule='sin_neg', vars={'x': 'x'})),
+                   5: (('cos(x + -x)', 'cos(x)**2 + sin(x)**2'), Trans(trans=[2, 3, 4])),
+                   6: (('cos(x)**2 + sin(x)**2', 'cos(x + -x)'), Sym(sym=5)),
+                   7: (('cos(x)**2 + sin(x)**2', '1'), Trans(trans=[6, 1]))}
+                json_provided: false
+                json: null
+              destination: 13
+          origin:
+            - child
+            - 9
+            - 0
+        11:
+          kind: Compute
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: null
+          tags: []
+          properties:
+            - - with_ids: query
+                with_hints: null
+              - 9
+              - kind: query
+                name: __Computation__
+                args:
+                  fun: check
+                  args:
+                    eq:
+                      - cos(x)**2 + sin(x)**2
+                      - '1'
+                    proof:
+                      1:
+                        - - cos(x + -x)
+                          - '1'
+                        - rule: cos_zero
+                          vars: {}
+                      2:
+                        - - cos(x + -x)
+                          - cos(x)*cos(-x) - sin(x)*sin(-x)
+                        - rule: cos_add
+                          vars:
+                            x: x
+                            y: -x
+                      3:
+                        - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                          - cos(x)*cos(x) - sin(x)*sin(-x)
+                        - rule: cos_neg
+                          vars:
+                            x: x
+                      4:
+                        - - cos(x)*cos(x) - sin(x)*sin(-x)
+                          - cos(x)*cos(x) - sin(x)*(-sin(x))
+                        - rule: sin_neg
+                          vars:
+                            x: x
+                      5:
+                        - - cos(x + -x)
+                          - cos(x)**2 + sin(x)**2
+                        - trans:
+                            - 2
+                            - 3
+                            - 4
+                      6:
+                        - - cos(x)**2 + sin(x)**2
+                          - cos(x + -x)
+                        - sym: 5
+                      7:
+                        - - cos(x)**2 + sin(x)**2
+                          - '1'
+                        - trans:
+                            - 6
+                            - 1
+                    rules:
+                      cos_zero:
+                        - cos(0)
+                        - '1'
+                      sin_zero:
+                        - sin(0)
+                        - '0'
+                      sin_halfpi:
+                        - sin(pi/2)
+                        - '1'
+                      cos_halfpi:
+                        - cos(pi/2)
+                        - '0'
+                      sin_neg:
+                        - sin(-x)
+                        - -sin(x)
+                      cos_neg:
+                        - cos(-x)
+                        - cos(x)
+                      cos_add:
+                        - cos(x + y)
+                        - cos(x)*cos(y) - sin(x)*sin(y)
+                      sin_add:
+                        - sin(x + y)
+                        - sin(x)*cos(y) + cos(x)*sin(y)
+                tags:
+                  - __Computation__
+                answers:
+                  - id: 10
+                    hint: null
+                    value:
+                      short: None
+                      long: None
+                      json_provided: true
+                      json: null
+          actions:
+            - ref:
+                with_ids: $9{@10}
+                with_hints: null
+              hints: null
+              related_success_nodes: []
+              related_answers:
+                - 10
+              value:
+                short: None
+                long: None
+                json_provided: true
+                json: null
+              destination: 12
+          origin:
+            - nested
+            - 10
+            - 0
+        12:
+          kind: Success
+          success_value:
+            short: '{1: ((''cos(x + -x)'', ''1''), Rule(rule=''cos_zero'', vars={})), 2: ((''cos(x + -x)'',
+              ''cos(x)*cos(-x) - sin(x)*sin(-x)''), Rule(rule=''cos_add'', vars={''x'': ''x'', ''y'':
+              ''-x''})), 3: ((''cos(x)*cos(-x) - sin(x)*sin(-x)'', ''cos(x)*cos(x) - sin(x)*sin(-x)''),
+              Rule(rule=''cos_neg'', vars={''x'': ''x''})), 4: ((''cos(x)*cos(x) - sin(x)*sin(-x)'', ''cos(x)*cos(x)
+              - sin(x)*(-sin(x))''), Rule(rule=''sin_neg'', vars={''x'': ''x''})), 5: ((''cos(x + -x)'',
+              ''cos(x)**2 + sin(x)**2''), Trans(trans=[2, 3, 4])), 6: ((''cos(x)**2 + sin(x)**2'', ''cos(x
+              + -x)''), Sym(sym=5)), 7: ((''cos(x)**2 + sin(x)**2'', ''1''), Trans(trans=[6, 1]))}'
+            long: |-
+              {1: (('cos(x + -x)', '1'), Rule(rule='cos_zero', vars={})),
+               2: (('cos(x + -x)', 'cos(x)*cos(-x) - sin(x)*sin(-x)'),
+                   Rule(rule='cos_add', vars={'x': 'x', 'y': '-x'})),
+               3: (('cos(x)*cos(-x) - sin(x)*sin(-x)', 'cos(x)*cos(x) - sin(x)*sin(-x)'),
+                   Rule(rule='cos_neg', vars={'x': 'x'})),
+               4: (('cos(x)*cos(x) - sin(x)*sin(-x)', 'cos(x)*cos(x) - sin(x)*(-sin(x))'),
+                   Rule(rule='sin_neg', vars={'x': 'x'})),
+               5: (('cos(x + -x)', 'cos(x)**2 + sin(x)**2'), Trans(trans=[2, 3, 4])),
+               6: (('cos(x)**2 + sin(x)**2', 'cos(x + -x)'), Sym(sym=5)),
+               7: (('cos(x)**2 + sin(x)**2', '1'), Trans(trans=[6, 1]))}
+            json_provided: false
+            json: null
+          summary_message: null
+          leaf_node: true
+          label: null
+          tags: []
+          properties: []
+          actions: []
+          origin:
+            - child
+            - 11
+            - 0
+        13:
+          kind: Success
+          success_value:
+            short: '{1: ((''cos(x + -x)'', ''1''), Rule(rule=''cos_zero'', vars={})), 2: ((''cos(x + -x)'',
+              ''cos(x)*cos(-x) - sin(x)*sin(-x)''), Rule(rule=''cos_add'', vars={''x'': ''x'', ''y'':
+              ''-x''})), 3: ((''cos(x)*cos(-x) - sin(x)*sin(-x)'', ''cos(x)*cos(x) - sin(x)*sin(-x)''),
+              Rule(rule=''cos_neg'', vars={''x'': ''x''})), 4: ((''cos(x)*cos(x) - sin(x)*sin(-x)'', ''cos(x)*cos(x)
+              - sin(x)*(-sin(x))''), Rule(rule=''sin_neg'', vars={''x'': ''x''})), 5: ((''cos(x + -x)'',
+              ''cos(x)**2 + sin(x)**2''), Trans(trans=[2, 3, 4])), 6: ((''cos(x)**2 + sin(x)**2'', ''cos(x
+              + -x)''), Sym(sym=5)), 7: ((''cos(x)**2 + sin(x)**2'', ''1''), Trans(trans=[6, 1]))}'
+            long: |-
+              {1: (('cos(x + -x)', '1'), Rule(rule='cos_zero', vars={})),
+               2: (('cos(x + -x)', 'cos(x)*cos(-x) - sin(x)*sin(-x)'),
+                   Rule(rule='cos_add', vars={'x': 'x', 'y': '-x'})),
+               3: (('cos(x)*cos(-x) - sin(x)*sin(-x)', 'cos(x)*cos(x) - sin(x)*sin(-x)'),
+                   Rule(rule='cos_neg', vars={'x': 'x'})),
+               4: (('cos(x)*cos(x) - sin(x)*sin(-x)', 'cos(x)*cos(x) - sin(x)*(-sin(x))'),
+                   Rule(rule='sin_neg', vars={'x': 'x'})),
+               5: (('cos(x + -x)', 'cos(x)**2 + sin(x)**2'), Trans(trans=[2, 3, 4])),
+               6: (('cos(x)**2 + sin(x)**2', 'cos(x + -x)'), Sym(sym=5)),
+               7: (('cos(x)**2 + sin(x)**2', '1'), Trans(trans=[6, 1]))}
+            json_provided: false
+            json: null
+          summary_message: null
+          leaf_node: true
+          label: null
+          tags: []
+          properties: []
+          actions: []
+          origin:
+            - child
+            - 10
+            - 0
+      spaces:
+        1:
+          - 1
+          - 0
+        2:
+          - 2
+          - 0
+        3:
+          - 3
+          - 0
+        4:
+          - 5
+          - 0
+        5:
+          - 6
+          - 0
+        6:
+          - 7
+          - 0
+        7:
+          - 9
+          - 0
+        8:
+          - 10
+          - 0
+        9:
+          - 11
+          - 0

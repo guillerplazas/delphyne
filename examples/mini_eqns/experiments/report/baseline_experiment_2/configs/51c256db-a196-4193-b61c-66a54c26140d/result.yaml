@@ -1,0 +1,2001 @@
+# delphyne-command
+
+command: run_strategy
+args:
+  strategy: prove_equality_interactive
+  args:
+    equality:
+      - cos(pi + x)
+      - -cos(x)
+  policy: prove_equality_interactive_policy
+  policy_args:
+    model_name: gpt-5.4
+    temperature: 1.0
+    max_feedback_cycles: 10
+    loop: true
+    reasoning_effort: low
+  budget:
+    price: 0.2
+  cache_file: configs/51c256db-a196-4193-b61c-66a54c26140d/cache.yaml
+  embeddings_cache_file: configs/51c256db-a196-4193-b61c-66a54c26140d/embeddings.cache.h5
+  cache_mode: create
+outcome:
+  diagnostics: []
+  result:
+    success: true
+    values:
+      - 1:
+          - - cos(pi)
+            - cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)
+          - rule: cos_add
+            vars:
+              x: pi/2
+              y: pi/2
+        2:
+          - - cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)
+            - -sin(pi/2)*sin(pi/2)
+          - rule: cos_halfpi
+        3:
+          - - -sin(pi/2)*sin(pi/2)
+            - '-1'
+          - rule: sin_halfpi
+        4:
+          - - cos(pi)
+            - '-1'
+          - trans:
+              - 1
+              - 2
+              - 3
+        5:
+          - - sin(pi)
+            - sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)
+          - rule: sin_add
+            vars:
+              x: pi/2
+              y: pi/2
+        6:
+          - - sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)
+            - '0'
+          - rule: cos_halfpi
+        7:
+          - - sin(pi)
+            - '0'
+          - trans:
+              - 5
+              - 6
+        8:
+          - - cos(pi + x)
+            - cos(pi)*cos(x) - sin(pi)*sin(x)
+          - rule: cos_add
+            vars:
+              x: pi
+              y: x
+        9:
+          - - cos(pi)*cos(x) - sin(pi)*sin(x)
+            - -cos(x) - sin(pi)*sin(x)
+          - step: 4
+        10:
+          - - -cos(x) - sin(pi)*sin(x)
+            - -cos(x)
+          - step: 7
+        11:
+          - - cos(pi + x)
+            - -cos(x)
+          - trans:
+              - 8
+              - 9
+              - 10
+    spent_budget:
+      num_requests: 2
+      num_completions: 2
+      input_tokens: 4294
+      output_tokens: 1594
+      cached_input_tokens: 3584
+      price: 0.0172755
+    success_nodes:
+      - 9
+    raw_trace:
+      nodes:
+        1: nested($0)
+        2: child(%1, $1{@1})
+        3: nested($2)
+        4: child(%3, $3{@2})
+        5: child(%2, $2{%4})
+        6: child(%5, $4{@3})
+        7: nested($5)
+        8: child(%7, $6{@4})
+        9: child(%6, $5{%8})
+      spaces:
+        0: main
+        1: local(%1, cands)
+        2: local(%2, cands)
+        3: local(%3, query)
+        4: local(%5, cands)
+        5: local(%6, cands)
+        6: local(%7, query)
+      answers:
+        1:
+          space: 1
+          answer:
+            mode: null
+            content: |-
+              We use the addition formula twice.
+
+              First compute the trigonometric values at `pi` from the allowed rules:
+              - `cos(pi) = cos(pi/2 + pi/2) = cos(pi/2)cos(pi/2) - sin(pi/2)sin(pi/2) = 0 - 1 = -1`.
+              - `sin(pi) = sin(pi/2 + pi/2) = sin(pi/2)cos(pi/2) + cos(pi/2)sin(pi/2) = 0 + 0 = 0`.
+
+              Then apply the addition formula to `cos(pi + x)`:
+              - `cos(pi + x) = cos(pi)cos(x) - sin(pi)sin(x) = (-1)cos(x) - 0 = -cos(x)`.
+
+              ```yaml
+              1:
+                - ["cos(pi)", "cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)"]
+                - {rule: cos_add, vars: {x: "pi/2", y: "pi/2"}}
+
+              2:
+                - ["cos(pi)", "-1"]
+                - {trans: [1]}
+
+              3:
+                - ["sin(pi)", "sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)"]
+                - {rule: sin_add, vars: {x: "pi/2", y: "pi/2"}}
+
+              4:
+                - ["sin(pi)", "0"]
+                - {trans: [3]}
+
+              5:
+                - ["cos(pi + x)", "cos(pi)*cos(x) - sin(pi)*sin(x)"]
+                - {rule: cos_add, vars: {x: "pi", y: "x"}}
+
+              6:
+                - ["cos(pi)*cos(x) - sin(pi)*sin(x)", "-cos(x)"]
+                - {step: 2}
+
+              7:
+                - ["cos(pi + x)", "-cos(x)"]
+                - {trans: [5, 6]}
+              ```
+        2:
+          space: 3
+          answer:
+            mode: null
+            content: |
+              feedback: Transitivity requires at least 2 steps.
+              step: 2
+        3:
+          space: 4
+          answer:
+            mode: null
+            content: |-
+              We prove `cos(pi + x) = -cos(x)` by expanding `cos(pi+x)` with the addition formula, then evaluating `cos(pi)` and `sin(pi)` from the allowed rules.
+
+              First,
+              - `cos(pi) = cos(pi/2 + pi/2)`
+              - by `cos_add`, this is `cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)`
+              - since `cos(pi/2)=0` and `sin(pi/2)=1`, this simplifies to `-1`.
+
+              Similarly,
+              - `sin(pi) = sin(pi/2 + pi/2)`
+              - by `sin_add`, this is `sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)`
+              - since `cos(pi/2)=0`, this simplifies to `0`.
+
+              Then
+              - `cos(pi+x) = cos(pi)cos(x) - sin(pi)sin(x)`
+              - substitute `cos(pi)=-1` and `sin(pi)=0`
+              - this becomes `-cos(x)`.
+
+              ```yaml
+              1:
+                - ["cos(pi)", "cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)"]
+                - {rule: cos_add, vars: {x: "pi/2", y: "pi/2"}}
+
+              2:
+                - ["cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)", "-sin(pi/2)*sin(pi/2)"]
+                - {rule: cos_halfpi, vars: {}}
+
+              3:
+                - ["-sin(pi/2)*sin(pi/2)", "-1"]
+                - {rule: sin_halfpi, vars: {}}
+
+              4:
+                - ["cos(pi)", "-1"]
+                - {trans: [1, 2, 3]}
+
+              5:
+                - ["sin(pi)", "sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)"]
+                - {rule: sin_add, vars: {x: "pi/2", y: "pi/2"}}
+
+              6:
+                - ["sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)", "0"]
+                - {rule: cos_halfpi, vars: {}}
+
+              7:
+                - ["sin(pi)", "0"]
+                - {trans: [5, 6]}
+
+              8:
+                - ["cos(pi + x)", "cos(pi)*cos(x) - sin(pi)*sin(x)"]
+                - {rule: cos_add, vars: {x: "pi", y: "x"}}
+
+              9:
+                - ["cos(pi)*cos(x) - sin(pi)*sin(x)", "-cos(x) - sin(pi)*sin(x)"]
+                - {step: 4}
+
+              10:
+                - ["-cos(x) - sin(pi)*sin(x)", "-cos(x)"]
+                - {step: 7}
+
+              11:
+                - ["cos(pi + x)", "-cos(x)"]
+                - {trans: [8, 9, 10]}
+              ```
+        4:
+          space: 6
+          answer:
+            mode: null
+            content: |
+              null
+              ...
+    log:
+      - message: llm_request
+        level: info
+        message_id: 0
+        time: 2026-03-20 12:34:05.235699
+        space: 1
+        metadata:
+          query: ProveEqualityInteractive
+          request:
+            chat:
+              - role: system
+                content: |-
+                  ## Task Description
+
+                  The goal is to produce machine-checkable proofs of simple trigonometric equalities. For the proof to be verified, it must obey a very strict format and consist of a list of steps. Each step states an equality and is attached a justification for how the equality was obtained, which can be either:
+
+                  - Applying a predefined rewriting rule (see list below): `{rule: <rule_name>, vars: {<var_1>: "<value_1>", ..., <var_n>: "value_n"}}`.
+                  - Substituting a previously obtained equality: `{step: {prev_step_id}}`.
+                  - Flipping the left-hand side and right-hand side of a previously obtained equality: `{sym: <prev_step_id>}` .
+                  - Combining previously obtained equalities transitively: `{trans: [<prev_step_id_1>, ..., <prev_step_id_n>]}`.
+
+                  The last step of the proof must feature the target equality that you were tasked to prove.
+
+                  Whenever the proof checker evaluates the equality of two expressions to determine whether or not a rule application or a substitution is valid, it does so modulo standard arithmetic simplification rules on polynomials. Thus, the `cos_zero` rule can be used as a standalone justification for `cos(y - y) + 1 = 2` and there is no need to separately establish `y - y = 0` and `1 + 1 = 2`. However, **no** fact about trigonometry should be ever taken for granted.
+
+                  You should organize your answer in the following way. Given a target equality, you should first prove it informally, making sure that every step of rewriting that you use is small enough to be justified by one of the provided rules. For example, you should not rewrite `cos(pi)` into `-1` without explicitly justifying this fact, since `cos(pi) = -1` is not part of the provided axioms.
+
+                  Once you've done that, you should end your answer with a triple-quoted code block containing a valid YAML object that describes a machine-checkable proof formalizing your former reasoning. All expressions must be written as strings using Python syntax (and thus parsable using `sympy.sympyfy`). In particular, exponentiation is written `**`.
+
+                  **Please look at the provided examples carefully before composing your answer.**
+
+                  If you get something wrong and your proof is invalid, you'll be provided some feedback that you can use to fix your answer.
+
+                  ## List of allowed rewriting rules
+
+                  ```
+                  - cos_zero: `cos(0) = 1`
+                  - sin_zero: `sin(0) = 0`
+                  - sin_halfpi: `sin(pi/2) = 1`
+                  - cos_halfpi: `cos(pi/2) = 0`
+                  - sin_neg: `sin(-x) = -sin(x)`
+                  - cos_neg: `cos(-x) = cos(x)`
+                  - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+                  - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+                  ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    The equality can be derived as follows:
+                    ```
+                    cos(pi/3)
+                    = cos(pi/2-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    However, the second step uses property `cos(pi/2-x) = sin(x)`, which is not part of the allowed set of rules. Thus, we provide a longer derivation that uses `cos_add`.
+
+                    ```
+                    cos(pi/2-pi/6)
+                    = cos(pi/2+(-pi/6))
+                    = cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                    = -sin(-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    The second step uses that `cos(pi/2) = 0` and `sin(pi/2)` = 1, which we can get via the `sin_halfpi` and `cos_halfpi` rules. The last step uses `sin_neg`, so we should be done. Let's formalize this reasoning as a proof.
+
+                    ```yaml
+                    # We start establishing `cos(pi/2-pi/6) = sin(pi/6)`
+                    1:
+                      - ["cos(pi/2-pi/6)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/2-pi/6)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+
+                    # We establish our main result.
+                    # Step 5 applies directly since "cos(pi/3)" and "cos(pi/2-pi/6)" are treated as identical by the rule matcher, which performs simple simplification (as long as the required simplification does not require trigonometry).
+                    6:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {step: 5}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    Let me just propose a simple proof:
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    ```
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  {'error': None, 'feedback': "Error at step 1: Rule application failed. Obtained: '0' instead of the expected right-hand side."}
+                  ```
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    I see the error. The `cos_halfpi` rule says `cos(pi/2) = 0`, but I'm trying to prove `cos(pi/3) = sin(pi/6)`. Let me fix this by using the correct approach.
+
+                    Since `pi/3 = pi/2 - pi/6`, I can rewrite `cos(pi/3)` as `cos(pi/2 - pi/6)` and use the angle addition formula.
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `2*sin(x/2)*cos(x/2) = sin(x)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |-
+                    It is easier to start with the right-hand side here:
+
+                    ```
+                    sin(x)
+                    = sin(x/2+x/2)
+                    = sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                    = 2*sin(x/2)*cos(x/2)
+                    ```
+
+                    The first and last steps are just elementary simplifications so the only real rule to apply here is `sin_add`.
+
+                    ```yaml
+                    1:
+                      - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                      - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+                    2:
+                      - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                      - {sym: 1}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi + x) = -cos(x)`.'
+            options:
+              temperature: 1.0
+      - message: llm_response
+        level: info
+        message_id: 1
+        related:
+          - 0
+        time: 2026-03-20 12:34:13.508194
+        space: 1
+        metadata:
+          response:
+            outputs:
+              - content: |-
+                  We use the addition formula twice.
+
+                  First compute the trigonometric values at `pi` from the allowed rules:
+                  - `cos(pi) = cos(pi/2 + pi/2) = cos(pi/2)cos(pi/2) - sin(pi/2)sin(pi/2) = 0 - 1 = -1`.
+                  - `sin(pi) = sin(pi/2 + pi/2) = sin(pi/2)cos(pi/2) + cos(pi/2)sin(pi/2) = 0 + 0 = 0`.
+
+                  Then apply the addition formula to `cos(pi + x)`:
+                  - `cos(pi + x) = cos(pi)cos(x) - sin(pi)sin(x) = (-1)cos(x) - 0 = -cos(x)`.
+
+                  ```yaml
+                  1:
+                    - ["cos(pi)", "cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)"]
+                    - {rule: cos_add, vars: {x: "pi/2", y: "pi/2"}}
+
+                  2:
+                    - ["cos(pi)", "-1"]
+                    - {trans: [1]}
+
+                  3:
+                    - ["sin(pi)", "sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)"]
+                    - {rule: sin_add, vars: {x: "pi/2", y: "pi/2"}}
+
+                  4:
+                    - ["sin(pi)", "0"]
+                    - {trans: [3]}
+
+                  5:
+                    - ["cos(pi + x)", "cos(pi)*cos(x) - sin(pi)*sin(x)"]
+                    - {rule: cos_add, vars: {x: "pi", y: "x"}}
+
+                  6:
+                    - ["cos(pi)*cos(x) - sin(pi)*sin(x)", "-cos(x)"]
+                    - {step: 2}
+
+                  7:
+                    - ["cos(pi + x)", "-cos(x)"]
+                    - {trans: [5, 6]}
+                  ```
+                tool_calls: []
+            budget:
+              values:
+                num_requests: 1
+                num_completions: 1
+                input_tokens: 1909
+                output_tokens: 540
+                cached_input_tokens: 1792
+                price: 0.005770249999999999
+            log_items: []
+            model_name: gpt-5.4-2026-03-05
+            usage_info:
+              completion_tokens: 540
+              prompt_tokens: 1909
+              total_tokens: 2449
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 102
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+          usage:
+            model: gpt-5.4-2026-03-05
+            usage:
+              completion_tokens: 540
+              prompt_tokens: 1909
+              total_tokens: 2449
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 102
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+      - message: llm_request
+        level: info
+        message_id: 2
+        time: 2026-03-20 12:34:13.542318
+        space: 4
+        metadata:
+          query: ProveEqualityInteractive
+          request:
+            chat:
+              - role: system
+                content: |-
+                  ## Task Description
+
+                  The goal is to produce machine-checkable proofs of simple trigonometric equalities. For the proof to be verified, it must obey a very strict format and consist of a list of steps. Each step states an equality and is attached a justification for how the equality was obtained, which can be either:
+
+                  - Applying a predefined rewriting rule (see list below): `{rule: <rule_name>, vars: {<var_1>: "<value_1>", ..., <var_n>: "value_n"}}`.
+                  - Substituting a previously obtained equality: `{step: {prev_step_id}}`.
+                  - Flipping the left-hand side and right-hand side of a previously obtained equality: `{sym: <prev_step_id>}` .
+                  - Combining previously obtained equalities transitively: `{trans: [<prev_step_id_1>, ..., <prev_step_id_n>]}`.
+
+                  The last step of the proof must feature the target equality that you were tasked to prove.
+
+                  Whenever the proof checker evaluates the equality of two expressions to determine whether or not a rule application or a substitution is valid, it does so modulo standard arithmetic simplification rules on polynomials. Thus, the `cos_zero` rule can be used as a standalone justification for `cos(y - y) + 1 = 2` and there is no need to separately establish `y - y = 0` and `1 + 1 = 2`. However, **no** fact about trigonometry should be ever taken for granted.
+
+                  You should organize your answer in the following way. Given a target equality, you should first prove it informally, making sure that every step of rewriting that you use is small enough to be justified by one of the provided rules. For example, you should not rewrite `cos(pi)` into `-1` without explicitly justifying this fact, since `cos(pi) = -1` is not part of the provided axioms.
+
+                  Once you've done that, you should end your answer with a triple-quoted code block containing a valid YAML object that describes a machine-checkable proof formalizing your former reasoning. All expressions must be written as strings using Python syntax (and thus parsable using `sympy.sympyfy`). In particular, exponentiation is written `**`.
+
+                  **Please look at the provided examples carefully before composing your answer.**
+
+                  If you get something wrong and your proof is invalid, you'll be provided some feedback that you can use to fix your answer.
+
+                  ## List of allowed rewriting rules
+
+                  ```
+                  - cos_zero: `cos(0) = 1`
+                  - sin_zero: `sin(0) = 0`
+                  - sin_halfpi: `sin(pi/2) = 1`
+                  - cos_halfpi: `cos(pi/2) = 0`
+                  - sin_neg: `sin(-x) = -sin(x)`
+                  - cos_neg: `cos(-x) = cos(x)`
+                  - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+                  - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+                  ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    The equality can be derived as follows:
+                    ```
+                    cos(pi/3)
+                    = cos(pi/2-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    However, the second step uses property `cos(pi/2-x) = sin(x)`, which is not part of the allowed set of rules. Thus, we provide a longer derivation that uses `cos_add`.
+
+                    ```
+                    cos(pi/2-pi/6)
+                    = cos(pi/2+(-pi/6))
+                    = cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                    = -sin(-pi/6)
+                    = sin(pi/6)
+                    ```
+
+                    The second step uses that `cos(pi/2) = 0` and `sin(pi/2)` = 1, which we can get via the `sin_halfpi` and `cos_halfpi` rules. The last step uses `sin_neg`, so we should be done. Let's formalize this reasoning as a proof.
+
+                    ```yaml
+                    # We start establishing `cos(pi/2-pi/6) = sin(pi/6)`
+                    1:
+                      - ["cos(pi/2-pi/6)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/2-pi/6)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+
+                    # We establish our main result.
+                    # Step 5 applies directly since "cos(pi/3)" and "cos(pi/2-pi/6)" are treated as identical by the rule matcher, which performs simple simplification (as long as the required simplification does not require trigonometry).
+                    6:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {step: 5}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi/3) = sin(pi/6)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    Let me just propose a simple proof:
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    ```
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  {'error': None, 'feedback': "Error at step 1: Rule application failed. Obtained: '0' instead of the expected right-hand side."}
+                  ```
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    I see the error. The `cos_halfpi` rule says `cos(pi/2) = 0`, but I'm trying to prove `cos(pi/3) = sin(pi/6)`. Let me fix this by using the correct approach.
+
+                    Since `pi/3 = pi/2 - pi/6`, I can rewrite `cos(pi/3)` as `cos(pi/2 - pi/6)` and use the angle addition formula.
+
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    5:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `2*sin(x/2)*cos(x/2) = sin(x)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |-
+                    It is easier to start with the right-hand side here:
+
+                    ```
+                    sin(x)
+                    = sin(x/2+x/2)
+                    = sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                    = 2*sin(x/2)*cos(x/2)
+                    ```
+
+                    The first and last steps are just elementary simplifications so the only real rule to apply here is `sin_add`.
+
+                    ```yaml
+                    1:
+                      - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                      - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+                    2:
+                      - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                      - {sym: 1}
+                    ```
+              - role: user
+                content: 'Prove the following equality: `cos(pi + x) = -cos(x)`.'
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |-
+                    We use the addition formula twice.
+
+                    First compute the trigonometric values at `pi` from the allowed rules:
+                    - `cos(pi) = cos(pi/2 + pi/2) = cos(pi/2)cos(pi/2) - sin(pi/2)sin(pi/2) = 0 - 1 = -1`.
+                    - `sin(pi) = sin(pi/2 + pi/2) = sin(pi/2)cos(pi/2) + cos(pi/2)sin(pi/2) = 0 + 0 = 0`.
+
+                    Then apply the addition formula to `cos(pi + x)`:
+                    - `cos(pi + x) = cos(pi)cos(x) - sin(pi)sin(x) = (-1)cos(x) - 0 = -cos(x)`.
+
+                    ```yaml
+                    1:
+                      - ["cos(pi)", "cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "pi/2"}}
+
+                    2:
+                      - ["cos(pi)", "-1"]
+                      - {trans: [1]}
+
+                    3:
+                      - ["sin(pi)", "sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)"]
+                      - {rule: sin_add, vars: {x: "pi/2", y: "pi/2"}}
+
+                    4:
+                      - ["sin(pi)", "0"]
+                      - {trans: [3]}
+
+                    5:
+                      - ["cos(pi + x)", "cos(pi)*cos(x) - sin(pi)*sin(x)"]
+                      - {rule: cos_add, vars: {x: "pi", y: "x"}}
+
+                    6:
+                      - ["cos(pi)*cos(x) - sin(pi)*sin(x)", "-cos(x)"]
+                      - {step: 2}
+
+                    7:
+                      - ["cos(pi + x)", "-cos(x)"]
+                      - {trans: [5, 6]}
+                    ```
+              - role: user
+                content: |-
+                  Your formal proof did not check successfully. Take the following error into consideration and make another try.
+
+                  ```
+                  Error at step 2: Transitivity requires at least 2 steps.
+                  ```
+            options:
+              temperature: 1.0
+      - message: llm_response
+        level: info
+        message_id: 3
+        related:
+          - 2
+        time: 2026-03-20 12:34:27.549484
+        space: 4
+        metadata:
+          response:
+            outputs:
+              - content: |-
+                  We prove `cos(pi + x) = -cos(x)` by expanding `cos(pi+x)` with the addition formula, then evaluating `cos(pi)` and `sin(pi)` from the allowed rules.
+
+                  First,
+                  - `cos(pi) = cos(pi/2 + pi/2)`
+                  - by `cos_add`, this is `cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)`
+                  - since `cos(pi/2)=0` and `sin(pi/2)=1`, this simplifies to `-1`.
+
+                  Similarly,
+                  - `sin(pi) = sin(pi/2 + pi/2)`
+                  - by `sin_add`, this is `sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)`
+                  - since `cos(pi/2)=0`, this simplifies to `0`.
+
+                  Then
+                  - `cos(pi+x) = cos(pi)cos(x) - sin(pi)sin(x)`
+                  - substitute `cos(pi)=-1` and `sin(pi)=0`
+                  - this becomes `-cos(x)`.
+
+                  ```yaml
+                  1:
+                    - ["cos(pi)", "cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)"]
+                    - {rule: cos_add, vars: {x: "pi/2", y: "pi/2"}}
+
+                  2:
+                    - ["cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)", "-sin(pi/2)*sin(pi/2)"]
+                    - {rule: cos_halfpi, vars: {}}
+
+                  3:
+                    - ["-sin(pi/2)*sin(pi/2)", "-1"]
+                    - {rule: sin_halfpi, vars: {}}
+
+                  4:
+                    - ["cos(pi)", "-1"]
+                    - {trans: [1, 2, 3]}
+
+                  5:
+                    - ["sin(pi)", "sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)"]
+                    - {rule: sin_add, vars: {x: "pi/2", y: "pi/2"}}
+
+                  6:
+                    - ["sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)", "0"]
+                    - {rule: cos_halfpi, vars: {}}
+
+                  7:
+                    - ["sin(pi)", "0"]
+                    - {trans: [5, 6]}
+
+                  8:
+                    - ["cos(pi + x)", "cos(pi)*cos(x) - sin(pi)*sin(x)"]
+                    - {rule: cos_add, vars: {x: "pi", y: "x"}}
+
+                  9:
+                    - ["cos(pi)*cos(x) - sin(pi)*sin(x)", "-cos(x) - sin(pi)*sin(x)"]
+                    - {step: 4}
+
+                  10:
+                    - ["-cos(x) - sin(pi)*sin(x)", "-cos(x)"]
+                    - {step: 7}
+
+                  11:
+                    - ["cos(pi + x)", "-cos(x)"]
+                    - {trans: [8, 9, 10]}
+                  ```
+                tool_calls: []
+            budget:
+              values:
+                num_requests: 1
+                num_completions: 1
+                input_tokens: 2385
+                output_tokens: 1054
+                cached_input_tokens: 1792
+                price: 0.011505249999999998
+            log_items: []
+            model_name: gpt-5.4-2026-03-05
+            usage_info:
+              completion_tokens: 1054
+              prompt_tokens: 2385
+              total_tokens: 3439
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 386
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+          usage:
+            model: gpt-5.4-2026-03-05
+            usage:
+              completion_tokens: 1054
+              prompt_tokens: 2385
+              total_tokens: 3439
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 386
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 1792
+    browsable_trace:
+      nodes:
+        1:
+          kind: Branch
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: ProveEqualityInteractive
+          tags:
+            - ProveEqualityInteractive
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 1
+              - kind: query
+                name: ProveEqualityInteractive
+                args:
+                  equality:
+                    - cos(pi + x)
+                    - -cos(x)
+                  prefix: []
+                tags:
+                  - ProveEqualityInteractive
+                answers:
+                  - id: 1
+                    hint: null
+                    value:
+                      short: 'Response(answer=Answer(mode=None, content=''We use the addition formula
+                        twice.\n\nFirst compute the trigonometric values at `pi` from the allowed rules:\n-
+                        `cos(pi) = cos(pi/2 + pi/2) = cos(pi/2)cos(pi/2) - sin(pi/2)sin(pi/2) = 0 - 1
+                        = -1`.\n- `sin(pi) = sin(pi/2 + pi/2) = sin(pi/2)cos(pi/2) + cos(pi/2)sin(pi/2)
+                        = 0 + 0 = 0`.\n\nThen apply the addition formula to `cos(pi + x)`:\n- `cos(pi
+                        + x) = cos(pi)cos(x) - sin(pi)sin(x) = (-1)cos(x) - 0 = -cos(x)`.\n\n```yaml\n1:\n  -
+                        ["cos(pi)", "cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)"]\n  - {rule: cos_add,
+                        vars: {x: "pi/2", y: "pi/2"}}\n\n2:\n  - ["cos(pi)", "-1"]\n  - {trans: [1]}\n\n3:\n  -
+                        ["sin(pi)", "sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)"]\n  - {rule: sin_add,
+                        vars: {x: "pi/2", y: "pi/2"}}\n\n4:\n  - ["sin(pi)", "0"]\n  - {trans: [3]}\n\n5:\n  -
+                        ["cos(pi + x)", "cos(pi)*cos(x) - sin(pi)*sin(x)"]\n  - {rule: cos_add, vars:
+                        {x: "pi", y: "x"}}\n\n6:\n  - ["cos(pi)*cos(x) - sin(pi)*sin(x)", "-cos(x)"]\n  -
+                        {step: 2}\n\n7:\n  - ["cos(pi + x)", "-cos(x)"]\n  - {trans: [5, 6]}\n```'', tool_calls=(),
+                        justification=None), parsed=FinalAnswer(final={1: ((''cos(pi)'', ''cos(pi/2)*cos(pi/2)
+                        - sin(pi/2)*sin(pi/2)''), Rule(rule=''cos_add'', vars={''x'': ''pi/2'', ''y'':
+                        ''pi/2''})), 2: ((''cos(pi)'', ''-1''), Trans(trans=[1])), 3: ((''sin(pi)'', ''sin(pi/2)*cos(pi/2)
+                        + cos(pi/2)*sin(pi/2)''), Rule(rule=''sin_add'', vars={''x'': ''pi/2'', ''y'':
+                        ''pi/2''})), 4: ((''sin(pi)'', ''0''), Trans(trans=[3])), 5: ((''cos(pi + x)'',
+                        ''cos(pi)*cos(x) - sin(pi)*sin(x)''), Rule(rule=''cos_add'', vars={''x'': ''pi'',
+                        ''y'': ''x''})), 6: ((''cos(pi)*cos(x) - sin(pi)*sin(x)'', ''-cos(x)''), RewritePrev(step=2)),
+                        7: ((''cos(pi + x)'', ''-cos(x)''), Trans(trans=[5, 6]))}))'
+                      long: |-
+                        Response(answer=Answer(mode=None,
+                                               content='We use the addition formula twice.\n'
+                                                       '\n'
+                                                       'First compute the trigonometric values at `pi` '
+                                                       'from the allowed rules:\n'
+                                                       '- `cos(pi) = cos(pi/2 + pi/2) = '
+                                                       'cos(pi/2)cos(pi/2) - sin(pi/2)sin(pi/2) = 0 - '
+                                                       '1 = -1`.\n'
+                                                       '- `sin(pi) = sin(pi/2 + pi/2) = '
+                                                       'sin(pi/2)cos(pi/2) + cos(pi/2)sin(pi/2) = 0 + '
+                                                       '0 = 0`.\n'
+                                                       '\n'
+                                                       'Then apply the addition formula to `cos(pi + '
+                                                       'x)`:\n'
+                                                       '- `cos(pi + x) = cos(pi)cos(x) - sin(pi)sin(x) '
+                                                       '= (-1)cos(x) - 0 = -cos(x)`.\n'
+                                                       '\n'
+                                                       '```yaml\n'
+                                                       '1:\n'
+                                                       '  - ["cos(pi)", "cos(pi/2)*cos(pi/2) - '
+                                                       'sin(pi/2)*sin(pi/2)"]\n'
+                                                       '  - {rule: cos_add, vars: {x: "pi/2", y: '
+                                                       '"pi/2"}}\n'
+                                                       '\n'
+                                                       '2:\n'
+                                                       '  - ["cos(pi)", "-1"]\n'
+                                                       '  - {trans: [1]}\n'
+                                                       '\n'
+                                                       '3:\n'
+                                                       '  - ["sin(pi)", "sin(pi/2)*cos(pi/2) + '
+                                                       'cos(pi/2)*sin(pi/2)"]\n'
+                                                       '  - {rule: sin_add, vars: {x: "pi/2", y: '
+                                                       '"pi/2"}}\n'
+                                                       '\n'
+                                                       '4:\n'
+                                                       '  - ["sin(pi)", "0"]\n'
+                                                       '  - {trans: [3]}\n'
+                                                       '\n'
+                                                       '5:\n'
+                                                       '  - ["cos(pi + x)", "cos(pi)*cos(x) - '
+                                                       'sin(pi)*sin(x)"]\n'
+                                                       '  - {rule: cos_add, vars: {x: "pi", y: "x"}}\n'
+                                                       '\n'
+                                                       '6:\n'
+                                                       '  - ["cos(pi)*cos(x) - sin(pi)*sin(x)", '
+                                                       '"-cos(x)"]\n'
+                                                       '  - {step: 2}\n'
+                                                       '\n'
+                                                       '7:\n'
+                                                       '  - ["cos(pi + x)", "-cos(x)"]\n'
+                                                       '  - {trans: [5, 6]}\n'
+                                                       '```',
+                                               tool_calls=(),
+                                               justification=None),
+                                 parsed=FinalAnswer(final={1: (('cos(pi)',
+                                                                'cos(pi/2)*cos(pi/2) - '
+                                                                'sin(pi/2)*sin(pi/2)'),
+                                                               Rule(rule='cos_add',
+                                                                    vars={'x': 'pi/2', 'y': 'pi/2'})),
+                                                           2: (('cos(pi)', '-1'), Trans(trans=[1])),
+                                                           3: (('sin(pi)',
+                                                                'sin(pi/2)*cos(pi/2) + '
+                                                                'cos(pi/2)*sin(pi/2)'),
+                                                               Rule(rule='sin_add',
+                                                                    vars={'x': 'pi/2', 'y': 'pi/2'})),
+                                                           4: (('sin(pi)', '0'), Trans(trans=[3])),
+                                                           5: (('cos(pi + x)',
+                                                                'cos(pi)*cos(x) - sin(pi)*sin(x)'),
+                                                               Rule(rule='cos_add',
+                                                                    vars={'x': 'pi', 'y': 'x'})),
+                                                           6: (('cos(pi)*cos(x) - sin(pi)*sin(x)',
+                                                                '-cos(x)'),
+                                                               RewritePrev(step=2)),
+                                                           7: (('cos(pi + x)', '-cos(x)'),
+                                                               Trans(trans=[5, 6]))}))
+                      json_provided: false
+                      json: null
+          actions:
+            - ref:
+                with_ids: $1{@1}
+                with_hints: null
+              hints: null
+              related_success_nodes: []
+              related_answers:
+                - 1
+              value:
+                short: 'Response(answer=Answer(mode=None, content=''We use the addition formula twice.\n\nFirst
+                  compute the trigonometric values at `pi` from the allowed rules:\n- `cos(pi) = cos(pi/2
+                  + pi/2) = cos(pi/2)cos(pi/2) - sin(pi/2)sin(pi/2) = 0 - 1 = -1`.\n- `sin(pi) = sin(pi/2
+                  + pi/2) = sin(pi/2)cos(pi/2) + cos(pi/2)sin(pi/2) = 0 + 0 = 0`.\n\nThen apply the addition
+                  formula to `cos(pi + x)`:\n- `cos(pi + x) = cos(pi)cos(x) - sin(pi)sin(x) = (-1)cos(x)
+                  - 0 = -cos(x)`.\n\n```yaml\n1:\n  - ["cos(pi)", "cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)"]\n  -
+                  {rule: cos_add, vars: {x: "pi/2", y: "pi/2"}}\n\n2:\n  - ["cos(pi)", "-1"]\n  - {trans:
+                  [1]}\n\n3:\n  - ["sin(pi)", "sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)"]\n  - {rule:
+                  sin_add, vars: {x: "pi/2", y: "pi/2"}}\n\n4:\n  - ["sin(pi)", "0"]\n  - {trans: [3]}\n\n5:\n  -
+                  ["cos(pi + x)", "cos(pi)*cos(x) - sin(pi)*sin(x)"]\n  - {rule: cos_add, vars: {x: "pi",
+                  y: "x"}}\n\n6:\n  - ["cos(pi)*cos(x) - sin(pi)*sin(x)", "-cos(x)"]\n  - {step: 2}\n\n7:\n  -
+                  ["cos(pi + x)", "-cos(x)"]\n  - {trans: [5, 6]}\n```'', tool_calls=(), justification=None),
+                  parsed=FinalAnswer(final={1: ((''cos(pi)'', ''cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)''),
+                  Rule(rule=''cos_add'', vars={''x'': ''pi/2'', ''y'': ''pi/2''})), 2: ((''cos(pi)'',
+                  ''-1''), Trans(trans=[1])), 3: ((''sin(pi)'', ''sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)''),
+                  Rule(rule=''sin_add'', vars={''x'': ''pi/2'', ''y'': ''pi/2''})), 4: ((''sin(pi)'',
+                  ''0''), Trans(trans=[3])), 5: ((''cos(pi + x)'', ''cos(pi)*cos(x) - sin(pi)*sin(x)''),
+                  Rule(rule=''cos_add'', vars={''x'': ''pi'', ''y'': ''x''})), 6: ((''cos(pi)*cos(x) -
+                  sin(pi)*sin(x)'', ''-cos(x)''), RewritePrev(step=2)), 7: ((''cos(pi + x)'', ''-cos(x)''),
+                  Trans(trans=[5, 6]))}))'
+                long: |-
+                  Response(answer=Answer(mode=None,
+                                         content='We use the addition formula twice.\n'
+                                                 '\n'
+                                                 'First compute the trigonometric values at `pi` '
+                                                 'from the allowed rules:\n'
+                                                 '- `cos(pi) = cos(pi/2 + pi/2) = '
+                                                 'cos(pi/2)cos(pi/2) - sin(pi/2)sin(pi/2) = 0 - '
+                                                 '1 = -1`.\n'
+                                                 '- `sin(pi) = sin(pi/2 + pi/2) = '
+                                                 'sin(pi/2)cos(pi/2) + cos(pi/2)sin(pi/2) = 0 + '
+                                                 '0 = 0`.\n'
+                                                 '\n'
+                                                 'Then apply the addition formula to `cos(pi + '
+                                                 'x)`:\n'
+                                                 '- `cos(pi + x) = cos(pi)cos(x) - sin(pi)sin(x) '
+                                                 '= (-1)cos(x) - 0 = -cos(x)`.\n'
+                                                 '\n'
+                                                 '```yaml\n'
+                                                 '1:\n'
+                                                 '  - ["cos(pi)", "cos(pi/2)*cos(pi/2) - '
+                                                 'sin(pi/2)*sin(pi/2)"]\n'
+                                                 '  - {rule: cos_add, vars: {x: "pi/2", y: '
+                                                 '"pi/2"}}\n'
+                                                 '\n'
+                                                 '2:\n'
+                                                 '  - ["cos(pi)", "-1"]\n'
+                                                 '  - {trans: [1]}\n'
+                                                 '\n'
+                                                 '3:\n'
+                                                 '  - ["sin(pi)", "sin(pi/2)*cos(pi/2) + '
+                                                 'cos(pi/2)*sin(pi/2)"]\n'
+                                                 '  - {rule: sin_add, vars: {x: "pi/2", y: '
+                                                 '"pi/2"}}\n'
+                                                 '\n'
+                                                 '4:\n'
+                                                 '  - ["sin(pi)", "0"]\n'
+                                                 '  - {trans: [3]}\n'
+                                                 '\n'
+                                                 '5:\n'
+                                                 '  - ["cos(pi + x)", "cos(pi)*cos(x) - '
+                                                 'sin(pi)*sin(x)"]\n'
+                                                 '  - {rule: cos_add, vars: {x: "pi", y: "x"}}\n'
+                                                 '\n'
+                                                 '6:\n'
+                                                 '  - ["cos(pi)*cos(x) - sin(pi)*sin(x)", '
+                                                 '"-cos(x)"]\n'
+                                                 '  - {step: 2}\n'
+                                                 '\n'
+                                                 '7:\n'
+                                                 '  - ["cos(pi + x)", "-cos(x)"]\n'
+                                                 '  - {trans: [5, 6]}\n'
+                                                 '```',
+                                         tool_calls=(),
+                                         justification=None),
+                           parsed=FinalAnswer(final={1: (('cos(pi)',
+                                                          'cos(pi/2)*cos(pi/2) - '
+                                                          'sin(pi/2)*sin(pi/2)'),
+                                                         Rule(rule='cos_add',
+                                                              vars={'x': 'pi/2', 'y': 'pi/2'})),
+                                                     2: (('cos(pi)', '-1'), Trans(trans=[1])),
+                                                     3: (('sin(pi)',
+                                                          'sin(pi/2)*cos(pi/2) + '
+                                                          'cos(pi/2)*sin(pi/2)'),
+                                                         Rule(rule='sin_add',
+                                                              vars={'x': 'pi/2', 'y': 'pi/2'})),
+                                                     4: (('sin(pi)', '0'), Trans(trans=[3])),
+                                                     5: (('cos(pi + x)',
+                                                          'cos(pi)*cos(x) - sin(pi)*sin(x)'),
+                                                         Rule(rule='cos_add',
+                                                              vars={'x': 'pi', 'y': 'x'})),
+                                                     6: (('cos(pi)*cos(x) - sin(pi)*sin(x)',
+                                                          '-cos(x)'),
+                                                         RewritePrev(step=2)),
+                                                     7: (('cos(pi + x)', '-cos(x)'),
+                                                         Trans(trans=[5, 6]))}))
+                json_provided: false
+                json: null
+              destination: 2
+          origin: root
+        2:
+          kind: Run
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: check_equality
+          tags:
+            - check_equality
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 2
+              - kind: nested
+                strategy: check_equality
+                args:
+                  equality:
+                    short: ('cos(pi + x)', '-cos(x)')
+                    long: ('cos(pi + x)', '-cos(x)')
+                    json_provided: true
+                    json:
+                      - cos(pi + x)
+                      - -cos(x)
+                  proof:
+                    short: '{1: ((''cos(pi)'', ''cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)''), Rule(rule=''cos_add'',
+                      vars={''x'': ''pi/2'', ''y'': ''pi/2''})), 2: ((''cos(pi)'', ''-1''), Trans(trans=[1])),
+                      3: ((''sin(pi)'', ''sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)''), Rule(rule=''sin_add'',
+                      vars={''x'': ''pi/2'', ''y'': ''pi/2''})), 4: ((''sin(pi)'', ''0''), Trans(trans=[3])),
+                      5: ((''cos(pi + x)'', ''cos(pi)*cos(x) - sin(pi)*sin(x)''), Rule(rule=''cos_add'',
+                      vars={''x'': ''pi'', ''y'': ''x''})), 6: ((''cos(pi)*cos(x) - sin(pi)*sin(x)'',
+                      ''-cos(x)''), RewritePrev(step=2)), 7: ((''cos(pi + x)'', ''-cos(x)''), Trans(trans=[5,
+                      6]))}'
+                    long: |-
+                      {1: (('cos(pi)', 'cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)'),
+                           Rule(rule='cos_add', vars={'x': 'pi/2', 'y': 'pi/2'})),
+                       2: (('cos(pi)', '-1'), Trans(trans=[1])),
+                       3: (('sin(pi)', 'sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)'),
+                           Rule(rule='sin_add', vars={'x': 'pi/2', 'y': 'pi/2'})),
+                       4: (('sin(pi)', '0'), Trans(trans=[3])),
+                       5: (('cos(pi + x)', 'cos(pi)*cos(x) - sin(pi)*sin(x)'),
+                           Rule(rule='cos_add', vars={'x': 'pi', 'y': 'x'})),
+                       6: (('cos(pi)*cos(x) - sin(pi)*sin(x)', '-cos(x)'), RewritePrev(step=2)),
+                       7: (('cos(pi + x)', '-cos(x)'), Trans(trans=[5, 6]))}
+                    json_provided: false
+                    json: null
+                tags:
+                  - check_equality
+                node_id: 3
+          actions:
+            - ref:
+                with_ids: $2{%4}
+                with_hints: null
+              hints: null
+              related_success_nodes:
+                - 4
+              related_answers: []
+              value:
+                short: |-
+                  feedback
+
+                  'Error at step 2: Transitivity requires at least 2 steps.'
+                long: |-
+                  Error(label='feedback',
+                        description=None,
+                        meta='Error at step 2: Transitivity requires at least 2 steps.')
+                json_provided: true
+                json:
+                  label: feedback
+                  meta: 'Error at step 2: Transitivity requires at least 2 steps.'
+              destination: 5
+          origin:
+            - child
+            - 1
+            - 0
+        3:
+          kind: Compute
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: null
+          tags: []
+          properties:
+            - - with_ids: query
+                with_hints: null
+              - 3
+              - kind: query
+                name: __Computation__
+                args:
+                  fun: check
+                  args:
+                    eq:
+                      - cos(pi + x)
+                      - -cos(x)
+                    proof:
+                      1:
+                        - - cos(pi)
+                          - cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)
+                        - rule: cos_add
+                          vars:
+                            x: pi/2
+                            y: pi/2
+                      2:
+                        - - cos(pi)
+                          - '-1'
+                        - trans:
+                            - 1
+                      3:
+                        - - sin(pi)
+                          - sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)
+                        - rule: sin_add
+                          vars:
+                            x: pi/2
+                            y: pi/2
+                      4:
+                        - - sin(pi)
+                          - '0'
+                        - trans:
+                            - 3
+                      5:
+                        - - cos(pi + x)
+                          - cos(pi)*cos(x) - sin(pi)*sin(x)
+                        - rule: cos_add
+                          vars:
+                            x: pi
+                            y: x
+                      6:
+                        - - cos(pi)*cos(x) - sin(pi)*sin(x)
+                          - -cos(x)
+                        - step: 2
+                      7:
+                        - - cos(pi + x)
+                          - -cos(x)
+                        - trans:
+                            - 5
+                            - 6
+                    rules:
+                      cos_zero:
+                        - cos(0)
+                        - '1'
+                      sin_zero:
+                        - sin(0)
+                        - '0'
+                      sin_halfpi:
+                        - sin(pi/2)
+                        - '1'
+                      cos_halfpi:
+                        - cos(pi/2)
+                        - '0'
+                      sin_neg:
+                        - sin(-x)
+                        - -sin(x)
+                      cos_neg:
+                        - cos(-x)
+                        - cos(x)
+                      cos_add:
+                        - cos(x + y)
+                        - cos(x)*cos(y) - sin(x)*sin(y)
+                      sin_add:
+                        - sin(x + y)
+                        - sin(x)*cos(y) + cos(x)*sin(y)
+                tags:
+                  - __Computation__
+                answers:
+                  - id: 2
+                    hint: null
+                    value:
+                      short: '{''feedback'': ''Transitivity requires at least 2 steps.'', ''step'': 2}'
+                      long: '{''feedback'': ''Transitivity requires at least 2 steps.'', ''step'': 2}'
+                      json_provided: true
+                      json:
+                        feedback: Transitivity requires at least 2 steps.
+                        step: 2
+          actions:
+            - ref:
+                with_ids: $3{@2}
+                with_hints: null
+              hints: null
+              related_success_nodes: []
+              related_answers:
+                - 2
+              value:
+                short: '{''feedback'': ''Transitivity requires at least 2 steps.'', ''step'': 2}'
+                long: '{''feedback'': ''Transitivity requires at least 2 steps.'', ''step'': 2}'
+                json_provided: true
+                json:
+                  feedback: Transitivity requires at least 2 steps.
+                  step: 2
+              destination: 4
+          origin:
+            - nested
+            - 2
+            - 0
+        4:
+          kind: Success
+          success_value:
+            short: |-
+              feedback
+
+              'Error at step 2: Transitivity requires at least 2 steps.'
+            long: |-
+              Error(label='feedback',
+                    description=None,
+                    meta='Error at step 2: Transitivity requires at least 2 steps.')
+            json_provided: true
+            json:
+              label: feedback
+              meta: 'Error at step 2: Transitivity requires at least 2 steps.'
+          summary_message: null
+          leaf_node: true
+          label: null
+          tags: []
+          properties: []
+          actions: []
+          origin:
+            - child
+            - 3
+            - 0
+        5:
+          kind: Branch
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: ProveEqualityInteractive
+          tags:
+            - ProveEqualityInteractive
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 4
+              - kind: query
+                name: ProveEqualityInteractive
+                args:
+                  equality:
+                    - cos(pi + x)
+                    - -cos(x)
+                  prefix:
+                    - kind: oracle
+                      answer:
+                        mode: null
+                        content: |-
+                          We use the addition formula twice.
+
+                          First compute the trigonometric values at `pi` from the allowed rules:
+                          - `cos(pi) = cos(pi/2 + pi/2) = cos(pi/2)cos(pi/2) - sin(pi/2)sin(pi/2) = 0 - 1 = -1`.
+                          - `sin(pi) = sin(pi/2 + pi/2) = sin(pi/2)cos(pi/2) + cos(pi/2)sin(pi/2) = 0 + 0 = 0`.
+
+                          Then apply the addition formula to `cos(pi + x)`:
+                          - `cos(pi + x) = cos(pi)cos(x) - sin(pi)sin(x) = (-1)cos(x) - 0 = -cos(x)`.
+
+                          ```yaml
+                          1:
+                            - ["cos(pi)", "cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)"]
+                            - {rule: cos_add, vars: {x: "pi/2", y: "pi/2"}}
+
+                          2:
+                            - ["cos(pi)", "-1"]
+                            - {trans: [1]}
+
+                          3:
+                            - ["sin(pi)", "sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)"]
+                            - {rule: sin_add, vars: {x: "pi/2", y: "pi/2"}}
+
+                          4:
+                            - ["sin(pi)", "0"]
+                            - {trans: [3]}
+
+                          5:
+                            - ["cos(pi + x)", "cos(pi)*cos(x) - sin(pi)*sin(x)"]
+                            - {rule: cos_add, vars: {x: "pi", y: "x"}}
+
+                          6:
+                            - ["cos(pi)*cos(x) - sin(pi)*sin(x)", "-cos(x)"]
+                            - {step: 2}
+
+                          7:
+                            - ["cos(pi + x)", "-cos(x)"]
+                            - {trans: [5, 6]}
+                          ```
+                        tool_calls: []
+                        justification: null
+                    - kind: feedback
+                      label: feedback
+                      description: null
+                      meta: 'Error at step 2: Transitivity requires at least 2 steps.'
+                tags:
+                  - ProveEqualityInteractive
+                answers:
+                  - id: 3
+                    hint: null
+                    value:
+                      short: 'Response(answer=Answer(mode=None, content=''We prove `cos(pi + x) = -cos(x)`
+                        by expanding `cos(pi+x)` with the addition formula, then evaluating `cos(pi)`
+                        and `sin(pi)` from the allowed rules.\n\nFirst,\n- `cos(pi) = cos(pi/2 + pi/2)`\n-
+                        by `cos_add`, this is `cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)`\n- since `cos(pi/2)=0`
+                        and `sin(pi/2)=1`, this simplifies to `-1`.\n\nSimilarly,\n- `sin(pi) = sin(pi/2
+                        + pi/2)`\n- by `sin_add`, this is `sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)`\n-
+                        since `cos(pi/2)=0`, this simplifies to `0`.\n\nThen\n- `cos(pi+x) = cos(pi)cos(x)
+                        - sin(pi)sin(x)`\n- substitute `cos(pi)=-1` and `sin(pi)=0`\n- this becomes `-cos(x)`.\n\n```yaml\n1:\n  -
+                        ["cos(pi)", "cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)"]\n  - {rule: cos_add,
+                        vars: {x: "pi/2", y: "pi/2"}}\n\n2:\n  - ["cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)",
+                        "-sin(pi/2)*sin(pi/2)"]\n  - {rule: cos_halfpi, vars: {}}\n\n3:\n  - ["-sin(pi/2)*sin(pi/2)",
+                        "-1"]\n  - {rule: sin_halfpi, vars: {}}\n\n4:\n  - ["cos(pi)", "-1"]\n  - {trans:
+                        [1, 2, 3]}\n\n5:\n  - ["sin(pi)", "sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)"]\n  -
+                        {rule: sin_add, vars: {x: "pi/2", y: "pi/2"}}\n\n6:\n  - ["sin(pi/2)*cos(pi/2)
+                        + cos(pi/2)*sin(pi/2)", "0"]\n  - {rule: cos_halfpi, vars: {}}\n\n7:\n  - ["sin(pi)",
+                        "0"]\n  - {trans: [5, 6]}\n\n8:\n  - ["cos(pi + x)", "cos(pi)*cos(x) - sin(pi)*sin(x)"]\n  -
+                        {rule: cos_add, vars: {x: "pi", y: "x"}}\n\n9:\n  - ["cos(pi)*cos(x) - sin(pi)*sin(x)",
+                        "-cos(x) - sin(pi)*sin(x)"]\n  - {step: 4}\n\n10:\n  - ["-cos(x) - sin(pi)*sin(x)",
+                        "-cos(x)"]\n  - {step: 7}\n\n11:\n  - ["cos(pi + x)", "-cos(x)"]\n  - {trans:
+                        [8, 9, 10]}\n```'', tool_calls=(), justification=None), parsed=FinalAnswer(final={1:
+                        ((''cos(pi)'', ''cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)''), Rule(rule=''cos_add'',
+                        vars={''x'': ''pi/2'', ''y'': ''pi/2''})), 2: ((''cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)'',
+                        ''-sin(pi/2)*sin(pi/2)''), Rule(rule=''cos_halfpi'', vars={})), 3: ((''-sin(pi/2)*sin(pi/2)'',
+                        ''-1''), Rule(rule=''sin_halfpi'', vars={})), 4: ((''cos(pi)'', ''-1''), Trans(trans=[1,
+                        2, 3])), 5: ((''sin(pi)'', ''sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)''), Rule(rule=''sin_add'',
+                        vars={''x'': ''pi/2'', ''y'': ''pi/2''})), 6: ((''sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)'',
+                        ''0''), Rule(rule=''cos_halfpi'', vars={})), 7: ((''sin(pi)'', ''0''), Trans(trans=[5,
+                        6])), 8: ((''cos(pi + x)'', ''cos(pi)*cos(x) - sin(pi)*sin(x)''), Rule(rule=''cos_add'',
+                        vars={''x'': ''pi'', ''y'': ''x''})), 9: ((''cos(pi)*cos(x) - sin(pi)*sin(x)'',
+                        ''-cos(x) - sin(pi)*sin(x)''), RewritePrev(step=4)), 10: ((''-cos(x) - sin(pi)*sin(x)'',
+                        ''-cos(x)''), RewritePrev(step=7)), 11: ((''cos(pi + x)'', ''-cos(x)''), Trans(trans=[8,
+                        9, 10]))}))'
+                      long: |-
+                        Response(answer=Answer(mode=None,
+                                               content='We prove `cos(pi + x) = -cos(x)` by expanding '
+                                                       '`cos(pi+x)` with the addition formula, then '
+                                                       'evaluating `cos(pi)` and `sin(pi)` from the '
+                                                       'allowed rules.\n'
+                                                       '\n'
+                                                       'First,\n'
+                                                       '- `cos(pi) = cos(pi/2 + pi/2)`\n'
+                                                       '- by `cos_add`, this is `cos(pi/2)*cos(pi/2) - '
+                                                       'sin(pi/2)*sin(pi/2)`\n'
+                                                       '- since `cos(pi/2)=0` and `sin(pi/2)=1`, this '
+                                                       'simplifies to `-1`.\n'
+                                                       '\n'
+                                                       'Similarly,\n'
+                                                       '- `sin(pi) = sin(pi/2 + pi/2)`\n'
+                                                       '- by `sin_add`, this is `sin(pi/2)*cos(pi/2) + '
+                                                       'cos(pi/2)*sin(pi/2)`\n'
+                                                       '- since `cos(pi/2)=0`, this simplifies to '
+                                                       '`0`.\n'
+                                                       '\n'
+                                                       'Then\n'
+                                                       '- `cos(pi+x) = cos(pi)cos(x) - sin(pi)sin(x)`\n'
+                                                       '- substitute `cos(pi)=-1` and `sin(pi)=0`\n'
+                                                       '- this becomes `-cos(x)`.\n'
+                                                       '\n'
+                                                       '```yaml\n'
+                                                       '1:\n'
+                                                       '  - ["cos(pi)", "cos(pi/2)*cos(pi/2) - '
+                                                       'sin(pi/2)*sin(pi/2)"]\n'
+                                                       '  - {rule: cos_add, vars: {x: "pi/2", y: '
+                                                       '"pi/2"}}\n'
+                                                       '\n'
+                                                       '2:\n'
+                                                       '  - ["cos(pi/2)*cos(pi/2) - '
+                                                       'sin(pi/2)*sin(pi/2)", "-sin(pi/2)*sin(pi/2)"]\n'
+                                                       '  - {rule: cos_halfpi, vars: {}}\n'
+                                                       '\n'
+                                                       '3:\n'
+                                                       '  - ["-sin(pi/2)*sin(pi/2)", "-1"]\n'
+                                                       '  - {rule: sin_halfpi, vars: {}}\n'
+                                                       '\n'
+                                                       '4:\n'
+                                                       '  - ["cos(pi)", "-1"]\n'
+                                                       '  - {trans: [1, 2, 3]}\n'
+                                                       '\n'
+                                                       '5:\n'
+                                                       '  - ["sin(pi)", "sin(pi/2)*cos(pi/2) + '
+                                                       'cos(pi/2)*sin(pi/2)"]\n'
+                                                       '  - {rule: sin_add, vars: {x: "pi/2", y: '
+                                                       '"pi/2"}}\n'
+                                                       '\n'
+                                                       '6:\n'
+                                                       '  - ["sin(pi/2)*cos(pi/2) + '
+                                                       'cos(pi/2)*sin(pi/2)", "0"]\n'
+                                                       '  - {rule: cos_halfpi, vars: {}}\n'
+                                                       '\n'
+                                                       '7:\n'
+                                                       '  - ["sin(pi)", "0"]\n'
+                                                       '  - {trans: [5, 6]}\n'
+                                                       '\n'
+                                                       '8:\n'
+                                                       '  - ["cos(pi + x)", "cos(pi)*cos(x) - '
+                                                       'sin(pi)*sin(x)"]\n'
+                                                       '  - {rule: cos_add, vars: {x: "pi", y: "x"}}\n'
+                                                       '\n'
+                                                       '9:\n'
+                                                       '  - ["cos(pi)*cos(x) - sin(pi)*sin(x)", '
+                                                       '"-cos(x) - sin(pi)*sin(x)"]\n'
+                                                       '  - {step: 4}\n'
+                                                       '\n'
+                                                       '10:\n'
+                                                       '  - ["-cos(x) - sin(pi)*sin(x)", "-cos(x)"]\n'
+                                                       '  - {step: 7}\n'
+                                                       '\n'
+                                                       '11:\n'
+                                                       '  - ["cos(pi + x)", "-cos(x)"]\n'
+                                                       '  - {trans: [8, 9, 10]}\n'
+                                                       '```',
+                                               tool_calls=(),
+                                               justification=None),
+                                 parsed=FinalAnswer(final={1: (('cos(pi)',
+                                                                'cos(pi/2)*cos(pi/2) - '
+                                                                'sin(pi/2)*sin(pi/2)'),
+                                                               Rule(rule='cos_add',
+                                                                    vars={'x': 'pi/2', 'y': 'pi/2'})),
+                                                           2: (('cos(pi/2)*cos(pi/2) - '
+                                                                'sin(pi/2)*sin(pi/2)',
+                                                                '-sin(pi/2)*sin(pi/2)'),
+                                                               Rule(rule='cos_halfpi', vars={})),
+                                                           3: (('-sin(pi/2)*sin(pi/2)', '-1'),
+                                                               Rule(rule='sin_halfpi', vars={})),
+                                                           4: (('cos(pi)', '-1'),
+                                                               Trans(trans=[1, 2, 3])),
+                                                           5: (('sin(pi)',
+                                                                'sin(pi/2)*cos(pi/2) + '
+                                                                'cos(pi/2)*sin(pi/2)'),
+                                                               Rule(rule='sin_add',
+                                                                    vars={'x': 'pi/2', 'y': 'pi/2'})),
+                                                           6: (('sin(pi/2)*cos(pi/2) + '
+                                                                'cos(pi/2)*sin(pi/2)',
+                                                                '0'),
+                                                               Rule(rule='cos_halfpi', vars={})),
+                                                           7: (('sin(pi)', '0'), Trans(trans=[5, 6])),
+                                                           8: (('cos(pi + x)',
+                                                                'cos(pi)*cos(x) - sin(pi)*sin(x)'),
+                                                               Rule(rule='cos_add',
+                                                                    vars={'x': 'pi', 'y': 'x'})),
+                                                           9: (('cos(pi)*cos(x) - sin(pi)*sin(x)',
+                                                                '-cos(x) - sin(pi)*sin(x)'),
+                                                               RewritePrev(step=4)),
+                                                           10: (('-cos(x) - sin(pi)*sin(x)', '-cos(x)'),
+                                                                RewritePrev(step=7)),
+                                                           11: (('cos(pi + x)', '-cos(x)'),
+                                                                Trans(trans=[8, 9, 10]))}))
+                      json_provided: false
+                      json: null
+          actions:
+            - ref:
+                with_ids: $4{@3}
+                with_hints: null
+              hints: null
+              related_success_nodes: []
+              related_answers:
+                - 3
+              value:
+                short: 'Response(answer=Answer(mode=None, content=''We prove `cos(pi + x) = -cos(x)` by
+                  expanding `cos(pi+x)` with the addition formula, then evaluating `cos(pi)` and `sin(pi)`
+                  from the allowed rules.\n\nFirst,\n- `cos(pi) = cos(pi/2 + pi/2)`\n- by `cos_add`, this
+                  is `cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)`\n- since `cos(pi/2)=0` and `sin(pi/2)=1`,
+                  this simplifies to `-1`.\n\nSimilarly,\n- `sin(pi) = sin(pi/2 + pi/2)`\n- by `sin_add`,
+                  this is `sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)`\n- since `cos(pi/2)=0`, this simplifies
+                  to `0`.\n\nThen\n- `cos(pi+x) = cos(pi)cos(x) - sin(pi)sin(x)`\n- substitute `cos(pi)=-1`
+                  and `sin(pi)=0`\n- this becomes `-cos(x)`.\n\n```yaml\n1:\n  - ["cos(pi)", "cos(pi/2)*cos(pi/2)
+                  - sin(pi/2)*sin(pi/2)"]\n  - {rule: cos_add, vars: {x: "pi/2", y: "pi/2"}}\n\n2:\n  -
+                  ["cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)", "-sin(pi/2)*sin(pi/2)"]\n  - {rule: cos_halfpi,
+                  vars: {}}\n\n3:\n  - ["-sin(pi/2)*sin(pi/2)", "-1"]\n  - {rule: sin_halfpi, vars: {}}\n\n4:\n  -
+                  ["cos(pi)", "-1"]\n  - {trans: [1, 2, 3]}\n\n5:\n  - ["sin(pi)", "sin(pi/2)*cos(pi/2)
+                  + cos(pi/2)*sin(pi/2)"]\n  - {rule: sin_add, vars: {x: "pi/2", y: "pi/2"}}\n\n6:\n  -
+                  ["sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)", "0"]\n  - {rule: cos_halfpi, vars: {}}\n\n7:\n  -
+                  ["sin(pi)", "0"]\n  - {trans: [5, 6]}\n\n8:\n  - ["cos(pi + x)", "cos(pi)*cos(x) - sin(pi)*sin(x)"]\n  -
+                  {rule: cos_add, vars: {x: "pi", y: "x"}}\n\n9:\n  - ["cos(pi)*cos(x) - sin(pi)*sin(x)",
+                  "-cos(x) - sin(pi)*sin(x)"]\n  - {step: 4}\n\n10:\n  - ["-cos(x) - sin(pi)*sin(x)",
+                  "-cos(x)"]\n  - {step: 7}\n\n11:\n  - ["cos(pi + x)", "-cos(x)"]\n  - {trans: [8, 9,
+                  10]}\n```'', tool_calls=(), justification=None), parsed=FinalAnswer(final={1: ((''cos(pi)'',
+                  ''cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)''), Rule(rule=''cos_add'', vars={''x'':
+                  ''pi/2'', ''y'': ''pi/2''})), 2: ((''cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)'', ''-sin(pi/2)*sin(pi/2)''),
+                  Rule(rule=''cos_halfpi'', vars={})), 3: ((''-sin(pi/2)*sin(pi/2)'', ''-1''), Rule(rule=''sin_halfpi'',
+                  vars={})), 4: ((''cos(pi)'', ''-1''), Trans(trans=[1, 2, 3])), 5: ((''sin(pi)'', ''sin(pi/2)*cos(pi/2)
+                  + cos(pi/2)*sin(pi/2)''), Rule(rule=''sin_add'', vars={''x'': ''pi/2'', ''y'': ''pi/2''})),
+                  6: ((''sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)'', ''0''), Rule(rule=''cos_halfpi'',
+                  vars={})), 7: ((''sin(pi)'', ''0''), Trans(trans=[5, 6])), 8: ((''cos(pi + x)'', ''cos(pi)*cos(x)
+                  - sin(pi)*sin(x)''), Rule(rule=''cos_add'', vars={''x'': ''pi'', ''y'': ''x''})), 9:
+                  ((''cos(pi)*cos(x) - sin(pi)*sin(x)'', ''-cos(x) - sin(pi)*sin(x)''), RewritePrev(step=4)),
+                  10: ((''-cos(x) - sin(pi)*sin(x)'', ''-cos(x)''), RewritePrev(step=7)), 11: ((''cos(pi
+                  + x)'', ''-cos(x)''), Trans(trans=[8, 9, 10]))}))'
+                long: |-
+                  Response(answer=Answer(mode=None,
+                                         content='We prove `cos(pi + x) = -cos(x)` by expanding '
+                                                 '`cos(pi+x)` with the addition formula, then '
+                                                 'evaluating `cos(pi)` and `sin(pi)` from the '
+                                                 'allowed rules.\n'
+                                                 '\n'
+                                                 'First,\n'
+                                                 '- `cos(pi) = cos(pi/2 + pi/2)`\n'
+                                                 '- by `cos_add`, this is `cos(pi/2)*cos(pi/2) - '
+                                                 'sin(pi/2)*sin(pi/2)`\n'
+                                                 '- since `cos(pi/2)=0` and `sin(pi/2)=1`, this '
+                                                 'simplifies to `-1`.\n'
+                                                 '\n'
+                                                 'Similarly,\n'
+                                                 '- `sin(pi) = sin(pi/2 + pi/2)`\n'
+                                                 '- by `sin_add`, this is `sin(pi/2)*cos(pi/2) + '
+                                                 'cos(pi/2)*sin(pi/2)`\n'
+                                                 '- since `cos(pi/2)=0`, this simplifies to '
+                                                 '`0`.\n'
+                                                 '\n'
+                                                 'Then\n'
+                                                 '- `cos(pi+x) = cos(pi)cos(x) - sin(pi)sin(x)`\n'
+                                                 '- substitute `cos(pi)=-1` and `sin(pi)=0`\n'
+                                                 '- this becomes `-cos(x)`.\n'
+                                                 '\n'
+                                                 '```yaml\n'
+                                                 '1:\n'
+                                                 '  - ["cos(pi)", "cos(pi/2)*cos(pi/2) - '
+                                                 'sin(pi/2)*sin(pi/2)"]\n'
+                                                 '  - {rule: cos_add, vars: {x: "pi/2", y: '
+                                                 '"pi/2"}}\n'
+                                                 '\n'
+                                                 '2:\n'
+                                                 '  - ["cos(pi/2)*cos(pi/2) - '
+                                                 'sin(pi/2)*sin(pi/2)", "-sin(pi/2)*sin(pi/2)"]\n'
+                                                 '  - {rule: cos_halfpi, vars: {}}\n'
+                                                 '\n'
+                                                 '3:\n'
+                                                 '  - ["-sin(pi/2)*sin(pi/2)", "-1"]\n'
+                                                 '  - {rule: sin_halfpi, vars: {}}\n'
+                                                 '\n'
+                                                 '4:\n'
+                                                 '  - ["cos(pi)", "-1"]\n'
+                                                 '  - {trans: [1, 2, 3]}\n'
+                                                 '\n'
+                                                 '5:\n'
+                                                 '  - ["sin(pi)", "sin(pi/2)*cos(pi/2) + '
+                                                 'cos(pi/2)*sin(pi/2)"]\n'
+                                                 '  - {rule: sin_add, vars: {x: "pi/2", y: '
+                                                 '"pi/2"}}\n'
+                                                 '\n'
+                                                 '6:\n'
+                                                 '  - ["sin(pi/2)*cos(pi/2) + '
+                                                 'cos(pi/2)*sin(pi/2)", "0"]\n'
+                                                 '  - {rule: cos_halfpi, vars: {}}\n'
+                                                 '\n'
+                                                 '7:\n'
+                                                 '  - ["sin(pi)", "0"]\n'
+                                                 '  - {trans: [5, 6]}\n'
+                                                 '\n'
+                                                 '8:\n'
+                                                 '  - ["cos(pi + x)", "cos(pi)*cos(x) - '
+                                                 'sin(pi)*sin(x)"]\n'
+                                                 '  - {rule: cos_add, vars: {x: "pi", y: "x"}}\n'
+                                                 '\n'
+                                                 '9:\n'
+                                                 '  - ["cos(pi)*cos(x) - sin(pi)*sin(x)", '
+                                                 '"-cos(x) - sin(pi)*sin(x)"]\n'
+                                                 '  - {step: 4}\n'
+                                                 '\n'
+                                                 '10:\n'
+                                                 '  - ["-cos(x) - sin(pi)*sin(x)", "-cos(x)"]\n'
+                                                 '  - {step: 7}\n'
+                                                 '\n'
+                                                 '11:\n'
+                                                 '  - ["cos(pi + x)", "-cos(x)"]\n'
+                                                 '  - {trans: [8, 9, 10]}\n'
+                                                 '```',
+                                         tool_calls=(),
+                                         justification=None),
+                           parsed=FinalAnswer(final={1: (('cos(pi)',
+                                                          'cos(pi/2)*cos(pi/2) - '
+                                                          'sin(pi/2)*sin(pi/2)'),
+                                                         Rule(rule='cos_add',
+                                                              vars={'x': 'pi/2', 'y': 'pi/2'})),
+                                                     2: (('cos(pi/2)*cos(pi/2) - '
+                                                          'sin(pi/2)*sin(pi/2)',
+                                                          '-sin(pi/2)*sin(pi/2)'),
+                                                         Rule(rule='cos_halfpi', vars={})),
+                                                     3: (('-sin(pi/2)*sin(pi/2)', '-1'),
+                                                         Rule(rule='sin_halfpi', vars={})),
+                                                     4: (('cos(pi)', '-1'),
+                                                         Trans(trans=[1, 2, 3])),
+                                                     5: (('sin(pi)',
+                                                          'sin(pi/2)*cos(pi/2) + '
+                                                          'cos(pi/2)*sin(pi/2)'),
+                                                         Rule(rule='sin_add',
+                                                              vars={'x': 'pi/2', 'y': 'pi/2'})),
+                                                     6: (('sin(pi/2)*cos(pi/2) + '
+                                                          'cos(pi/2)*sin(pi/2)',
+                                                          '0'),
+                                                         Rule(rule='cos_halfpi', vars={})),
+                                                     7: (('sin(pi)', '0'), Trans(trans=[5, 6])),
+                                                     8: (('cos(pi + x)',
+                                                          'cos(pi)*cos(x) - sin(pi)*sin(x)'),
+                                                         Rule(rule='cos_add',
+                                                              vars={'x': 'pi', 'y': 'x'})),
+                                                     9: (('cos(pi)*cos(x) - sin(pi)*sin(x)',
+                                                          '-cos(x) - sin(pi)*sin(x)'),
+                                                         RewritePrev(step=4)),
+                                                     10: (('-cos(x) - sin(pi)*sin(x)', '-cos(x)'),
+                                                          RewritePrev(step=7)),
+                                                     11: (('cos(pi + x)', '-cos(x)'),
+                                                          Trans(trans=[8, 9, 10]))}))
+                json_provided: false
+                json: null
+              destination: 6
+          origin:
+            - child
+            - 2
+            - 0
+        6:
+          kind: Run
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: check_equality
+          tags:
+            - check_equality
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 5
+              - kind: nested
+                strategy: check_equality
+                args:
+                  equality:
+                    short: ('cos(pi + x)', '-cos(x)')
+                    long: ('cos(pi + x)', '-cos(x)')
+                    json_provided: true
+                    json:
+                      - cos(pi + x)
+                      - -cos(x)
+                  proof:
+                    short: '{1: ((''cos(pi)'', ''cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)''), Rule(rule=''cos_add'',
+                      vars={''x'': ''pi/2'', ''y'': ''pi/2''})), 2: ((''cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)'',
+                      ''-sin(pi/2)*sin(pi/2)''), Rule(rule=''cos_halfpi'', vars={})), 3: ((''-sin(pi/2)*sin(pi/2)'',
+                      ''-1''), Rule(rule=''sin_halfpi'', vars={})), 4: ((''cos(pi)'', ''-1''), Trans(trans=[1,
+                      2, 3])), 5: ((''sin(pi)'', ''sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)''), Rule(rule=''sin_add'',
+                      vars={''x'': ''pi/2'', ''y'': ''pi/2''})), 6: ((''sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)'',
+                      ''0''), Rule(rule=''cos_halfpi'', vars={})), 7: ((''sin(pi)'', ''0''), Trans(trans=[5,
+                      6])), 8: ((''cos(pi + x)'', ''cos(pi)*cos(x) - sin(pi)*sin(x)''), Rule(rule=''cos_add'',
+                      vars={''x'': ''pi'', ''y'': ''x''})), 9: ((''cos(pi)*cos(x) - sin(pi)*sin(x)'',
+                      ''-cos(x) - sin(pi)*sin(x)''), RewritePrev(step=4)), 10: ((''-cos(x) - sin(pi)*sin(x)'',
+                      ''-cos(x)''), RewritePrev(step=7)), 11: ((''cos(pi + x)'', ''-cos(x)''), Trans(trans=[8,
+                      9, 10]))}'
+                    long: |-
+                      {1: (('cos(pi)', 'cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)'),
+                           Rule(rule='cos_add', vars={'x': 'pi/2', 'y': 'pi/2'})),
+                       2: (('cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)', '-sin(pi/2)*sin(pi/2)'),
+                           Rule(rule='cos_halfpi', vars={})),
+                       3: (('-sin(pi/2)*sin(pi/2)', '-1'), Rule(rule='sin_halfpi', vars={})),
+                       4: (('cos(pi)', '-1'), Trans(trans=[1, 2, 3])),
+                       5: (('sin(pi)', 'sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)'),
+                           Rule(rule='sin_add', vars={'x': 'pi/2', 'y': 'pi/2'})),
+                       6: (('sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)', '0'),
+                           Rule(rule='cos_halfpi', vars={})),
+                       7: (('sin(pi)', '0'), Trans(trans=[5, 6])),
+                       8: (('cos(pi + x)', 'cos(pi)*cos(x) - sin(pi)*sin(x)'),
+                           Rule(rule='cos_add', vars={'x': 'pi', 'y': 'x'})),
+                       9: (('cos(pi)*cos(x) - sin(pi)*sin(x)', '-cos(x) - sin(pi)*sin(x)'),
+                           RewritePrev(step=4)),
+                       10: (('-cos(x) - sin(pi)*sin(x)', '-cos(x)'), RewritePrev(step=7)),
+                       11: (('cos(pi + x)', '-cos(x)'), Trans(trans=[8, 9, 10]))}
+                    json_provided: false
+                    json: null
+                tags:
+                  - check_equality
+                node_id: 7
+          actions:
+            - ref:
+                with_ids: $5{%8}
+                with_hints: null
+              hints: null
+              related_success_nodes:
+                - 8
+              related_answers: []
+              value:
+                short: '{1: ((''cos(pi)'', ''cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)''), Rule(rule=''cos_add'',
+                  vars={''x'': ''pi/2'', ''y'': ''pi/2''})), 2: ((''cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)'',
+                  ''-sin(pi/2)*sin(pi/2)''), Rule(rule=''cos_halfpi'', vars={})), 3: ((''-sin(pi/2)*sin(pi/2)'',
+                  ''-1''), Rule(rule=''sin_halfpi'', vars={})), 4: ((''cos(pi)'', ''-1''), Trans(trans=[1,
+                  2, 3])), 5: ((''sin(pi)'', ''sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)''), Rule(rule=''sin_add'',
+                  vars={''x'': ''pi/2'', ''y'': ''pi/2''})), 6: ((''sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)'',
+                  ''0''), Rule(rule=''cos_halfpi'', vars={})), 7: ((''sin(pi)'', ''0''), Trans(trans=[5,
+                  6])), 8: ((''cos(pi + x)'', ''cos(pi)*cos(x) - sin(pi)*sin(x)''), Rule(rule=''cos_add'',
+                  vars={''x'': ''pi'', ''y'': ''x''})), 9: ((''cos(pi)*cos(x) - sin(pi)*sin(x)'', ''-cos(x)
+                  - sin(pi)*sin(x)''), RewritePrev(step=4)), 10: ((''-cos(x) - sin(pi)*sin(x)'', ''-cos(x)''),
+                  RewritePrev(step=7)), 11: ((''cos(pi + x)'', ''-cos(x)''), Trans(trans=[8, 9, 10]))}'
+                long: |-
+                  {1: (('cos(pi)', 'cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)'),
+                       Rule(rule='cos_add', vars={'x': 'pi/2', 'y': 'pi/2'})),
+                   2: (('cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)', '-sin(pi/2)*sin(pi/2)'),
+                       Rule(rule='cos_halfpi', vars={})),
+                   3: (('-sin(pi/2)*sin(pi/2)', '-1'), Rule(rule='sin_halfpi', vars={})),
+                   4: (('cos(pi)', '-1'), Trans(trans=[1, 2, 3])),
+                   5: (('sin(pi)', 'sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)'),
+                       Rule(rule='sin_add', vars={'x': 'pi/2', 'y': 'pi/2'})),
+                   6: (('sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)', '0'),
+                       Rule(rule='cos_halfpi', vars={})),
+                   7: (('sin(pi)', '0'), Trans(trans=[5, 6])),
+                   8: (('cos(pi + x)', 'cos(pi)*cos(x) - sin(pi)*sin(x)'),
+                       Rule(rule='cos_add', vars={'x': 'pi', 'y': 'x'})),
+                   9: (('cos(pi)*cos(x) - sin(pi)*sin(x)', '-cos(x) - sin(pi)*sin(x)'),
+                       RewritePrev(step=4)),
+                   10: (('-cos(x) - sin(pi)*sin(x)', '-cos(x)'), RewritePrev(step=7)),
+                   11: (('cos(pi + x)', '-cos(x)'), Trans(trans=[8, 9, 10]))}
+                json_provided: false
+                json: null
+              destination: 9
+          origin:
+            - child
+            - 5
+            - 0
+        7:
+          kind: Compute
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: null
+          tags: []
+          properties:
+            - - with_ids: query
+                with_hints: null
+              - 6
+              - kind: query
+                name: __Computation__
+                args:
+                  fun: check
+                  args:
+                    eq:
+                      - cos(pi + x)
+                      - -cos(x)
+                    proof:
+                      1:
+                        - - cos(pi)
+                          - cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)
+                        - rule: cos_add
+                          vars:
+                            x: pi/2
+                            y: pi/2
+                      2:
+                        - - cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)
+                          - -sin(pi/2)*sin(pi/2)
+                        - rule: cos_halfpi
+                          vars: {}
+                      3:
+                        - - -sin(pi/2)*sin(pi/2)
+                          - '-1'
+                        - rule: sin_halfpi
+                          vars: {}
+                      4:
+                        - - cos(pi)
+                          - '-1'
+                        - trans:
+                            - 1
+                            - 2
+                            - 3
+                      5:
+                        - - sin(pi)
+                          - sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)
+                        - rule: sin_add
+                          vars:
+                            x: pi/2
+                            y: pi/2
+                      6:
+                        - - sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)
+                          - '0'
+                        - rule: cos_halfpi
+                          vars: {}
+                      7:
+                        - - sin(pi)
+                          - '0'
+                        - trans:
+                            - 5
+                            - 6
+                      8:
+                        - - cos(pi + x)
+                          - cos(pi)*cos(x) - sin(pi)*sin(x)
+                        - rule: cos_add
+                          vars:
+                            x: pi
+                            y: x
+                      9:
+                        - - cos(pi)*cos(x) - sin(pi)*sin(x)
+                          - -cos(x) - sin(pi)*sin(x)
+                        - step: 4
+                      10:
+                        - - -cos(x) - sin(pi)*sin(x)
+                          - -cos(x)
+                        - step: 7
+                      11:
+                        - - cos(pi + x)
+                          - -cos(x)
+                        - trans:
+                            - 8
+                            - 9
+                            - 10
+                    rules:
+                      cos_zero:
+                        - cos(0)
+                        - '1'
+                      sin_zero:
+                        - sin(0)
+                        - '0'
+                      sin_halfpi:
+                        - sin(pi/2)
+                        - '1'
+                      cos_halfpi:
+                        - cos(pi/2)
+                        - '0'
+                      sin_neg:
+                        - sin(-x)
+                        - -sin(x)
+                      cos_neg:
+                        - cos(-x)
+                        - cos(x)
+                      cos_add:
+                        - cos(x + y)
+                        - cos(x)*cos(y) - sin(x)*sin(y)
+                      sin_add:
+                        - sin(x + y)
+                        - sin(x)*cos(y) + cos(x)*sin(y)
+                tags:
+                  - __Computation__
+                answers:
+                  - id: 4
+                    hint: null
+                    value:
+                      short: None
+                      long: None
+                      json_provided: true
+                      json: null
+          actions:
+            - ref:
+                with_ids: $6{@4}
+                with_hints: null
+              hints: null
+              related_success_nodes: []
+              related_answers:
+                - 4
+              value:
+                short: None
+                long: None
+                json_provided: true
+                json: null
+              destination: 8
+          origin:
+            - nested
+            - 6
+            - 0
+        8:
+          kind: Success
+          success_value:
+            short: '{1: ((''cos(pi)'', ''cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)''), Rule(rule=''cos_add'',
+              vars={''x'': ''pi/2'', ''y'': ''pi/2''})), 2: ((''cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)'',
+              ''-sin(pi/2)*sin(pi/2)''), Rule(rule=''cos_halfpi'', vars={})), 3: ((''-sin(pi/2)*sin(pi/2)'',
+              ''-1''), Rule(rule=''sin_halfpi'', vars={})), 4: ((''cos(pi)'', ''-1''), Trans(trans=[1,
+              2, 3])), 5: ((''sin(pi)'', ''sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)''), Rule(rule=''sin_add'',
+              vars={''x'': ''pi/2'', ''y'': ''pi/2''})), 6: ((''sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)'',
+              ''0''), Rule(rule=''cos_halfpi'', vars={})), 7: ((''sin(pi)'', ''0''), Trans(trans=[5, 6])),
+              8: ((''cos(pi + x)'', ''cos(pi)*cos(x) - sin(pi)*sin(x)''), Rule(rule=''cos_add'', vars={''x'':
+              ''pi'', ''y'': ''x''})), 9: ((''cos(pi)*cos(x) - sin(pi)*sin(x)'', ''-cos(x) - sin(pi)*sin(x)''),
+              RewritePrev(step=4)), 10: ((''-cos(x) - sin(pi)*sin(x)'', ''-cos(x)''), RewritePrev(step=7)),
+              11: ((''cos(pi + x)'', ''-cos(x)''), Trans(trans=[8, 9, 10]))}'
+            long: |-
+              {1: (('cos(pi)', 'cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)'),
+                   Rule(rule='cos_add', vars={'x': 'pi/2', 'y': 'pi/2'})),
+               2: (('cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)', '-sin(pi/2)*sin(pi/2)'),
+                   Rule(rule='cos_halfpi', vars={})),
+               3: (('-sin(pi/2)*sin(pi/2)', '-1'), Rule(rule='sin_halfpi', vars={})),
+               4: (('cos(pi)', '-1'), Trans(trans=[1, 2, 3])),
+               5: (('sin(pi)', 'sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)'),
+                   Rule(rule='sin_add', vars={'x': 'pi/2', 'y': 'pi/2'})),
+               6: (('sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)', '0'),
+                   Rule(rule='cos_halfpi', vars={})),
+               7: (('sin(pi)', '0'), Trans(trans=[5, 6])),
+               8: (('cos(pi + x)', 'cos(pi)*cos(x) - sin(pi)*sin(x)'),
+                   Rule(rule='cos_add', vars={'x': 'pi', 'y': 'x'})),
+               9: (('cos(pi)*cos(x) - sin(pi)*sin(x)', '-cos(x) - sin(pi)*sin(x)'),
+                   RewritePrev(step=4)),
+               10: (('-cos(x) - sin(pi)*sin(x)', '-cos(x)'), RewritePrev(step=7)),
+               11: (('cos(pi + x)', '-cos(x)'), Trans(trans=[8, 9, 10]))}
+            json_provided: false
+            json: null
+          summary_message: null
+          leaf_node: true
+          label: null
+          tags: []
+          properties: []
+          actions: []
+          origin:
+            - child
+            - 7
+            - 0
+        9:
+          kind: Success
+          success_value:
+            short: '{1: ((''cos(pi)'', ''cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)''), Rule(rule=''cos_add'',
+              vars={''x'': ''pi/2'', ''y'': ''pi/2''})), 2: ((''cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)'',
+              ''-sin(pi/2)*sin(pi/2)''), Rule(rule=''cos_halfpi'', vars={})), 3: ((''-sin(pi/2)*sin(pi/2)'',
+              ''-1''), Rule(rule=''sin_halfpi'', vars={})), 4: ((''cos(pi)'', ''-1''), Trans(trans=[1,
+              2, 3])), 5: ((''sin(pi)'', ''sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)''), Rule(rule=''sin_add'',
+              vars={''x'': ''pi/2'', ''y'': ''pi/2''})), 6: ((''sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)'',
+              ''0''), Rule(rule=''cos_halfpi'', vars={})), 7: ((''sin(pi)'', ''0''), Trans(trans=[5, 6])),
+              8: ((''cos(pi + x)'', ''cos(pi)*cos(x) - sin(pi)*sin(x)''), Rule(rule=''cos_add'', vars={''x'':
+              ''pi'', ''y'': ''x''})), 9: ((''cos(pi)*cos(x) - sin(pi)*sin(x)'', ''-cos(x) - sin(pi)*sin(x)''),
+              RewritePrev(step=4)), 10: ((''-cos(x) - sin(pi)*sin(x)'', ''-cos(x)''), RewritePrev(step=7)),
+              11: ((''cos(pi + x)'', ''-cos(x)''), Trans(trans=[8, 9, 10]))}'
+            long: |-
+              {1: (('cos(pi)', 'cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)'),
+                   Rule(rule='cos_add', vars={'x': 'pi/2', 'y': 'pi/2'})),
+               2: (('cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)', '-sin(pi/2)*sin(pi/2)'),
+                   Rule(rule='cos_halfpi', vars={})),
+               3: (('-sin(pi/2)*sin(pi/2)', '-1'), Rule(rule='sin_halfpi', vars={})),
+               4: (('cos(pi)', '-1'), Trans(trans=[1, 2, 3])),
+               5: (('sin(pi)', 'sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)'),
+                   Rule(rule='sin_add', vars={'x': 'pi/2', 'y': 'pi/2'})),
+               6: (('sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)', '0'),
+                   Rule(rule='cos_halfpi', vars={})),
+               7: (('sin(pi)', '0'), Trans(trans=[5, 6])),
+               8: (('cos(pi + x)', 'cos(pi)*cos(x) - sin(pi)*sin(x)'),
+                   Rule(rule='cos_add', vars={'x': 'pi', 'y': 'x'})),
+               9: (('cos(pi)*cos(x) - sin(pi)*sin(x)', '-cos(x) - sin(pi)*sin(x)'),
+                   RewritePrev(step=4)),
+               10: (('-cos(x) - sin(pi)*sin(x)', '-cos(x)'), RewritePrev(step=7)),
+               11: (('cos(pi + x)', '-cos(x)'), Trans(trans=[8, 9, 10]))}
+            json_provided: false
+            json: null
+          summary_message: null
+          leaf_node: true
+          label: null
+          tags: []
+          properties: []
+          actions: []
+          origin:
+            - child
+            - 6
+            - 0
+      spaces:
+        1:
+          - 1
+          - 0
+        2:
+          - 2
+          - 0
+        3:
+          - 3
+          - 0
+        4:
+          - 5
+          - 0
+        5:
+          - 6
+          - 0
+        6:
+          - 7
+          - 0
