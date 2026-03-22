@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Baseline Interactive Experiment for Mini Equations
+Baseline Interactive Experiment for Mini Equations.
 
-This experiment runs the interactive proof strategy on a grid of configurations,
-testing different models, temperatures, and feedback cycles.
+This experiment runs the interactive baseline on the full benchmark using
+`gpt-5.4`, `gpt-5.4-mini`, and `gpt-5.4-nano`, with reasoning effort as
+our primary tuning axis.
 
 To run:
     python experiments/baseline_experiment.py run --max_workers=1
@@ -21,37 +22,26 @@ To check status:
 import delphyne as dp
 import mini_eqns_experiments as meq
 
-# Model configurations
-SMALL_MODELS = ["gpt-5.4-nano"]
-#SMALL_MODELS = ["gpt-5-mini-2025-08-07"]
-#LARGE_MODELS = ["gpt-4o"]
-REASONING_EFFORTS = ["xhigh"]  # e.g. [None], ["low"], ["medium"], ["high"]
+MODEL_CONFIGS = [("gpt-5.4-mini", ["low"])]
+#   ("gpt-5.4", ["medium", "high"]),
+#   ("gpt-5.4-mini", ["low", "medium", "high"]),
+#    ("gpt-5.4-nano", ["low", "medium", "high"]),
+#]
 
-# Create experiment configurations
 configs = [
     meq.BaselineConfig(
         bench_name=bench_name,
-        model_name=model,
-        temperature=temperature,
-        max_feedback_cycles=max_feedback_cycles,
+        model_name=model_name,
+        temperature=None,
+        max_feedback_cycles=10,
         loop=True,
         max_dollar_budget=0.2,
         seed=seed,
         reasoning_effort=reasoning_effort,
     )
-    # Run on all equations from benchmark file
     for bench_name in list(meq.BENCHS.keys())
-    # Use different models
-    #for model in [*SMALL_MODELS, *LARGE_MODELS]
-    for model in [*SMALL_MODELS]
-    # Temperature variations (more for small models)
-    #for temperature in ([0.7, 1.0, 1.5] if model in SMALL_MODELS else [0.7, 1.0])
-    for temperature in ([1.0] if model in SMALL_MODELS else [1.0]) # KEEP DEFAULT
-    for reasoning_effort in REASONING_EFFORTS
-    # Feedback cycle variations (more for large models)
-    #for max_feedback_cycles in ([3] if model in SMALL_MODELS else [0, 1, 3])
-    for max_feedback_cycles in ([10] if model in SMALL_MODELS else [20])
-    # Multiple seeds for reproducibility
+    for (model_name, efforts) in MODEL_CONFIGS
+    for reasoning_effort in efforts
     for seed in range(1)
 ]
 

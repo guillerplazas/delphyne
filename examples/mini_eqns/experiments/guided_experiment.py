@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Guided Interactive Experiment for Mini Equations
+Guided Interactive Experiment for Mini Equations.
 
-This experiment runs the guided proof strategy with enhanced prompts and
-a light search configuration.
+This experiment runs the guided proof strategy on the full benchmark using
+`gpt-5.4`, `gpt-5.4-mini`, and `gpt-5.4-nano`, with reasoning effort as
+our primary tuning axis.
 
-The policy default supports broader search, but this experiment keeps
-`num_completions=2` to measure the prompt improvements under a modest
-sampling budget.
+The guided strategy still uses a modest completion budget so prompt quality
+matters more than brute-force sampling.
 
 To run:
     python experiments/guided_experiment.py run --max_workers=16
@@ -25,15 +25,17 @@ To check status:
 import delphyne as dp
 import mini_eqns_experiments as meq
 
-#MODELS = ["gpt-5-mini-2025-08-07", "gpt-5-nano-2025-08-07"]
-MODELS = ["gpt-5.4-nano"]
-REASONING_EFFORTS = ["high"]  # e.g. [None], ["low"], ["medium"], ["high"]
+MODEL_CONFIGS = [("gpt-5.4-mini", ["low"])]
+#   ("gpt-5.4", ["medium", "high"]),
+#   ("gpt-5.4-mini", ["low", "medium", "high"]),
+#    ("gpt-5.4-nano", ["low", "medium", "high"]),
+#]
 
 configs = [
     meq.GuidedConfig(
         bench_name=bench_name,
-        model_name=model,
-        temperature=1.0,
+        model_name=model_name,
+        temperature=None,
         num_completions=2,
         max_feedback_cycles=10,
         loop=True,
@@ -42,8 +44,8 @@ configs = [
         reasoning_effort=reasoning_effort,
     )
     for bench_name in list(meq.BENCHS.keys())
-    for model in MODELS
-    for reasoning_effort in REASONING_EFFORTS
+    for (model_name, efforts) in MODEL_CONFIGS
+    for reasoning_effort in efforts
     for seed in range(1)
 ]
 

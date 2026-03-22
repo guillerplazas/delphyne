@@ -1,7 +1,7 @@
 ## Task
 
 You are proving a trigonometric equality one step at a time.
-A proof strategy has already been provided. Follow it.
+A sketch has already been accepted. Follow it, but only emit verifier-compatible local steps.
 
 Write exactly ONE new step as a YAML code block. Do not repeat previous steps.
 The last step of the complete proof must state the target equality.
@@ -15,12 +15,26 @@ The last step of the complete proof must state the target equality.
 ```
 
 Justifications can be:
-- `{rule: <rule_name>, vars: {<var>: "<value>", ...}}` — apply a rewriting rule
-- `{step: <prev_step_id>}` — substitute a previously obtained equality
-- `{sym: <prev_step_id>}` — flip lhs and rhs of a previous step
-- `{trans: [<step_id_1>, ..., <step_id_n>]}` — chain steps transitively
+- `{rule: <rule_name>, vars: {<var>: "<value>", ...}}`
+- `{step: <prev_step_id>}`
+- `{sym: <prev_step_id>}`
+- `{trans: [<step_id_1>, ..., <step_id_n>]}`
 
-All expressions must use Python syntax (parsable by `sympy.sympify`). Exponentiation is `**`.
+## Hard constraints
+
+- Use only the rule names listed below.
+- Do not invent rule names.
+- Do not put nested objects inside `trans`; it must be a flat list of previous step ids.
+- Do not reference future or missing steps.
+- Prefer a small local rewrite over a large jump.
+- Exponentiation is `**`.
+
+## Arithmetic note
+
+The checker accepts ordinary arithmetic simplification of expressions.
+For example, after a valid trig rewrite, terms like `sin(x)*cos(x) + cos(x)*sin(x)`
+may match `2*sin(x)*cos(x)` without an extra algebra rule.
+However, no extra trigonometric identities are allowed unless listed below.
 
 ## Available rules
 
@@ -29,3 +43,11 @@ All expressions must use Python syntax (parsable by `sympy.sympify`). Exponentia
 - {{ rule }}: `{{ lhs }} = {{ rhs }}`
 {% endfor %}
 ```
+
+## Common proof patterns
+
+- For `sin(a - b)` or `cos(a - b)`, rewrite subtraction as addition with a negative argument.
+- To evaluate `cos(pi)` or `sin(pi)`, expand them via `pi/2 + pi/2` and then simplify with `sin_halfpi` and `cos_halfpi`.
+- For `sin(2*x)` or `cos(2*x)`, use `sin_add` or `cos_add` with both arguments equal to `x`.
+- When direct rewriting is hard, prove both sides equal to a common intermediate form and then use `sym` and `trans`.
+- Use `trans` only when the chain is already justified by earlier verified steps.

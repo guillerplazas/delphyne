@@ -16,6 +16,7 @@ BENCHMARKS_FOLDER = Path(__file__).parent.parent / "benchmark"
 EQUATIONS_FILE = BENCHMARKS_FOLDER / "htps.txt"
 
 
+
 def load_all_equations() -> dict[str, tuple[str, str]]:
     """
     Load all equations from the benchmark file.
@@ -50,9 +51,10 @@ BENCHS = load_all_equations()
 @dataclass
 class BaselineConfig:
     """Configuration for baseline interactive proof experiments."""
+
     bench_name: str
     model_name: str
-    temperature: float
+    temperature: float | None
     max_feedback_cycles: int
     seed: int
     loop: bool = False
@@ -88,9 +90,10 @@ class BaselineConfig:
 @dataclass
 class GuidedConfig:
     """Configuration for guided interactive proof experiments."""
+
     bench_name: str
     model_name: str
-    temperature: float
+    temperature: float | None
     num_completions: int
     max_feedback_cycles: int
     seed: int
@@ -127,16 +130,19 @@ class GuidedConfig:
 
 @dataclass
 class StepByStepConfig:
-    """Configuration for sketch-guided step-by-step proof experiments."""
+    """Configuration for split-model sketch-guided proof experiments."""
+
     bench_name: str
-    model_name: str
-    temperature: float
+    sketch_model_name: str
+    step_model_name: str
+    sketch_reasoning_effort: str | None
+    step_reasoning_effort: str | None
+    num_completions: int
     max_feedback_cycles_per_step: int
     max_steps: int
     seed: int
     loop: bool = False
-    max_dollar_budget: float | None = 0.2
-    reasoning_effort: str | None = None
+    max_dollar_budget: float | None = 0.25
 
     def instantiate(self, context: object) -> dp.RunStrategyArgs:
         budget: dict[str, float] = {}
@@ -150,11 +156,14 @@ class StepByStepConfig:
             args={"equality": [lhs, rhs], "max_steps": self.max_steps},
             policy="prove_step_by_step_policy",
             policy_args={
-                "model_name": self.model_name,
-                "temperature": self.temperature,
+                "sketch_model_name": self.sketch_model_name,
+                "step_model_name": self.step_model_name,
+                "sketch_reasoning_effort": self.sketch_reasoning_effort,
+                "step_reasoning_effort": self.step_reasoning_effort,
+                "num_completions": self.num_completions,
                 "max_feedback_cycles_per_step": self.max_feedback_cycles_per_step,
+                "max_steps": self.max_steps,
                 "loop": self.loop,
-                "reasoning_effort": self.reasoning_effort,
             },
             num_generated=1,
             budget=budget,

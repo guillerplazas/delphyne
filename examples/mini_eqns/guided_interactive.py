@@ -66,7 +66,7 @@ def prove_equality_guided(
 
 def prove_equality_guided_policy(
     model_name: str = "gpt-5-mini-2025-08-07",
-    temperature: float = 1.5,
+    temperature: float | None = None,
     num_completions: int = 8,
     max_feedback_cycles: int = 3,
     loop: bool = True,
@@ -77,7 +77,7 @@ def prove_equality_guided_policy(
 
     Args:
         model_name: Name of the model to use
-        temperature: Temperature for sampling (higher for diversity)
+        temperature: Optional sampling temperature; use None for reasoning-model defaults
         num_completions: Number of proof candidates per LLM call
         max_feedback_cycles: Maximum number of feedback rounds
         loop: Whether to loop the search
