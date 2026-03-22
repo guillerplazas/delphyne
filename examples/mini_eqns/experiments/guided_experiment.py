@@ -2,8 +2,12 @@
 """
 Guided Interactive Experiment for Mini Equations
 
-This experiment runs the guided proof strategy with multiple completions
-and enhanced prompts on both gpt-5-mini and gpt-5-nano.
+This experiment runs the guided proof strategy with enhanced prompts and
+a light search configuration.
+
+The policy default supports broader search, but this experiment keeps
+`num_completions=2` to measure the prompt improvements under a modest
+sampling budget.
 
 To run:
     python experiments/guided_experiment.py run --max_workers=16
@@ -22,8 +26,8 @@ import delphyne as dp
 import mini_eqns_experiments as meq
 
 #MODELS = ["gpt-5-mini-2025-08-07", "gpt-5-nano-2025-08-07"]
-MODELS = ["gpt-5-nano-2025-08-07"]
-REASONING_EFFORTS = [None]  # e.g. [None], ["low"], ["medium"], ["high"]
+MODELS = ["gpt-5.4-nano"]
+REASONING_EFFORTS = ["high"]  # e.g. [None], ["low"], ["medium"], ["high"]
 
 configs = [
     meq.GuidedConfig(
@@ -33,7 +37,7 @@ configs = [
         num_completions=2,
         max_feedback_cycles=10,
         loop=True,
-        max_dollar_budget=0.1,
+        max_dollar_budget=0.2,
         seed=seed,
         reasoning_effort=reasoning_effort,
     )

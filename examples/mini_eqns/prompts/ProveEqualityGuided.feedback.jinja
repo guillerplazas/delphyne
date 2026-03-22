@@ -1,26 +1,39 @@
+{% set feedback_text = feedback.meta.feedback if feedback.meta.feedback is defined else feedback.meta %}
+
 Your formal proof did not check successfully. Take the following error into consideration and make another try.
 
 ```
-{{feedback.meta}}
+{{feedback_text}}
 ```
 
 **Hints based on common mistakes:**
 
-{% if "not found" in feedback.meta %}
+- Re-check the failing step exactly as written by the checker, and only use the listed rules plus `step`, `sym`, and `trans`.
+
+{% if "not found" in feedback_text %}
 - **Missing step reference**: You referenced a step ID that doesn't exist. Double-check that all step IDs in `trans`, `sym`, and `step` refer to previously defined steps.
 {% endif %}
-{% if "Unequal terms" in feedback.meta %}
+{% if "Unequal terms" in feedback_text %}
 - **Unequal terms**: The equality in your step doesn't match what the rule produces. Check that your `vars` dict maps the rule's placeholders to the correct expressions. Remember that `cos_add` has placeholders `x` and `y`, so `cos(a - b)` requires `vars: {x: "a", y: "-b"}`.
 {% endif %}
-{% if "Rule application failed" in feedback.meta %}
+{% if "Rule application failed" in feedback_text %}
 - **Wrong rule application**: The rule didn't produce the expected result. Verify that:
   1. You're using the correct rule name
   2. Your `vars` values exactly match the subexpressions in your term
   3. The RHS of your step matches what the rule produces after substitution
 {% endif %}
-{% if "does not end with the equation" in feedback.meta %}
+{% if "Invalid term syntax" in feedback_text %}
+- **Syntax error**: Write every expression as a Python-style string parsable by SymPy. Use `sin(x)`, `cos(x)`, and `**`. Do not use LaTeX, bracket notation like `[sin(x)]`, or caret exponentiation like `cos^2(x)`.
+{% endif %}
+{% if "Application of symmetry failed" in feedback_text %}
+- **Symmetry mismatch**: If you use `{sym: k}`, the new step must exactly reverse step `k`: left-hand side becomes the old right-hand side, and right-hand side becomes the old left-hand side.
+{% endif %}
+{% if "Transitivity requires at least 2 steps" in feedback_text %}
+- **Transitivity arity**: Use `{trans: [i, j, ...]}` with at least two previous steps.
+{% endif %}
+{% if "does not end with the equation" in feedback_text %}
 - **Missing final step**: Your proof's last step must state the exact target equality `{{query.equality[0]}} = {{query.equality[1]}}`. Add a final step using `trans` or `sym` to combine your intermediate results into the target equality.
 {% endif %}
-{% if "is not a past step" in feedback.meta %}
+{% if "is not a past step" in feedback_text %}
 - **Step ordering**: You can only reference steps with a smaller step ID. Make sure your steps are numbered in order and references point backwards.
 {% endif %}
