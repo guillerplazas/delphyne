@@ -93,6 +93,14 @@ def _validate_sketch(sketch: str) -> str | None:
     return None
 
 
+def _get_sketch_line(sketch: str, step_number: int) -> str | None:
+    """Returns the step_number-th non-empty sketch line (1-indexed), or None."""
+    lines = [l.strip() for l in sketch.strip().splitlines() if l.strip()]
+    if 1 <= step_number <= len(lines):
+        return lines[step_number - 1]
+    return None
+
+
 # ── Phase 1: Proof Sketch ─────────────────────────────────────────────────────
 
 
@@ -132,6 +140,7 @@ class ProposeNextStep(dp.Query[dp.Response[ch.Proof, Never]]):
     equality: ch.Eq
     sketch: str
     partial_proof: ch.Proof
+    current_sketch_line: str | None = None
     prefix: dp.AnswerPrefix = field(default_factory=list)
 
     __parser__ = dp.last_code_block.yaml_as(ch.Proof).response
@@ -187,6 +196,7 @@ def prove_one_step(
     equality: ch.Eq,
     sketch: str,
     partial_proof: ch.Proof,
+    current_sketch_line: str | None = None,
 ) -> Strategy[Branch, IPDict, StepVerifyResult]:
     """Uses dp.interact to propose and validate a single new step."""
     new_step_id = (max(partial_proof.keys()) + 1) if partial_proof else 1
@@ -209,7 +219,7 @@ def prove_one_step(
 
     return (yield from dp.interact(
         step=lambda prefix, _: ProposeNextStep(
-            equality, sketch, partial_proof, prefix
+            equality, sketch, partial_proof, current_sketch_line, prefix
         ).using(...),
         process=process,
     ))
@@ -231,7 +241,9 @@ def prove_step_by_step(
     partial_proof: ch.Proof = {}
 
     for _ in range(max_steps):
-        result = yield from prove_one_step(equality, sketch, partial_proof).inline()
+        step_number = (max(partial_proof.keys()) + 1) if partial_proof else 1
+        current_sketch_line = _get_sketch_line(sketch, step_number)
+        result = yield from prove_one_step(equality, sketch, partial_proof, current_sketch_line).inline()
 
         if isinstance(result, dict):
             return result  # Complete proof returned by verify_new_step

@@ -1,0 +1,1138 @@
+# delphyne-command
+
+command: run_strategy
+args:
+  strategy: prove_step_by_step
+  args:
+    equality:
+      - sin(x)
+      - 2*sin(x/2)*cos(x/2)
+    max_steps: 12
+  policy: prove_step_by_step_policy
+  policy_args:
+    sketch_model_name: gpt-5.4
+    step_model_name: gpt-5.4-mini
+    sketch_reasoning_effort: medium
+    step_reasoning_effort: high
+    num_completions: 2
+    max_feedback_cycles_per_step: 3
+    max_steps: 12
+    loop: true
+  budget:
+    price: 0.2
+  cache_file: configs/b1607da8-27da-4bf7-94d1-46a0f55b64dc/cache.yaml
+  embeddings_cache_file: configs/b1607da8-27da-4bf7-94d1-46a0f55b64dc/embeddings.cache.h5
+  cache_mode: create
+outcome:
+  diagnostics: []
+  result:
+    success: true
+    values:
+      - 1:
+          - - sin(x)
+            - sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+          - rule: sin_add
+            vars:
+              x: x/2
+              y: x/2
+    spent_budget:
+      num_requests: 2
+      num_completions: 3
+      input_tokens: 3980
+      output_tokens: 990
+      cached_input_tokens: 2816
+      price: 0.011706999999999999
+    success_nodes:
+      - 8
+    raw_trace:
+      nodes:
+        1: nested($0)
+        2: child(%1, $1{@1})
+        3: nested($2)
+        4: child(%2, $2{%3})
+        5: child(%4, $3{@2})
+        6: nested($4)
+        7: child(%6, $5{@3})
+        8: child(%5, $4{%7})
+      spaces:
+        0: main
+        1: local(%1, cands)
+        2: local(%2, cands)
+        3: local(%4, cands)
+        4: local(%5, cands)
+        5: local(%6, query)
+      answers:
+        1:
+          space: 1
+          answer:
+            mode: null
+            content: |-
+              ```text
+              1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+              2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)
+              3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)
+              ```
+        2:
+          space: 3
+          answer:
+            mode: null
+            content: |-
+              ```yaml
+              1:
+                - ["sin(x)", "sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)"]
+                - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+              ```
+        3:
+          space: 5
+          answer:
+            mode: null
+            content: |
+              null
+              ...
+    log:
+      - message: llm_request
+        level: info
+        message_id: 0
+        time: 2026-03-22 15:47:09.483140
+        space: 1
+        metadata:
+          query: GenerateProofSketch
+          request:
+            chat:
+              - role: system
+                content: |-
+                  ## Task
+
+                  You are planning a proof of a trigonometric equality for a strict checker.
+                  Write a SHORT proof sketch that only uses moves the checker understands.
+
+                  ## Allowed move types
+
+                  - `rule:<rule_name>`
+                  - `sym`
+                  - `step`
+                  - `trans`
+
+                  ## Constraints
+
+                  - Use only the rule names listed below.
+                  - Do not invent algebraic macro-rules.
+                  - Do not mention unsupported shortcuts such as "difference of squares" or
+                    "Pythagorean substitution".
+                  - Arithmetic simplification is allowed implicitly by the checker, but every
+                    trigonometric fact must come from the listed rules or from previous steps.
+
+                  ## Available rules
+
+                  ```
+                  - cos_zero: `cos(0) = 1`
+                  - sin_zero: `sin(0) = 0`
+                  - sin_halfpi: `sin(pi/2) = 1`
+                  - cos_halfpi: `cos(pi/2) = 0`
+                  - sin_neg: `sin(-x) = -sin(x)`
+                  - cos_neg: `cos(-x) = cos(x)`
+                  - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+                  - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+                  ```
+
+                  ## Output format
+
+                  Return a numbered list inside a code block.
+                  Each item must name an allowed move and the local goal.
+                  Keep it concise.
+
+                  For every `rule:` step, use `→` to show the resulting expression after the rewrite.
+                  This is mandatory — the step model uses these targets to generate valid proof steps.
+
+                  Example (sin(pi/2 + x) = cos(x)):
+
+                  ```
+                  1. rule:sin_add vars:{x:"pi/2", y:"x"} → sin(pi/2)*cos(x) + cos(pi/2)*sin(x)
+                  2. rule:sin_halfpi → 1*cos(x) + cos(pi/2)*sin(x)
+                  3. rule:cos_halfpi → cos(x) + 0*sin(x)
+                  4. trans:[1,2,3] → sin(pi/2+x) = cos(x)
+                  ```
+              - role: user
+                content: |-
+                  Sketch a verifier-compatible proof plan for:
+
+                  `cos(pi/3) = sin(pi/6)`
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    ```
+                    1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+                    2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+                    3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+                    4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+                    5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+                    ```
+              - role: user
+                content: |-
+                  Sketch a verifier-compatible proof plan for:
+
+                  `2*sin(x/2)*cos(x/2) = sin(x)`
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    ```
+                    1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+                    2. Flip with sym to get the LHS = RHS direction
+                    ```
+              - role: user
+                content: |-
+                  Sketch a verifier-compatible proof plan for:
+
+                  `sin(x) = 2*sin(x/2)*cos(x/2)`
+            options: {}
+      - message: llm_response
+        level: info
+        message_id: 1
+        related:
+          - 0
+        time: 2026-03-22 15:47:17.398847
+        space: 1
+        metadata:
+          response:
+            outputs:
+              - content: |-
+                  ```text
+                  1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                  2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)
+                  3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)
+                  ```
+                tool_calls: []
+            budget:
+              values:
+                num_requests: 1
+                num_completions: 1
+                input_tokens: 749
+                output_tokens: 501
+                cached_input_tokens: 0
+                price: 0.005946249999999999
+            log_items: []
+            model_name: gpt-5.4-2026-03-05
+            usage_info:
+              completion_tokens: 501
+              prompt_tokens: 749
+              total_tokens: 1250
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 383
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 0
+          usage:
+            model: gpt-5.4-2026-03-05
+            usage:
+              completion_tokens: 501
+              prompt_tokens: 749
+              total_tokens: 1250
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 383
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 0
+      - message: llm_request
+        level: info
+        message_id: 2
+        time: 2026-03-22 15:47:17.410275
+        space: 3
+        metadata:
+          query: ProposeNextStep
+          request:
+            chat:
+              - role: system
+                content: |-
+                  ## Task
+
+                  You are proving a trigonometric equality one step at a time.
+                  A sketch has already been accepted. Follow it, but only emit verifier-compatible local steps.
+
+                  Write exactly ONE new step as a YAML code block. Do not repeat previous steps.
+                  The last step of the complete proof must state the target equality.
+
+                  ## Step format
+
+                  ```yaml
+                  <step_id>:
+                    - ["<lhs>", "<rhs>"]
+                    - <justification>
+                  ```
+
+                  Justifications can be:
+                  - `{rule: <rule_name>, vars: {<var>: "<value>", ...}}`
+                  - `{step: <prev_step_id>}`
+                  - `{sym: <prev_step_id>}`
+                  - `{trans: [<step_id_1>, ..., <step_id_n>]}`
+
+                  ## Hard constraints
+
+                  - Use only the rule names listed below.
+                  - Do not invent rule names.
+                  - Do not put nested objects inside `trans`; it must be a flat list of previous step ids.
+                  - Do not reference future or missing steps.
+                  - Prefer a small local rewrite over a large jump.
+                  - Exponentiation is `**`.
+
+                  ## Arithmetic note
+
+                  The checker accepts ordinary arithmetic simplification of expressions.
+                  For example, after a valid trig rewrite, terms like `sin(x)*cos(x) + cos(x)*sin(x)`
+                  may match `2*sin(x)*cos(x)` without an extra algebra rule.
+                  However, no extra trigonometric identities are allowed unless listed below.
+
+                  ## Available rules
+
+                  ```
+                  - cos_zero: `cos(0) = 1`
+                  - sin_zero: `sin(0) = 0`
+                  - sin_halfpi: `sin(pi/2) = 1`
+                  - cos_halfpi: `cos(pi/2) = 0`
+                  - sin_neg: `sin(-x) = -sin(x)`
+                  - cos_neg: `cos(-x) = cos(x)`
+                  - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+                  - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+                  ```
+
+                  ## Common proof patterns
+
+                  - For `sin(a - b)` or `cos(a - b)`, rewrite subtraction as addition with a negative argument.
+                  - To evaluate `cos(pi)` or `sin(pi)`, expand them via `pi/2 + pi/2` and then simplify with `sin_halfpi` and `cos_halfpi`.
+                  - For `sin(2*x)` or `cos(2*x)`, use `sin_add` or `cos_add` with both arguments equal to `x`.
+                  - When direct rewriting is hard, prove both sides equal to a common intermediate form and then use `sym` and `trans`.
+                  - Use `trans` only when the chain is already justified by earlier verified steps.
+
+                  ## How `{step: K}` works
+
+                  `{step: K}` rewrites a sub-expression inside the current step's LHS using the equality from step K.
+                  If step K proved `A = B`, then `{step: K}` substitutes `A → B` inside the current LHS.
+
+                  Example: if step 3 proved `sin(pi) = 0`, then:
+                  ```yaml
+                  4:
+                    - ["sin(x)*cos(pi) + cos(x)*sin(pi)", "sin(x)*cos(pi) + cos(x)*0"]
+                    - {step: 3}
+                  ```
+                  Use `{step: K}` when you want to rewrite one occurrence inside a compound expression.
+                  Use `{trans: [i, j, ...]}` only when steps i, j, ... form a proper chain (each step's RHS equals the next step's LHS).
+              - role: user
+                content: |
+                  **Target**: `cos(pi/3) = sin(pi/6)`
+
+                  **Accepted sketch**:
+                  ```
+                  1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+                  2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+                  3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+                  4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+                  5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+                  ```
+
+
+                  No verified steps yet.
+                  Write step **1** as a small local rewrite that matches the sketch.
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    ```yaml
+                    1:
+                      - ["cos(pi/3)", "cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_add, vars: {x: "pi/2", y: "-pi/6"}}
+                    ```
+              - role: user
+                content: |
+                  **Target**: `cos(pi/3) = sin(pi/6)`
+
+                  **Accepted sketch**:
+                  ```
+                  1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+                  2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+                  3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+                  4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+                  5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+                  ```
+
+
+                  **Verified steps so far**:
+                  ```yaml
+                  1:
+                    - - cos(pi/3)
+                      - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                    - rule: cos_add
+                      vars:
+                        x: pi/2
+                        y: -pi/6
+
+                  ```
+                  Write step **2**.
+                  Either add one new local equality, or finish with a valid `sym` / `trans` step if the proof is ready.
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    ```yaml
+                    2:
+                      - ["cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)", "-sin(pi/2)*sin(-pi/6)"]
+                      - {rule: cos_halfpi, vars: {}}
+                    ```
+              - role: user
+                content: |
+                  **Target**: `cos(pi/3) = sin(pi/6)`
+
+                  **Accepted sketch**:
+                  ```
+                  1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+                  2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+                  3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+                  4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+                  5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+                  ```
+
+
+                  **Verified steps so far**:
+                  ```yaml
+                  1:
+                    - - cos(pi/3)
+                      - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                    - rule: cos_add
+                      vars:
+                        x: pi/2
+                        y: -pi/6
+                  2:
+                    - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                      - -sin(pi/2)*sin(-pi/6)
+                    - rule: cos_halfpi
+                      vars: {}
+
+                  ```
+                  Write step **3**.
+                  Either add one new local equality, or finish with a valid `sym` / `trans` step if the proof is ready.
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    ```yaml
+                    3:
+                      - ["-sin(pi/2)*sin(-pi/6)", "-sin(-pi/6)"]
+                      - {rule: sin_halfpi, vars: {}}
+                    ```
+              - role: user
+                content: |
+                  **Target**: `cos(pi/3) = sin(pi/6)`
+
+                  **Accepted sketch**:
+                  ```
+                  1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+                  2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+                  3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+                  4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+                  5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+                  ```
+
+
+                  **Verified steps so far**:
+                  ```yaml
+                  1:
+                    - - cos(pi/3)
+                      - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                    - rule: cos_add
+                      vars:
+                        x: pi/2
+                        y: -pi/6
+                  2:
+                    - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                      - -sin(pi/2)*sin(-pi/6)
+                    - rule: cos_halfpi
+                      vars: {}
+                  3:
+                    - - -sin(pi/2)*sin(-pi/6)
+                      - -sin(-pi/6)
+                    - rule: sin_halfpi
+                      vars: {}
+
+                  ```
+                  Write step **4**.
+                  Either add one new local equality, or finish with a valid `sym` / `trans` step if the proof is ready.
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    ```yaml
+                    4:
+                      - ["-sin(-pi/6)", "sin(pi/6)"]
+                      - {rule: sin_neg, vars: {x: "pi/6"}}
+                    ```
+              - role: user
+                content: |
+                  **Target**: `cos(pi/3) = sin(pi/6)`
+
+                  **Accepted sketch**:
+                  ```
+                  1. Use cos_add with x=pi/2, y=-pi/6 to expand cos(pi/3) as cos(pi/2 + (-pi/6))
+                  2. Apply cos_halfpi to simplify: cos(pi/2) = 0, dropping the first term
+                  3. Apply sin_halfpi to simplify: sin(pi/2) = 1, leaving -sin(-pi/6)
+                  4. Apply sin_neg to simplify: sin(-pi/6) = -sin(pi/6), so -sin(-pi/6) = sin(pi/6)
+                  5. Chain steps 1-4 with trans to get cos(pi/3) = sin(pi/6)
+
+                  ```
+
+
+                  **Verified steps so far**:
+                  ```yaml
+                  1:
+                    - - cos(pi/3)
+                      - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                    - rule: cos_add
+                      vars:
+                        x: pi/2
+                        y: -pi/6
+                  2:
+                    - - cos(pi/2)*cos(-pi/6) - sin(pi/2)*sin(-pi/6)
+                      - -sin(pi/2)*sin(-pi/6)
+                    - rule: cos_halfpi
+                      vars: {}
+                  3:
+                    - - -sin(pi/2)*sin(-pi/6)
+                      - -sin(-pi/6)
+                    - rule: sin_halfpi
+                      vars: {}
+                  4:
+                    - - -sin(-pi/6)
+                      - sin(pi/6)
+                    - rule: sin_neg
+                      vars:
+                        x: pi/6
+
+                  ```
+                  Write step **5**.
+                  Either add one new local equality, or finish with a valid `sym` / `trans` step if the proof is ready.
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    ```yaml
+                    5:
+                      - ["cos(pi/3)", "sin(pi/6)"]
+                      - {trans: [1, 2, 3, 4]}
+                    ```
+              - role: user
+                content: |
+                  **Target**: `2*sin(x/2)*cos(x/2) = sin(x)`
+
+                  **Accepted sketch**:
+                  ```
+                  1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+                  2. Flip with sym to get the LHS = RHS direction
+
+                  ```
+
+
+                  No verified steps yet.
+                  Write step **1** as a small local rewrite that matches the sketch.
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    ```yaml
+                    1:
+                      - ["sin(x)", "2*sin(x/2)*cos(x/2)"]
+                      - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+                    ```
+              - role: user
+                content: |
+                  **Target**: `2*sin(x/2)*cos(x/2) = sin(x)`
+
+                  **Accepted sketch**:
+                  ```
+                  1. Work from the RHS: use sin_add with x=x/2, y=x/2 to rewrite sin(x) as 2*sin(x/2)*cos(x/2)
+                  2. Flip with sym to get the LHS = RHS direction
+
+                  ```
+
+
+                  **Verified steps so far**:
+                  ```yaml
+                  1:
+                    - - sin(x)
+                      - 2*sin(x/2)*cos(x/2)
+                    - rule: sin_add
+                      vars:
+                        x: x/2
+                        y: x/2
+
+                  ```
+                  Write step **2**.
+                  Either add one new local equality, or finish with a valid `sym` / `trans` step if the proof is ready.
+              - role: assistant
+                answer:
+                  mode: null
+                  content: |
+                    ```yaml
+                    2:
+                      - ["2*sin(x/2)*cos(x/2)", "sin(x)"]
+                      - {sym: 1}
+                    ```
+              - role: user
+                content: |
+                  **Target**: `sin(x) = 2*sin(x/2)*cos(x/2)`
+
+                  **Accepted sketch**:
+                  ```
+                  1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                  2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)
+                  3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)
+
+                  ```
+
+                  **Current sketch step to implement**: `1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)`
+                  The expression after `→` is your target: your step's RHS must equal (or simplify to) that expression.
+
+                  No verified steps yet.
+                  Write step **1** as a small local rewrite that matches the sketch.
+            options: {}
+            num_completions: 2
+      - message: llm_response
+        level: info
+        message_id: 3
+        related:
+          - 2
+        time: 2026-03-22 15:47:19.349083
+        space: 3
+        metadata:
+          response:
+            outputs:
+              - content: |-
+                  ```yaml
+                  1:
+                    - ["sin(x)", "sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)"]
+                    - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+                  ```
+                tool_calls: []
+              - content: |-
+                  ```yaml
+                  1:
+                    - ["sin(x)", "sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)"]
+                    - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}
+                  ```
+                tool_calls: []
+            budget:
+              values:
+                num_requests: 1
+                num_completions: 2
+                input_tokens: 3231
+                output_tokens: 489
+                cached_input_tokens: 2816
+                price: 0.005760749999999999
+            log_items: []
+            model_name: gpt-5.4-mini-2026-03-17
+            usage_info:
+              completion_tokens: 489
+              prompt_tokens: 3231
+              total_tokens: 3720
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 349
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 2816
+          usage:
+            model: gpt-5.4-mini-2026-03-17
+            usage:
+              completion_tokens: 489
+              prompt_tokens: 3231
+              total_tokens: 3720
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 349
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 2816
+    browsable_trace:
+      nodes:
+        1:
+          kind: Branch
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: GenerateProofSketch
+          tags:
+            - GenerateProofSketch
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 1
+              - kind: query
+                name: GenerateProofSketch
+                args:
+                  equality:
+                    - sin(x)
+                    - 2*sin(x/2)*cos(x/2)
+                  prefix: []
+                tags:
+                  - GenerateProofSketch
+                answers:
+                  - id: 1
+                    hint: null
+                    value:
+                      short: Response(answer=Answer(mode=None, content='```text\n1. rule:sin_add vars:{x:"x/2",
+                        y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)\n2. step → sin(x/2)*cos(x/2)
+                        + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)\n3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)\n```',
+                        tool_calls=(), justification=None), parsed=FinalAnswer(final='1. rule:sin_add
+                        vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)\n2. step → sin(x/2)*cos(x/2)
+                        + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)\n3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)\n'))
+                      long: |-
+                        Response(answer=Answer(mode=None,
+                                               content='```text\n'
+                                                       '1. rule:sin_add vars:{x:"x/2", y:"x/2"} → '
+                                                       'sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)\n'
+                                                       '2. step → sin(x/2)*cos(x/2) + '
+                                                       'cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)\n'
+                                                       '3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)\n'
+                                                       '```',
+                                               tool_calls=(),
+                                               justification=None),
+                                 parsed=FinalAnswer(final='1. rule:sin_add vars:{x:"x/2", y:"x/2"} → '
+                                                          'sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)\n'
+                                                          '2. step → sin(x/2)*cos(x/2) + '
+                                                          'cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)\n'
+                                                          '3. trans:[1,2] → sin(x) = '
+                                                          '2*sin(x/2)*cos(x/2)\n'))
+                      json_provided: false
+                      json: null
+          actions:
+            - ref:
+                with_ids: $1{@1}
+                with_hints: null
+              hints: null
+              related_success_nodes: []
+              related_answers:
+                - 1
+              value:
+                short: Response(answer=Answer(mode=None, content='```text\n1. rule:sin_add vars:{x:"x/2",
+                  y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)\n2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                  = 2*sin(x/2)*cos(x/2)\n3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)\n```', tool_calls=(),
+                  justification=None), parsed=FinalAnswer(final='1. rule:sin_add vars:{x:"x/2", y:"x/2"}
+                  → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)\n2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                  = 2*sin(x/2)*cos(x/2)\n3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)\n'))
+                long: |-
+                  Response(answer=Answer(mode=None,
+                                         content='```text\n'
+                                                 '1. rule:sin_add vars:{x:"x/2", y:"x/2"} → '
+                                                 'sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)\n'
+                                                 '2. step → sin(x/2)*cos(x/2) + '
+                                                 'cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)\n'
+                                                 '3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)\n'
+                                                 '```',
+                                         tool_calls=(),
+                                         justification=None),
+                           parsed=FinalAnswer(final='1. rule:sin_add vars:{x:"x/2", y:"x/2"} → '
+                                                    'sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)\n'
+                                                    '2. step → sin(x/2)*cos(x/2) + '
+                                                    'cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)\n'
+                                                    '3. trans:[1,2] → sin(x) = '
+                                                    '2*sin(x/2)*cos(x/2)\n'))
+                json_provided: false
+                json: null
+              destination: 2
+          origin: root
+        2:
+          kind: Run
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: check_sketch
+          tags:
+            - check_sketch
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 2
+              - kind: nested
+                strategy: check_sketch
+                args:
+                  sketch:
+                    short: |
+                      1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                      2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)
+                      3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)
+                    long: |-
+                      ('1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + '
+                       'cos(x/2)*sin(x/2)\n'
+                       '2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)\n'
+                       '3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)\n')
+                    json_provided: true
+                    json: |
+                      1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                      2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)
+                      3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)
+                tags:
+                  - check_sketch
+                node_id: 3
+          actions:
+            - ref:
+                with_ids: $2{%3}
+                with_hints: null
+              hints: null
+              related_success_nodes:
+                - 3
+              related_answers: []
+              value:
+                short: |
+                  1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                  2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)
+                  3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)
+                long: |-
+                  ('1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + '
+                   'cos(x/2)*sin(x/2)\n'
+                   '2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)\n'
+                   '3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)\n')
+                json_provided: true
+                json: |
+                  1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                  2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)
+                  3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)
+              destination: 4
+          origin:
+            - child
+            - 1
+            - 0
+        3:
+          kind: Success
+          success_value:
+            short: |
+              1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+              2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)
+              3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)
+            long: |-
+              ('1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + '
+               'cos(x/2)*sin(x/2)\n'
+               '2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)\n'
+               '3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)\n')
+            json_provided: true
+            json: |
+              1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+              2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)
+              3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)
+          summary_message: null
+          leaf_node: true
+          label: null
+          tags: []
+          properties: []
+          actions: []
+          origin:
+            - nested
+            - 2
+            - 0
+        4:
+          kind: Branch
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: ProposeNextStep
+          tags:
+            - ProposeNextStep
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 3
+              - kind: query
+                name: ProposeNextStep
+                args:
+                  equality:
+                    - sin(x)
+                    - 2*sin(x/2)*cos(x/2)
+                  sketch: |
+                    1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                    2. step → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2) = 2*sin(x/2)*cos(x/2)
+                    3. trans:[1,2] → sin(x) = 2*sin(x/2)*cos(x/2)
+                  partial_proof: {}
+                  current_sketch_line: 1. rule:sin_add vars:{x:"x/2", y:"x/2"} → sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                  prefix: []
+                tags:
+                  - ProposeNextStep
+                answers:
+                  - id: 2
+                    hint: null
+                    value:
+                      short: 'Response(answer=Answer(mode=None, content=''```yaml\n1:\n  - ["sin(x)",
+                        "sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)"]\n  - {rule: sin_add, vars: {x: "x/2",
+                        y: "x/2"}}\n```'', tool_calls=(), justification=None), parsed=FinalAnswer(final={1:
+                        ((''sin(x)'', ''sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)''), Rule(rule=''sin_add'',
+                        vars={''x'': ''x/2'', ''y'': ''x/2''}))}))'
+                      long: |-
+                        Response(answer=Answer(mode=None,
+                                               content='```yaml\n'
+                                                       '1:\n'
+                                                       '  - ["sin(x)", "sin(x/2)*cos(x/2) + '
+                                                       'cos(x/2)*sin(x/2)"]\n'
+                                                       '  - {rule: sin_add, vars: {x: "x/2", y: '
+                                                       '"x/2"}}\n'
+                                                       '```',
+                                               tool_calls=(),
+                                               justification=None),
+                                 parsed=FinalAnswer(final={1: (('sin(x)',
+                                                                'sin(x/2)*cos(x/2) + '
+                                                                'cos(x/2)*sin(x/2)'),
+                                                               Rule(rule='sin_add',
+                                                                    vars={'x': 'x/2', 'y': 'x/2'}))}))
+                      json_provided: false
+                      json: null
+          actions:
+            - ref:
+                with_ids: $3{@2}
+                with_hints: null
+              hints: null
+              related_success_nodes: []
+              related_answers:
+                - 2
+              value:
+                short: 'Response(answer=Answer(mode=None, content=''```yaml\n1:\n  - ["sin(x)", "sin(x/2)*cos(x/2)
+                  + cos(x/2)*sin(x/2)"]\n  - {rule: sin_add, vars: {x: "x/2", y: "x/2"}}\n```'', tool_calls=(),
+                  justification=None), parsed=FinalAnswer(final={1: ((''sin(x)'', ''sin(x/2)*cos(x/2)
+                  + cos(x/2)*sin(x/2)''), Rule(rule=''sin_add'', vars={''x'': ''x/2'', ''y'': ''x/2''}))}))'
+                long: |-
+                  Response(answer=Answer(mode=None,
+                                         content='```yaml\n'
+                                                 '1:\n'
+                                                 '  - ["sin(x)", "sin(x/2)*cos(x/2) + '
+                                                 'cos(x/2)*sin(x/2)"]\n'
+                                                 '  - {rule: sin_add, vars: {x: "x/2", y: '
+                                                 '"x/2"}}\n'
+                                                 '```',
+                                         tool_calls=(),
+                                         justification=None),
+                           parsed=FinalAnswer(final={1: (('sin(x)',
+                                                          'sin(x/2)*cos(x/2) + '
+                                                          'cos(x/2)*sin(x/2)'),
+                                                         Rule(rule='sin_add',
+                                                              vars={'x': 'x/2', 'y': 'x/2'}))}))
+                json_provided: false
+                json: null
+              destination: 5
+          origin:
+            - child
+            - 2
+            - 0
+        5:
+          kind: Run
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: verify_new_step
+          tags:
+            - verify_new_step
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 4
+              - kind: nested
+                strategy: verify_new_step
+                args:
+                  equality:
+                    short: ('sin(x)', '2*sin(x/2)*cos(x/2)')
+                    long: ('sin(x)', '2*sin(x/2)*cos(x/2)')
+                    json_provided: true
+                    json:
+                      - sin(x)
+                      - 2*sin(x/2)*cos(x/2)
+                  partial_proof:
+                    short: '{}'
+                    long: '{}'
+                    json_provided: true
+                    json: {}
+                  new_step_id:
+                    short: '1'
+                    long: '1'
+                    json_provided: true
+                    json: 1
+                  new_step:
+                    short: '((''sin(x)'', ''sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)''), Rule(rule=''sin_add'',
+                      vars={''x'': ''x/2'', ''y'': ''x/2''}))'
+                    long: |-
+                      (('sin(x)', 'sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)'),
+                       Rule(rule='sin_add', vars={'x': 'x/2', 'y': 'x/2'}))
+                    json_provided: true
+                    json:
+                      - - sin(x)
+                        - sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                      - rule: sin_add
+                        vars:
+                          x: x/2
+                          y: x/2
+                tags:
+                  - verify_new_step
+                node_id: 6
+          actions:
+            - ref:
+                with_ids: $4{%7}
+                with_hints: null
+              hints: null
+              related_success_nodes:
+                - 7
+              related_answers: []
+              value:
+                short: '{1: ((''sin(x)'', ''sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)''), Rule(rule=''sin_add'',
+                  vars={''x'': ''x/2'', ''y'': ''x/2''}))}'
+                long: |-
+                  {1: (('sin(x)', 'sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)'),
+                       Rule(rule='sin_add', vars={'x': 'x/2', 'y': 'x/2'}))}
+                json_provided: false
+                json: null
+              destination: 8
+          origin:
+            - child
+            - 4
+            - 0
+        6:
+          kind: Compute
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: null
+          tags: []
+          properties:
+            - - with_ids: query
+                with_hints: null
+              - 5
+              - kind: query
+                name: __Computation__
+                args:
+                  fun: check
+                  args:
+                    eq:
+                      - sin(x)
+                      - 2*sin(x/2)*cos(x/2)
+                    proof:
+                      1:
+                        - - sin(x)
+                          - sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)
+                        - rule: sin_add
+                          vars:
+                            x: x/2
+                            y: x/2
+                    rules:
+                      cos_zero:
+                        - cos(0)
+                        - '1'
+                      sin_zero:
+                        - sin(0)
+                        - '0'
+                      sin_halfpi:
+                        - sin(pi/2)
+                        - '1'
+                      cos_halfpi:
+                        - cos(pi/2)
+                        - '0'
+                      sin_neg:
+                        - sin(-x)
+                        - -sin(x)
+                      cos_neg:
+                        - cos(-x)
+                        - cos(x)
+                      cos_add:
+                        - cos(x + y)
+                        - cos(x)*cos(y) - sin(x)*sin(y)
+                      sin_add:
+                        - sin(x + y)
+                        - sin(x)*cos(y) + cos(x)*sin(y)
+                tags:
+                  - __Computation__
+                answers:
+                  - id: 3
+                    hint: null
+                    value:
+                      short: None
+                      long: None
+                      json_provided: true
+                      json: null
+          actions:
+            - ref:
+                with_ids: $5{@3}
+                with_hints: null
+              hints: null
+              related_success_nodes: []
+              related_answers:
+                - 3
+              value:
+                short: None
+                long: None
+                json_provided: true
+                json: null
+              destination: 7
+          origin:
+            - nested
+            - 5
+            - 0
+        7:
+          kind: Success
+          success_value:
+            short: '{1: ((''sin(x)'', ''sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)''), Rule(rule=''sin_add'',
+              vars={''x'': ''x/2'', ''y'': ''x/2''}))}'
+            long: |-
+              {1: (('sin(x)', 'sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)'),
+                   Rule(rule='sin_add', vars={'x': 'x/2', 'y': 'x/2'}))}
+            json_provided: false
+            json: null
+          summary_message: null
+          leaf_node: true
+          label: null
+          tags: []
+          properties: []
+          actions: []
+          origin:
+            - child
+            - 6
+            - 0
+        8:
+          kind: Success
+          success_value:
+            short: '{1: ((''sin(x)'', ''sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)''), Rule(rule=''sin_add'',
+              vars={''x'': ''x/2'', ''y'': ''x/2''}))}'
+            long: |-
+              {1: (('sin(x)', 'sin(x/2)*cos(x/2) + cos(x/2)*sin(x/2)'),
+                   Rule(rule='sin_add', vars={'x': 'x/2', 'y': 'x/2'}))}
+            json_provided: false
+            json: null
+          summary_message: null
+          leaf_node: true
+          label: null
+          tags: []
+          properties: []
+          actions: []
+          origin:
+            - child
+            - 5
+            - 0
+      spaces:
+        1:
+          - 1
+          - 0
+        2:
+          - 2
+          - 0
+        3:
+          - 4
+          - 0
+        4:
+          - 5
+          - 0
+        5:
+          - 6
+          - 0
