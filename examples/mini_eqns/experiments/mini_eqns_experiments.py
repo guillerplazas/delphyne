@@ -143,6 +143,7 @@ class StepByStepConfig:
     seed: int
     loop: bool = False
     max_dollar_budget: float | None = 0.25
+    max_sketch_feedback_cycles: int = 1
 
     def instantiate(self, context: object) -> dp.RunStrategyArgs:
         budget: dict[str, float] = {}
@@ -163,6 +164,7 @@ class StepByStepConfig:
                 "num_completions": self.num_completions,
                 "max_feedback_cycles_per_step": self.max_feedback_cycles_per_step,
                 "max_steps": self.max_steps,
+                "max_sketch_feedback_cycles": self.max_sketch_feedback_cycles,
                 "loop": self.loop,
             },
             num_generated=1,

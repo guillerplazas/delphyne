@@ -47,8 +47,14 @@ However, no extra trigonometric identities are allowed unless listed below.
 ## Common proof patterns
 
 - For `sin(a - b)` or `cos(a - b)`, rewrite subtraction as addition with a negative argument.
-- To evaluate `cos(pi)` or `sin(pi)`, expand them via `pi/2 + pi/2` and then simplify with `sin_halfpi` and `cos_halfpi`.
+- To evaluate `cos(pi)`, `sin(pi)`, `cos(2*pi)`, `sin(2*pi)`: expand via `cos_add`/`sin_add`
+  with arguments summing to the target angle (e.g. `cos(pi) = cos(pi/2+pi/2)` via `cos_add`,
+  then simplify each factor using `cos_halfpi` and `sin_halfpi`).
 - For `sin(2*x)` or `cos(2*x)`, use `sin_add` or `cos_add` with both arguments equal to `x`.
+- For `cos(2*x) = 2*cos(x)**2 - 1` or `cos(2*x) = 1 - 2*sin(x)**2`: use the indirect
+  sub-lemma technique — derive `cos(0) = cos(x)**2 + sin(x)**2` (4 steps), then apply
+  `{step: K}` on `cos(0) - cos(x)**2` to get `sin(x)**2 = cos(0) - cos(x)**2`, substitute
+  the `sin(x)**2` atom, and finalize with `cos_zero`.
 - When direct rewriting is hard, prove both sides equal to a common intermediate form and then use `sym` and `trans`.
 - Use `trans` only when the chain is already justified by earlier verified steps.
 
@@ -63,5 +69,20 @@ Example: if step 3 proved `sin(pi) = 0`, then:
   - ["sin(x)*cos(pi) + cos(x)*sin(pi)", "sin(x)*cos(pi) + cos(x)*0"]
   - {step: 3}
 ```
-Use `{step: K}` when you want to rewrite one occurrence inside a compound expression.
+
+**Critical constraint**: `{step: K}` only works when K's LHS is a **single atom** (e.g.
+`sin(x)**2`, `cos(0)`). Sum patterns like `cos(x)**2 + sin(x)**2` do NOT work — SymPy
+simplifies them away before the substitution can match.
+
+**Indirect sub-lemma pattern**: to substitute the Pythagorean identity, keep `cos(0)` as
+an intermediate atom. Example (step 6 proved `sin(x)**2 = cos(0) - cos(x)**2`):
+```yaml
+8:
+  - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+  - {step: 6}
+```
+SymPy finds `sin(x)**2` as a single atom and replaces it with `cos(0) - cos(x)**2`,
+giving `2*cos(x)**2 - cos(0)`. Then `cos_zero` converts `cos(0) → 1` separately.
+
+Use `{step: K}` when you want to rewrite one occurrence of a single-atom sub-expression.
 Use `{trans: [i, j, ...]}` only when steps i, j, ... form a proper chain (each step's RHS equals the next step's LHS).

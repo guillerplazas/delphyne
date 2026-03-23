@@ -10,7 +10,7 @@ import delphyne as dp
 import mini_eqns_experiments as meq
 
 SKETCH_MODEL = "gpt-5.4"
-STEP_CONFIGS = [ ("gpt-5.4-nano", "medium", "high")]
+STEP_CONFIGS = [ ("gpt-5.4-nano", "medium", "low")]
 
 
 #[   
@@ -26,9 +26,10 @@ configs = [
         step_model_name=step_model_name,
         sketch_reasoning_effort=sketch_reasoning_effort,
         step_reasoning_effort=step_reasoning_effort,
-        num_completions=2,
+        num_completions=1,
         max_feedback_cycles_per_step=3,
-        max_steps=12,
+        max_steps=20,
+        max_sketch_feedback_cycles=2,
         loop=True,
         max_dollar_budget=0.2,
         seed=seed,

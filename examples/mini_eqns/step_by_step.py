@@ -32,15 +32,8 @@ SKETCH_BANNED_PHRASES = {
         "Do not invent rule names such as difference_of_squares."
     ),
     "a2_minus_b2": "Do not invent rule names such as a2_minus_b2.",
-    "pythagorean": (
-        "Do not use Pythagorean substitutions in the sketch. They are not "
-        "available as explicit checker rules."
-    ),
     "half-angle": (
         "Do not rely on half-angle identities unless they are derived step by step."
-    ),
-    "triple-angle": (
-        "Do not rely on triple-angle identities unless they are derived step by step."
     ),
     "product-to-sum": "Do not rely on product-to-sum identities in the sketch.",
     "sum-to-product": "Do not rely on sum-to-product identities in the sketch.",
