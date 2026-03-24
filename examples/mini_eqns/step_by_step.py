@@ -40,6 +40,12 @@ SKETCH_BANNED_PHRASES = {
     "(a-b)(a+b)": "Do not cite unsupported algebraic macros like (A-B)(A+B).",
 }
 SKETCH_RULE_RE = re.compile(r"rule:([A-Za-z_][A-Za-z0-9_]*)")
+_SKETCH_VARS_RE = re.compile(r'vars:\{([^}]*)\}')
+_SKETCH_VAR_PAIR_RE = re.compile(r'(\w+)\s*:\s*"([^"]*)"')
+
+_SKETCH_TRANS_LINE_RE = re.compile(
+    r'^\d+\.\s*trans:\[([^\]]+)\]\s*→\s*(.+)$'
+)
 
 
 # ── Shared Helpers ────────────────────────────────────────────────────────────
@@ -49,6 +55,42 @@ def _model_options(reasoning_effort: str | None) -> dict[str, object] | None:
     if reasoning_effort is None:
         return None
     return {"reasoning_effort": reasoning_effort}
+
+
+
+def _parse_sketch_sub_goals(sketch: str) -> dict[int, str]:
+    """
+    Parse the sketch to identify sub-lemma blocks via trans lines.
+
+    Returns a mapping from step_number → sub_goal_description for steps
+    that fall within a sub-lemma block (i.e., are referenced by a trans
+    that is NOT the final line of the sketch).
+    """
+    lines = [l.strip() for l in sketch.strip().splitlines() if l.strip()]
+    total_lines = len(lines)
+    sub_goals: dict[int, str] = {}
+
+    for i, line in enumerate(lines):
+        m = _SKETCH_TRANS_LINE_RE.match(line)
+        if not m:
+            continue
+        # This trans is at sketch position i+1 (1-indexed)
+        trans_pos = i + 1
+        # If this trans is the last line, it's the main proof — not a sub-lemma
+        if trans_pos == total_lines:
+            continue
+        step_ids_str, goal = m.group(1).strip(), m.group(2).strip()
+        # Parse referenced step ids
+        try:
+            ref_ids = [int(s.strip()) for s in step_ids_str.split(",")]
+        except ValueError:
+            continue
+        # All steps in the range [min_ref, trans_pos] are part of this sub-lemma
+        min_ref = min(ref_ids) if ref_ids else trans_pos
+        for step_num in range(min_ref, trans_pos + 1):
+            sub_goals[step_num] = goal
+
+    return sub_goals
 
 
 
@@ -83,15 +125,38 @@ def _validate_sketch(sketch: str) -> str | None:
                     f"The sketch uses unsupported rule '{rule_name}'. Only use: "
                     + ", ".join(sorted(ch.TRIG_RULES))
                 )
+        # Reject single-step trans (must chain ≥2 steps).
+        trans_m = re.search(r'trans:\[(\d+)\]', line)
+        if trans_m and ',' not in trans_m.group(0):
+            return (
+                f"Sketch line {i}: trans must chain at least 2 steps. "
+                f"A single-step trans:[{trans_m.group(1)}] is not valid. "
+                f"Use {{step: {trans_m.group(1)}}} or {{sym: {trans_m.group(1)}}} instead."
+            )
+        # Reject overlapping vars (sequential .subs() corruption).
+        # SymPy .subs(dict) substitutes in dict iteration order.
+        # Safe: {x:"-y", y:"y"} — x→-y introduces y, but y→y is identity.
+        # Safe: {x:"pi/2", y:"x"} — x→pi/2 first removes x, y→x is fresh.
+        # Broken: {x:"y", y:"-y"} — x→y introduces y, then y→-y corrupts it.
+        vars_m = _SKETCH_VARS_RE.search(line)
+        if vars_m:
+            pairs = _SKETCH_VAR_PAIR_RE.findall(vars_m.group(1))
+            # Check: if an earlier var's replacement introduces a later var
+            # that maps to something other than itself, sequential subs corrupts.
+            for idx, (k, v) in enumerate(pairs):
+                for later_k, later_v in pairs[idx + 1:]:
+                    if (re.search(rf'\b{re.escape(later_k)}\b', v)
+                            and later_v != later_k):
+                        return (
+                            f"Sketch line {i}: vars overlap — '{k}' maps to "
+                            f"\"{v}\" which contains '{later_k}', but "
+                            f"'{later_k}' maps to \"{later_v}\" (not itself). "
+                            f"Sequential substitution will corrupt the result. "
+                            f"Use {k}:\"-{later_k}\" and "
+                            f"{later_k}:\"{later_k}\" instead."
+                        )
     return None
 
-
-def _get_sketch_line(sketch: str, step_number: int) -> str | None:
-    """Returns the step_number-th non-empty sketch line (1-indexed), or None."""
-    lines = [l.strip() for l in sketch.strip().splitlines() if l.strip()]
-    if 1 <= step_number <= len(lines):
-        return lines[step_number - 1]
-    return None
 
 
 # ── Phase 1: Proof Sketch ─────────────────────────────────────────────────────
@@ -133,7 +198,7 @@ class ProposeNextStep(dp.Query[dp.Response[ch.Proof, Never]]):
     equality: ch.Eq
     sketch: str
     partial_proof: ch.Proof
-    current_sketch_line: str | None = None
+    current_sub_goal: str | None = None
     prefix: dp.AnswerPrefix = field(default_factory=list)
 
     __parser__ = dp.last_code_block.yaml_as(ch.Proof).response
@@ -189,7 +254,7 @@ def prove_one_step(
     equality: ch.Eq,
     sketch: str,
     partial_proof: ch.Proof,
-    current_sketch_line: str | None = None,
+    current_sub_goal: str | None = None,
 ) -> Strategy[Branch, IPDict, StepVerifyResult]:
     """Uses dp.interact to propose and validate a single new step."""
     new_step_id = (max(partial_proof.keys()) + 1) if partial_proof else 1
@@ -212,7 +277,7 @@ def prove_one_step(
 
     return (yield from dp.interact(
         step=lambda prefix, _: ProposeNextStep(
-            equality, sketch, partial_proof, current_sketch_line, prefix
+            equality, sketch, partial_proof, current_sub_goal, prefix,
         ).using(...),
         process=process,
     ))
@@ -232,11 +297,14 @@ def prove_step_by_step(
 
     # Phase 2: incremental step generation guided by the sketch
     partial_proof: ch.Proof = {}
+    sketch_sub_goals = _parse_sketch_sub_goals(sketch)
 
     for _ in range(max_steps):
         step_number = (max(partial_proof.keys()) + 1) if partial_proof else 1
-        current_sketch_line = _get_sketch_line(sketch, step_number)
-        result = yield from prove_one_step(equality, sketch, partial_proof, current_sketch_line).inline()
+        sub_goal = sketch_sub_goals.get(step_number)
+        result = yield from prove_one_step(
+            equality, sketch, partial_proof, sub_goal,
+        ).inline()
 
         if isinstance(result, dict):
             return result  # Complete proof returned by verify_new_step

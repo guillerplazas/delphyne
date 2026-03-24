@@ -10,14 +10,9 @@ import delphyne as dp
 import mini_eqns_experiments as meq
 
 SKETCH_MODEL = "gpt-5.4"
-STEP_CONFIGS = [ ("gpt-5.4-nano", "medium", "low")]
-
-
-#[   
-#    ("gpt-5.4-mini", "high", "low"),
-#    ("gpt-5.4-mini", "medium", "low"),
-#    ("gpt-5.4-nano", "high", "low"),
-#]
+STEP_CONFIGS = [
+    ("gpt-5.4", "medium", "none"),
+]
 
 configs = [
     meq.StepByStepConfig(
@@ -27,11 +22,11 @@ configs = [
         sketch_reasoning_effort=sketch_reasoning_effort,
         step_reasoning_effort=step_reasoning_effort,
         num_completions=1,
-        max_feedback_cycles_per_step=3,
-        max_steps=20,
+        max_feedback_cycles_per_step=4,
+        max_steps=30,
         max_sketch_feedback_cycles=2,
         loop=True,
-        max_dollar_budget=0.2,
+        max_dollar_budget=0.25,
         seed=seed,
     )
     for bench_name in list(meq.BENCHS.keys())
@@ -44,5 +39,5 @@ if __name__ == "__main__":
         config_class=meq.StepByStepConfig,
         context=dp.workspace_execution_context(__file__),
         configs=configs,
-        output_dir=f"experiments/report/{dp.path_stem(__file__)}",
+        output_dir=f"experiments/report/{dp.path_stem(__file__)}_final_3",
     ).run_cli()

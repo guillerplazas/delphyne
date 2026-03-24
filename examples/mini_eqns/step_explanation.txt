@@ -1,0 +1,434 @@
+================================================================================
+ STEP-BY-STEP PROOF STRATEGY — EXPLANATION
+================================================================================
+
+1. OVERVIEW
+-----------
+
+The step-by-step strategy proves trigonometric equalities using a two-phase
+approach: a strong model generates a high-level proof sketch, then a (possibly
+weaker/cheaper) model executes the proof one verified step at a time, guided by
+that sketch. Each step is checked by a SymPy-based verifier immediately, so
+invalid steps are caught and retried before proceeding.
+
+This design separates planning (which requires strong reasoning) from execution
+(which can be done by a cheap model following instructions), achieving 22/22 on
+the HTPS benchmark at $1.08 total cost.
+
+
+2. ARCHITECTURE
+---------------
+
+  Phase 1: Sketch Generation
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~
+  Query: GenerateProofSketch
+  Model: gpt-5.4 (strong, expensive)
+  Prompt: GenerateProofSketch.system.jinja + GenerateProofSketch.instance.jinja
+
+  The sketch model receives the target equality and the list of available trig
+  rules, and produces a numbered proof plan. Each line specifies a move type
+  (rule, sym, step, trans) and the expected result after that move.
+
+  The sketch is validated programmatically by _validate_sketch() before use.
+  If validation fails, the model gets feedback and may retry (up to
+  max_sketch_feedback_cycles times).
+
+  Phase 2: Step-by-Step Execution
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  Query: ProposeNextStep
+  Model: gpt-5.4-nano or gpt-5.4-mini (cheap)
+  Prompt: ProposeNextStep.system.jinja + ProposeNextStep.instance.jinja
+
+  The step model sees the target equality, the accepted sketch, and all
+  previously verified steps. It proposes exactly ONE new step as YAML. The
+  checker verifies it immediately:
+    - If the step is valid and completes the proof -> success
+    - If the step is valid but the proof is incomplete -> accept, continue
+    - If the step is invalid -> send error feedback, retry (up to
+      max_feedback_cycles_per_step times)
+
+  This continues until the proof is complete or max_steps is reached.
+
+
+3. FILES
+--------
+
+  step_by_step.py                    Main strategy and policy code
+  step_by_step.demo.yaml             Demonstration file (3 non-benchmark proofs)
+  checker.py                         SymPy-based proof verifier (not modified)
+  benchmark/htps.txt                 22-problem HTPS benchmark
+
+  prompts/
+    GenerateProofSketch.system.jinja   Sketch model system prompt
+    GenerateProofSketch.instance.jinja Sketch model instance prompt (shows target)
+    GenerateProofSketch.feedback.jinja Sketch rejection feedback
+    ProposeNextStep.system.jinja       Step model system prompt
+    ProposeNextStep.instance.jinja     Step model instance prompt (target + sketch + partial proof)
+    ProposeNextStep.feedback.jinja     Step rejection feedback (context-aware hints)
+
+  experiments/
+    mini_eqns_experiments.py           Experiment config dataclasses
+    step_by_step_experiment.py         Experiment runner
+
+
+4. KEY COMPONENTS IN step_by_step.py
+------------------------------------
+
+  Strategy functions (decorated with @strategy, use yield-from for effects):
+
+    prove_step_by_step(equality, max_steps)
+      Top-level strategy. Calls generate_validated_sketch, then loops calling
+      prove_one_step until the proof is complete or max_steps is exceeded.
+
+    generate_validated_sketch(equality)
+      Uses dp.interact to query the sketch model and validate the response.
+      Invalid sketches get feedback and a retry.
+
+    prove_one_step(equality, sketch, partial_proof, current_sub_goal)
+      Uses dp.interact to propose a single step and verify it. Enforces that
+      exactly 1 step is proposed. Normalizes the step ID.
+
+    verify_new_step(equality, partial_proof, new_step_id, new_step)
+      Runs the checker on the candidate proof. Returns the complete proof if
+      done, the validated step if not done, or an error for invalid steps.
+
+    check_sketch(sketch)
+      Delegates to _validate_sketch() and wraps the result as a strategy.
+
+  Helper functions:
+
+    _validate_sketch(sketch)
+      Programmatic validation of the sketch. Catches:
+      - Empty sketches
+      - Banned phrases (difference of squares, etc.)
+      - Lines not starting with numbered items
+      - Lines missing an allowed move type
+      - References to unsupported rule names
+      - Single-step trans (trans:[N] with only one ID)
+      - Overlapping vars that cause sequential .subs() corruption
+
+    _parse_sketch_sub_goals(sketch)
+      Parses trans lines to identify sub-lemma blocks. When a trans line is
+      NOT the final line of the sketch, all steps in its range are tagged
+      with the sub-goal description. This is passed to ProposeNextStep so the
+      step model knows it's working on an intermediate result, not the main
+      target.
+
+    _model_options(reasoning_effort)
+      Converts a reasoning effort string to model options dict.
+
+  Policy function:
+
+    prove_step_by_step_policy(...)
+      Constructs the search policy. Composes:
+      - DFS search with depth limit
+      - Budget limits (request count)
+      - Optional looping (restart on failure)
+      - Separate model configs for sketch vs. step queries
+      - Few-shot prompting for both query types
+
+
+5. PROOF SYSTEM
+---------------
+
+  The checker (checker.py) supports four justification types:
+
+    {rule: <name>, vars: {x: "<expr>", y: "<expr>"}}
+      Apply a named trig rule with variable substitutions. The checker
+      substitutes the rule's LHS pattern into the step's LHS and checks that
+      the result matches the step's RHS. Variable substitution is SEQUENTIAL
+      (Python dict iteration order), not simultaneous.
+
+    {step: <K>}
+      Rewrite a sub-expression using a previously proved equality. If step K
+      proved A = B, then {step: K} substitutes A -> B inside the current LHS.
+      Only works when A is a single atom (not a sum).
+
+    {sym: <K>}
+      Reverse step K: if K proved A = B, then {sym: K} proves B = A.
+
+    {trans: [i, j, ...]}
+      Chain steps: the RHS of step i must equal the LHS of step j, etc.
+      Must have at least 2 step references.
+
+  Available trig rules:
+    cos_zero:   cos(0) = 1
+    sin_zero:   sin(0) = 0
+    sin_halfpi: sin(pi/2) = 1
+    cos_halfpi: cos(pi/2) = 0
+    sin_neg:    sin(-x) = -sin(x)
+    cos_neg:    cos(-x) = cos(x)
+    cos_add:    cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)
+    sin_add:    sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)
+
+  The checker also accepts ordinary arithmetic simplification (e.g.,
+  sin(x)*cos(x) + cos(x)*sin(x) = 2*sin(x)*cos(x)).
+
+
+6. PROMPT DESIGN
+----------------
+
+  GenerateProofSketch.system.jinja:
+    - Lists allowed moves and all available rules
+    - "Keep proofs SHORT" section to minimize budget usage
+    - Detailed sub-lemma derivation technique (indirect Pythagorean identity
+      via cos(0) as an intermediate atom)
+    - Three worked examples of increasing complexity:
+      1. sin(pi/2 + x) = cos(x) — simple 4-step proof
+      2. cos(2*x) = 2*cos(x)**2 - 1 — indirect sub-lemma (10 steps)
+      3. cos(pi + x) = -cos(x) — constant evaluation sub-lemmas (12 steps)
+    - Critical warnings about:
+      * Sequential variable substitution (.subs() corruption)
+      * Never using atom 1 as a {step} target (use cos(0) instead)
+      * Never using sums as {step} targets (SymPy auto-simplification)
+      * Full replacement semantics (all occurrences, not partial)
+
+  ProposeNextStep.system.jinja:
+    - Step format specification (YAML with step_id, equality, justification)
+    - Hard constraints (no invented rules, no future references, etc.)
+    - "Rule application replaces ALL occurrences" section — critical for
+      preventing the model from copying wrong sketch annotations
+    - Common proof patterns (subtraction via negation, constant evaluation,
+      double-angle identities, Pythagorean identity technique)
+    - Sub-lemma awareness section
+    - Detailed {step: K} explanation with examples and constraints
+
+  ProposeNextStep.instance.jinja:
+    - Shows the target equality
+    - Shows current sub-goal if in a sub-lemma block
+    - Shows the accepted sketch
+    - Shows all verified steps so far
+    - Tells the model which step number to write next
+
+  ProposeNextStep.feedback.jinja:
+    - Context-aware error hints based on the checker's error message
+    - Specific guidance for: invented rules, future references, too-large
+      steps, invalid term syntax, single-step issues, incomplete proofs
+
+
+7. SKETCH VALIDATION
+--------------------
+
+  The programmatic sketch validator (_validate_sketch) catches errors that
+  would otherwise waste budget on doomed step execution. Checks include:
+
+  a) Structural: empty sketches, unnumbered lines, missing move types
+  b) Rule names: rejects rules not in ch.TRIG_RULES
+  c) Banned phrases: rejects known bad patterns (difference of squares, etc.)
+  d) Single-step trans: rejects trans:[N] (must chain >= 2 steps)
+  e) Vars overlap: detects sequential substitution corruption patterns
+
+  The vars overlap detector (e) is particularly important. SymPy's .subs(dict)
+  applies substitutions in dict iteration order, not simultaneously. This means
+  {x:"y", y:"-y"} first replaces x->y, then y->-y, corrupting the result. The
+  validator checks if an earlier variable's replacement value contains a later
+  variable that maps to something other than itself.
+
+  Safe examples:
+    {x:"-y", y:"y"}    — x->-y introduces y, but y->y is identity
+    {x:"pi/2", y:"x"}  — x->pi/2 removes x, then y->x is fresh
+
+  Unsafe example:
+    {x:"y", y:"-y"}    — x->y introduces y, then y->-y corrupts it
+
+
+8. SUB-LEMMA DETECTION
+----------------------
+
+  Complex proofs often require intermediate results (sub-lemmas) like:
+    cos(pi) = -1
+    sin(pi) = 0
+    cos(0) = cos(x)**2 + sin(x)**2
+
+  The _parse_sketch_sub_goals function identifies these by finding trans lines
+  that are NOT the final line of the sketch. All steps referenced by such a
+  trans are tagged with the sub-goal description.
+
+  When prove_one_step is called for a step that falls within a sub-lemma block,
+  the current_sub_goal field is set on the ProposeNextStep query. The instance
+  prompt then shows:
+
+    **Current sub-goal**: `cos(pi) = -1`
+    You are working on an intermediate sub-lemma, NOT the main target.
+
+  This prevents the step model from confusing the sub-lemma LHS (e.g., cos(pi))
+  with the main target LHS (e.g., cos(pi + x)).
+
+
+9. BUDGET MANAGEMENT
+--------------------
+
+  The strategy operates under a dollar budget (max_dollar_budget) and a request
+  count limit. Key budget considerations:
+
+  - Sketch generation is the most expensive single request. With "medium"
+    reasoning effort, it typically uses 500-5000 reasoning tokens ($0.005-$0.05).
+    With "high", it can use 10,000+ tokens ($0.10+), especially for complex
+    problems.
+
+  - Step execution is cheap per request (~$0.003-0.008 with nano/low).
+
+  - Failed problems burn their full budget on retries. Reducing
+    max_feedback_cycles_per_step from 8 to 4 saves budget on hopeless retries
+    without significantly hurting success rate.
+
+  - The loop=True option restarts the entire strategy (new sketch + new steps)
+    if the first attempt fails, allowing recovery from a bad sketch.
+
+
+10. EXPERIMENTAL RESULTS
+------------------------
+
+  Best configurations on the 22-problem HTPS benchmark:
+
+  Step Model    Sketch RE  Step RE  Score   Total Cost  Avg/Success
+  ----------    ---------  -------  -----   ----------  -----------
+  gpt-5.4       medium     none     22/22   $1.08       $0.049
+  gpt-5.4-nano  medium     low      21/22   $1.55       $0.061
+  gpt-5.4-mini  medium     low      20/22   $1.50       $0.049
+
+  Key findings:
+  - gpt-5.4 as step model achieves perfect 22/22 at lowest cost
+  - nano/low outperforms mini/low (21 vs 20) because nano is cheaper per
+    token, allowing more steps within budget
+  - The single remaining failure with nano (problem 019: sin(x+y)*sin(y-x) =
+    cos(x)**2 - cos(y)**2) requires a 29-step proof with the Pythagorean
+    identity derived twice, exceeding the $0.25 budget
+  - "medium" sketch reasoning is optimal — "high" wastes reasoning tokens
+    ($0.10-0.20 per sketch), "low" produces lower-quality sketches
+  - Step reasoning effort "low" or "none" is sufficient when the sketch is good
+
+
+11. DEMONSTRATIONS (step_by_step.demo.yaml)
+--------------------------------------------
+
+  The demo file contains three worked examples that serve as executable
+  specifications. Each demo specifies the full sequence of LLM queries and
+  expected answers, and can be verified with `delphyne check step_by_step.demo.yaml`.
+  The checker runs the strategy against the canned answers and verifies that the
+  proof is accepted.
+
+  IMPORTANT: Demo problems must NOT appear in the benchmark (htps.txt). This
+  prevents the demos from inflating benchmark scores via memorization.
+
+  Demo 0: cos(pi/2 + x) = -sin(x)  [Simple linear proof, 4 steps]
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  This is the simplest demo — a straightforward chain of rule applications
+  with no sub-lemmas. It demonstrates the basic Phase 1 -> Phase 2 flow.
+
+  Sketch (4 lines):
+    1. rule:cos_add vars:{x:"pi/2", y:"x"} → cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+    2. rule:cos_halfpi → -sin(pi/2)*sin(x)
+    3. rule:sin_halfpi → -sin(x)
+    4. trans:[1,2,3] → cos(pi/2 + x) = -sin(x)
+
+  Execution: 4 ProposeNextStep queries, one per sketch line. Each step
+  applies a single rule or trans, and the checker verifies it immediately.
+  The final trans chains steps 1-3 to close the proof.
+
+  What it demonstrates:
+    - The basic query cycle: GenerateProofSketch → ProposeNextStep (repeated)
+    - How the partial_proof grows with each accepted step
+    - How trans closes a proof by chaining verified steps
+    - That current_sub_goal is null throughout (no sub-lemmas)
+
+  Demo 1: sin(x)*cos(y) + cos(x)*sin(y) = sin(x + y)  [Reverse direction, 2 steps]
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  This demo proves an identity "backwards" — the LHS is the expanded form and
+  the RHS is the compact form. The sketch uses rule:sin_add to expand sin(x+y),
+  then sym to reverse the direction.
+
+  Sketch (2 lines):
+    1. rule:sin_add vars:{x:"x", y:"y"} → sin(x)*cos(y) + cos(x)*sin(y)
+    2. sym:[1] → sin(x)*cos(y) + cos(x)*sin(y) = sin(x + y)
+
+  Execution: 2 ProposeNextStep queries. Step 1 expands sin(x+y) via sin_add.
+  Step 2 applies sym to reverse, giving the target equality.
+
+  What it demonstrates:
+    - How sym reverses a proved equality
+    - That the step model can work with the proof direction (expanding the
+      RHS first, then reversing)
+    - A minimal 2-step proof
+
+  Demo 2: cos(x)**2 - sin(x)**2 = 2*cos(x)**2 - 1  [Indirect sub-lemma, 9 steps]
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  This is the most complex demo, showcasing the indirect sub-lemma technique
+  for deriving the Pythagorean identity and using it via {step} substitution.
+  It is the core pattern needed for double-angle identities and many other
+  complex proofs in the benchmark.
+
+  Sketch (9 lines):
+    1-3. Derive cos(0) = cos(x)*cos(-x) - sin(x)*sin(-x) → ... → cos(x)**2 + sin(x)**2
+         via cos_add(x,-x), cos_neg, sin_neg
+    4.   trans:[1,2,3] → cos(0) = cos(x)**2 + sin(x)**2  [sub-lemma]
+    5.   step:[4] on "cos(0) - cos(x)**2" → substitutes cos(0) atom → sin(x)**2
+    6.   sym:[5] → sin(x)**2 = cos(0) - cos(x)**2
+    7.   step:[6] on "cos(x)**2 - sin(x)**2" → substitutes sin(x)**2 atom
+         → 2*cos(x)**2 - cos(0)
+    8.   rule:cos_zero → 2*cos(x)**2 - 1
+    9.   trans:[7,8] → cos(x)**2 - sin(x)**2 = 2*cos(x)**2 - 1
+
+  Execution: 9 ProposeNextStep queries. Steps 1-4 are in a sub-lemma block
+  (current_sub_goal = "cos(0) = cos(x)**2 + sin(x)**2"), which tells the
+  step model that the LHS should be cos(0), not the main target. Steps 5-9
+  work on the main target with current_sub_goal = null.
+
+  What it demonstrates:
+    - The indirect sub-lemma technique: derive cos(0) = cos(x)**2 + sin(x)**2,
+      then use {step} on single atoms (cos(0), sin(x)**2) to rewrite
+    - How current_sub_goal changes between sub-lemma and main proof phases
+    - Why cos(0) must stay as cos(0) (not simplified to 1) until the final
+      cos_zero step — using 1 as a {step} target would corrupt the expression
+    - How {step: K} works: substitutes K's LHS as an atom inside the current
+      step's LHS, replacing it with K's RHS
+    - How sym reverses a proved equality for later use as a substitution source
+    - The full 9-step proof structure that is reused by many benchmark problems
+
+  Demo structure:
+    Each query entry in the YAML specifies:
+      - query: the query class name (GenerateProofSketch or ProposeNextStep)
+      - args: all fields of the query dataclass (equality, sketch,
+        partial_proof, current_sub_goal, prefix)
+      - answers: the expected LLM response(s) as markdown code blocks
+
+    The demo runner feeds these canned answers to the strategy instead of
+    calling the LLM, and the strategy's checker validates each step. The
+    test assertion `run | success` verifies that the strategy completes
+    successfully with the provided answers.
+
+
+12. KEY DESIGN DECISIONS AND LESSONS LEARNED
+--------------------------------------------
+
+  a) Separation of planning and execution
+     The sketch model only plans; the step model only executes. This allows
+     using an expensive model for the hard part (planning) and a cheap model
+     for the mechanical part (execution). The sketch acts as a "program" that
+     the step model follows.
+
+  b) Immediate verification
+     Each step is verified before proceeding. This prevents error accumulation
+     — a wrong step is caught and retried immediately, rather than discovering
+     at the end that the proof is invalid.
+
+  c) Programmatic sketch validation
+     The sketch validator catches errors that would waste budget: unsupported
+     rules, sequential substitution corruption, single-step trans, etc.
+     This is cheaper and more reliable than relying on the model to self-check.
+
+  d) Sub-lemma awareness
+     Without explicit sub-goal tracking, small models confuse sub-lemma LHS
+     expressions with the main target. The _parse_sketch_sub_goals function
+     and the instance prompt's "Current sub-goal" field solve this.
+
+  e) Full replacement semantics warning
+     The sketch model sometimes writes wrong intermediate annotations (showing
+     partial rule application instead of full). The step prompt explicitly
+     warns about this and tells the model to compute correct results
+     independently, not copy sketch annotations blindly.
+
+  f) Budget as the binding constraint
+     All failures with capable models are budget exhaustion, not reasoning
+     failures. The strategy could achieve 22/22 with nano if given a slightly
+     higher budget for the most complex problems.

@@ -28,6 +28,19 @@ Justifications can be:
 - Do not reference future or missing steps.
 - Prefer a small local rewrite over a large jump.
 - Exponentiation is `**`.
+- Variable substitution in `vars` is sequential (NOT simultaneous). Never use a rule
+  variable name (x or y) as a replacement value when that name is also being replaced.
+  For example, `vars:{x:"y", y:"-x"}` is WRONG — use `vars:{x:"-x", y:"y"}` instead.
+
+## Rule application replaces ALL occurrences
+
+When you apply a rule like `sin_halfpi` (`sin(pi/2) = 1`), the checker substitutes ALL
+occurrences of `sin(pi/2)` in the LHS simultaneously. For example:
+- LHS: `sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)`
+- After `sin_halfpi`: `cos(pi/2) + cos(pi/2)` = `2*cos(pi/2)` (NOT `cos(pi/2) + cos(pi/2)*sin(pi/2)`)
+
+Do NOT follow the sketch's `→` annotations blindly — they may show partial replacement.
+Always compute the correct RHS by replacing ALL matching subexpressions.
 
 ## Arithmetic note
 
@@ -55,8 +68,18 @@ However, no extra trigonometric identities are allowed unless listed below.
   sub-lemma technique — derive `cos(0) = cos(x)**2 + sin(x)**2` (4 steps), then apply
   `{step: K}` on `cos(0) - cos(x)**2` to get `sin(x)**2 = cos(0) - cos(x)**2`, substitute
   the `sin(x)**2` atom, and finalize with `cos_zero`.
+- For `sin(2*x) = 2*sin(x)*cos(x)`: use `sin_add` with `vars:{x:"x", y:"x"}` which gives
+  `sin(x)*cos(x) + cos(x)*sin(x)`. The checker's arithmetic simplification handles
+  `sin(x)*cos(x) + cos(x)*sin(x) = 2*sin(x)*cos(x)` automatically. This is a ONE-step proof.
 - When direct rewriting is hard, prove both sides equal to a common intermediate form and then use `sym` and `trans`.
 - Use `trans` only when the chain is already justified by earlier verified steps.
+
+## Sub-lemma awareness
+
+When the sketch derives intermediate results (like `cos(pi) = -1` or `sin(pi) = 0`), those
+steps are **sub-lemmas**. For sub-lemma steps:
+- The LHS of your step is the sub-lemma expression (e.g., `cos(pi)`), **NOT** the main target expression (e.g., `cos(pi + x)`).
+- If you see a "Current sub-goal" that differs from the main target, you are in a sub-lemma block.
 
 ## How `{step: K}` works
 
@@ -73,6 +96,10 @@ Example: if step 3 proved `sin(pi) = 0`, then:
 **Critical constraint**: `{step: K}` only works when K's LHS is a **single atom** (e.g.
 `sin(x)**2`, `cos(0)`). Sum patterns like `cos(x)**2 + sin(x)**2` do NOT work — SymPy
 simplifies them away before the substitution can match.
+
+**NEVER use `{step: K}` when K's LHS is `1`** — the atom `1` appears everywhere and will
+be replaced in ALL occurrences, corrupting the expression. Keep `cos(0)` as the intermediate
+atom and only apply `cos_zero` at the very end.
 
 **Indirect sub-lemma pattern**: to substitute the Pythagorean identity, keep `cos(0)` as
 an intermediate atom. Example (step 6 proved `sin(x)**2 = cos(0) - cos(x)**2`):
