@@ -11,7 +11,7 @@ import mini_eqns_experiments as meq
 
 SKETCH_MODEL = "gpt-5.4"
 STEP_CONFIGS = [
-    ("gpt-5.4", "medium", "none"),
+    ("gpt-5.4-nano", "medium", "medium"),
 ]
 
 configs = [
@@ -39,5 +39,5 @@ if __name__ == "__main__":
         config_class=meq.StepByStepConfig,
         context=dp.workspace_execution_context(__file__),
         configs=configs,
-        output_dir=f"experiments/report/{dp.path_stem(__file__)}_final_3",
+        output_dir=f"experiments/report/{dp.path_stem(__file__)}_9",
     ).run_cli()
