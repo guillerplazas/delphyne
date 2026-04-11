@@ -22,7 +22,7 @@ To check status:
 import delphyne as dp
 import mini_eqns_experiments as meq
 
-MODEL_CONFIGS = [("gpt-5.4-mini", ["low"])]
+MODEL_CONFIGS = [("gpt-5.4", ["low"])]
 #   ("gpt-5.4", ["medium", "high"]),
 #   ("gpt-5.4-mini", ["low", "medium", "high"]),
 #    ("gpt-5.4-nano", ["low", "medium", "high"]),
@@ -33,9 +33,9 @@ configs = [
         bench_name=bench_name,
         model_name=model_name,
         temperature=None,
-        max_feedback_cycles=10,
+        max_feedback_cycles=20,
         loop=True,
-        max_dollar_budget=0.2,
+        max_dollar_budget=0.75,
         seed=seed,
         reasoning_effort=reasoning_effort,
     )
@@ -50,5 +50,5 @@ if __name__ == "__main__":
         config_class=meq.BaselineConfig,
         context=dp.workspace_execution_context(__file__),
         configs=configs,
-        output_dir=f"experiments/report/{dp.path_stem(__file__)}",
+        output_dir=f"experiments/report/{dp.path_stem(__file__)}_saturate_3",
     ).run_cli()
