@@ -1,0 +1,27 @@
+(* miniF2F problem: mathd_algebra_214
+   Split: valid
+   Source: https://github.com/LLM4Rocq/miniF2F-rocq
+
+   Informal statement:
+   The graph of $y=ax^2 + bx + c$ is a parabola with vertical axis of symmetry.  The
+   vertex of this parabola is $(2,3)$ and the parabola contains the point $(4,4)$.  Find
+   the value of $y$ when $x=6$. Show that it is 7.
+
+   Informal proof:
+   Because the parabola has vertex $(2,3)$, it is the graph of  \[y=a(x-2)^2+3\] for
+   some number $a$.  In order for the graph to contain the point $(4,4)$, we must also
+   have  \[4=a(4-2)^2+3=4a+3,\] so $a=\frac14$, and our parabola is the graph of
+   \[y=\frac14(x-2)^2 + 3.\] Setting $x=6$ in this gives us  \[y = \frac14(6-2)^2 + 3 =
+   4+3=7.\]
+*)
+
+Require Import Reals.
+Open Scope R_scope.
+
+Theorem mathd_algebra_214 :
+  forall (a : R) (f : R -> R),
+  (forall x, f x = a * (x - 2)^2 + 3) ->
+  f 4 = 4 ->
+  f 6 = 7.
+Proof.
+Admitted.

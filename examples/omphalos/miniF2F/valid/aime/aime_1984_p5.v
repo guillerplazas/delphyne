@@ -1,0 +1,29 @@
+(* miniF2F problem: aime_1984_p5
+   Split: valid
+   Source: https://github.com/LLM4Rocq/miniF2F-rocq
+
+   Informal statement:
+   Determine the value of $ab$ if $\log_8a+\log_4b^2=5$ and $\log_8b+\log_4a^2=7$. Show
+   that it is 512.
+
+   Informal proof:
+   Use the [[change of base formula]] to see that $\frac{\log a}{\log 8} + \frac{2 \log
+   b}{\log 4} = 5$; combine [[denominator]]s to find that $\frac{\log ab^3}{3\log 2} =
+   5$. Doing the same thing with the second equation yields that $\frac{\log a^3b}{3\log
+   2} = 7$. This means that $\log ab^3 = 15\log 2 \Longrightarrow ab^3 = 2^{15}$ and
+   that $\log a^3 b = 21\log 2 \Longrightarrow a^3 b = 2^{21}$. If we multiply the two
+   equations together, we get that $a^4b^4 = 2^{36}$, so taking the fourth root of that,
+   $ab = 2^9 = 512$.
+*)
+
+Require Import Reals.
+Open Scope R_scope.
+
+Theorem aime_1984_p5 :
+  forall a b : R,
+  0 < a -> 0 < b ->
+  (ln a) / (ln 8) + (ln (b * b)) / (ln 4) = 5 ->
+  (ln b) / (ln 8) + (ln (a * a)) / (ln 4) = 7 ->
+  a * b = 512.
+Proof.
+Admitted.

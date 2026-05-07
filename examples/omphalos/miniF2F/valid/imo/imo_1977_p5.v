@@ -1,0 +1,32 @@
+(* miniF2F problem: imo_1977_p5
+   Split: valid
+   Source: https://github.com/LLM4Rocq/miniF2F-rocq
+
+   Informal statement:
+   Let $a,b$ be two natural numbers. When we divide $a^2+b^2$ by $a+b$, we the the
+   remainder $r$ and the quotient $q.$ Determine all pairs $(a, b)$ for which $q^2 + r =
+   1977.$ Show that it is (a,b)=(37,50) , (7, 50).
+
+   Informal proof:
+   Using $r=1977-q^2$, we have $a^2+b^2=(a+b)q+1977-q^2$, or
+   $q^2-(a+b)q+a^2+b^2-1977=0$, which implies $\Delta=7908+2ab-2(a^2+b^2)\ge 0$. If we
+   now assume Wlog that $a\ge b$, it follows $a+b\le 88$. If $q\le 43$, then
+   $r=1977-q^2\ge 128$, contradicting $r<a+b\le 88$. But $q\le 44$ from $q^2+r=1977$,
+   thus $q=44$. It follows $r=41$, and we get $a^2+b^2=44(a+b)+41\Leftrightarrow
+   (a-22)^2+(b-22)^2=1009\in \mathbb{P}$. By Jacobi's two squares theorem, we infer that
+   $15^2+28^2=1009$ is the only representation of $1009$ as a sum of squares. This
+   forces $(a,b)=(37,50) , (7, 50)$, and permutations. $\blacksquare$
+*)
+
+Require Import ZArith.
+Require Import Reals.
+
+Theorem imo_1977_p5 : 
+  forall (a b q r : nat),
+    r < a + b ->  (* remainder condition *)
+    a*a + b*b = (a + b) * q + r ->  (* division algorithm *)
+    q*q + r = 1977 ->  (* target sum *)
+    (Z.abs (Z.of_nat a - 22)%Z = 15%Z /\ Z.abs (Z.of_nat b - 22)%Z = 28%Z) \/
+    (Z.abs (Z.of_nat a - 22)%Z = 28%Z /\ Z.abs (Z.of_nat b - 22)%Z = 15%Z).
+Proof.
+Admitted.

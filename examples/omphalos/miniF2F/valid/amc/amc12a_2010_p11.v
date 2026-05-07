@@ -1,0 +1,37 @@
+(* miniF2F problem: amc12a_2010_p11
+   Split: valid
+   Source: https://github.com/LLM4Rocq/miniF2F-rocq
+
+   Informal statement:
+   The solution of the equation $7^{x+7} = 8^x$ can be expressed in the form $x = \log_b
+   7^7$. What is $b$?
+
+   $\textbf{(A)}\ \frac{7}{15} \qquad \textbf{(B)}\ \frac{7}{8} \qquad \textbf{(C)}\
+   \frac{8}{7} \qquad \textbf{(D)}\ \frac{15}{8} \qquad \textbf{(E)}\ \frac{15}{7}$ Show
+   that it is \textbf{(C)}\ \frac{8}{7}.
+
+   Informal proof:
+   This problem is quickly solved with knowledge of the laws of exponents and
+   logarithms.
+
+   $\begin{align*} 7^{x+7} &= 8^x \\
+   7^x*7^7 &= 8^x \\
+   \left(\frac{8}{7}\right)^x &= 7^7 \\
+   x &= \log_{8/7}7^7 \end{align*}$
+
+   Since we are looking for the base of the logarithm, our answer is $\textbf{(C)}\
+   \frac{8}{7}$.
+*)
+
+Require Import Reals.
+Open Scope R_scope.
+
+Theorem amc12a_2010_p11 :
+  forall (x b : R),
+    0 < b ->
+    Rpower 7 (x + 7) = Rpower 8 x ->
+    x = (ln (Rpower 7 7) / ln b) ->
+    b = 8/7.
+
+Proof.
+Admitted.

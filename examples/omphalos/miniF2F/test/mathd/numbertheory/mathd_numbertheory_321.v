@@ -1,0 +1,36 @@
+(* miniF2F problem: mathd_numbertheory_321
+   Split: test
+   Source: https://github.com/LLM4Rocq/miniF2F-rocq
+
+   Informal statement:
+   Notice that  \[35\cdot40=1400.\]Find some integer $n$ with $0\leq n<1399$ such that
+   $n$ is the multiplicative inverse to 160 modulo 1399. Show that it is 1058.
+
+   Informal proof:
+   Taking the given equation modulo 1399 gives \[35\cdot40\equiv1\pmod{1399},\]so we
+   know that 35 is the multiplicative inverse to 40.  We want to use this to find the
+   multiplicative inverse to $4\cdot40=160$, so we want to try to ''divide'' 35 by 4.
+
+   The difficulty in dividing by 4 is that 35 is odd.  We do know, though, that 
+   \[35\equiv35+1399\equiv1434\pmod{1399}\]and this number is even!  Let's go even
+   further, though, to find a multiple of 4:
+   \[35\equiv35+3\cdot1399\equiv4232\pmod{1399}.\]Factoring 4 we get 
+   \[35\equiv4\cdot1058\pmod{1399}.\]Finally we multiply by 40: \[1\equiv
+   40\cdot35\equiv40\cdot4\cdot1058\equiv160\cdot1058\pmod{1399}.\]This argument is
+   inelegant.  Let's write it in a more clear order: \begin{align*}
+   1058\cdot160&\equiv1058\cdot(4\cdot40)\\
+   &\equiv(1058\cdot4)\cdot40\\
+   &\equiv35\cdot40\\
+   &\equiv1\pmod{1399}.
+   \end{align*}The multiplicative inverse to 160 modulo 1399 is $1058$.
+*)
+
+Require Import ZArith.
+Open Scope Z_scope.
+
+Theorem mathd_numbertheory_321:
+  forall n : Z,
+  (0 <= n < 1399) /\ (n * 160 mod 1399 = 1) ->
+  n = 1058.
+Proof.
+Admitted.

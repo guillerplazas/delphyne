@@ -1,0 +1,32 @@
+(* miniF2F problem: mathd_numbertheory_303
+   Split: valid
+   Source: https://github.com/LLM4Rocq/miniF2F-rocq
+
+   Informal statement:
+   If $n>1$ is an integer, the notation $a\equiv b\pmod{n}$ means that $(a-b)$ is a
+   multiple of $n$. Find the sum of all possible values of $n$ such that both of the
+   following are true: $171\equiv80\pmod{n}$ and $468\equiv13\pmod{n}$. Show that it is
+   111.
+
+   Informal proof:
+   As we are told, we want to find all values of $n>1$ such that $n$ divides into
+   $171-80 = 91$ and $n$ also divides into $468 - 13 = 455$. We notice that $455 = 5
+   \cdot 91$, so it follows that if $n$ divides into $91$, then it must divide into
+   $455$. Then, we only need to find the factors of $91$, which are $\{1,7,13,91\}$.
+   Summing the factors other than $1$ gives $7 + 13 + 91 = 111$.
+*)
+
+Require Import Nat.
+Require Import List.
+Import ListNotations.
+
+
+
+Theorem mathd_numbertheory_303 (l : list nat)
+  (H : forall n, In n l <-> 2 <= n
+                         /\ (171 mod n = 80 mod n)
+                         /\ (468 mod n = 13 mod n)):
+  NoDup l ->
+  list_sum l = 111.
+Proof.
+Admitted.

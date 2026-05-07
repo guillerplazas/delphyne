@@ -1,0 +1,32 @@
+(* miniF2F problem: mathd_numbertheory_277
+   Split: test
+   Source: https://github.com/LLM4Rocq/miniF2F-rocq
+
+   Informal statement:
+   The greatest common divisor of positive integers $m$ and $n$ is 6. The least common
+   multiple of $m$ and $n$ is 126. What is the least possible value of $m+n$? Show that
+   it is 60.
+
+   Informal proof:
+   Since the GCD of $m$ and $n$ is 6, $m = 6x$ and $n = 6y$ for some integers $x$ and
+   $y$.  Note that minimizing $m + n = 6x + 6y = 6(x + y)$ is equivalent to minimizing
+   $x + y$.
+
+   The LCM of $m$ and $n$ is $126=2\cdot3^2\cdot7= 6 \cdot 3 \cdot 7$, so one of $x$ and
+   $y$ is divisible by 3 and one is divisible by 7.  Then we can minimize $x + y$ by
+   setting $x$ and $y$ to be 3 and 7 in some order.  Therefore, the least possible value
+   of $m+n$ is $6(3 + 7) = 60$.
+*)
+
+Require Import Coq.Arith.Arith.
+
+
+
+Theorem mathd_numbertheory_277 :
+  forall (m n : nat),
+    Nat.gcd m n = 6 ->
+    Nat.lcm m n = 126 ->
+    60 <= m + n.
+
+Proof.
+Admitted.
