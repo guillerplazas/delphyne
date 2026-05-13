@@ -1,0 +1,1 @@
+Lemma my_test : 1 = 1.
