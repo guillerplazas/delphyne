@@ -81,6 +81,46 @@ make -j
 `_upstream/` is a temporary local checkout. It is ignored by Git and should be
 removed before preparing a PR unless you are actively regenerating the layout.
 
+## Delphyne agentic baseline
+
+This directory ships a small, working Delphyne-based proving agent for
+miniF2F-Rocq. It is intentionally minimal: an LLM proposes a full proof
+script, [pytanque](https://github.com/LLM4Rocq/pytanque) verifies it,
+and the verifier's feedback (failing tactic, error, remaining goals) is
+fed back so the LLM can revise — up to a configurable number of cycles.
+
+Prerequisites:
+
+- `rocq` available on your opam switch.
+- Conda env `guille` activated (Delphyne + `pytanque` installed).
+- An API key for the configured model (default: `gpt-5.4-2026-03-05`,
+  overridable via `policy_args.model_name`).
+
+Sanity run (one problem):
+
+```sh
+make test
+```
+
+Curated dev sweep (8 problems, via `delphyne.stdlib.experiments`):
+
+```sh
+make test-subset       # runs with max_workers=2; per-config outputs land in
+                       # experiments/output/dev_baseline_experiment/
+make replay-subset     # re-derives summaries from cached outputs (no LLM calls)
+make summary           # regenerates the aggregate results_summary.csv
+```
+
+The strategy and policy live in `prove_baseline.py`; LLM prompts are in
+`prompts/`. The model sees both the informal statement *and* the
+informal proof sketch from each `.v` header — this is therefore a
+*with-hints* baseline, intended as a starting point for further
+ablations (see `bachelor_arbeit_plan.md`).
+
+A scaffolded `experiments/full_baseline_experiment.py` is included so
+scaling to the full valid split is a small mechanical change once the
+dev sweep is stable.
+
 ## Provenance
 
 - Upstream GitHub: <https://github.com/LLM4Rocq/miniF2F-rocq>
