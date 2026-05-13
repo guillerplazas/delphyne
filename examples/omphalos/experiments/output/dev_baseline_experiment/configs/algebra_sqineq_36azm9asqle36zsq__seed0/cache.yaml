@@ -1,0 +1,1079 @@
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Reals.
+            Open Scope R_scope.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem algebra_sqineq_36azm9asqle36zsq (z a : R) :
+              36 * (a * z) - 9 * a^2 <= 36 * z^2.
+            ```
+
+            ## Informal statement
+
+            For real numbers a and z, show that $36az - 9a^2 \leq 36z^2$.
+
+            ## Informal proof sketch
+
+            We can rewrite the inequality as $2.(3a).(6z) - (3.a)^2 \leq (6.z)^2$, then
+               $2.(3a).(6z) \leq (3.a)^2 + (6.z)^2$ . Then use that for all real numbers $x,y$,
+               $x^2+y^2 \geq 2xy$, with $x=3a$ and $y=6z$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          intros z a.
+          nra.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 1313
+        output_tokens: 16
+        cached_input_tokens: 0
+        price: 0.00180125
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 16
+      prompt_tokens: 1313
+      total_tokens: 1329
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 0
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros z a.
+                nra.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros z a.
+          - nra.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/algebra/algebra_sqineq_36azm9asqle36zsq.v
+              theorem_name: algebra_sqineq_36azm9asqle36zsq
+              tactics:
+                - intros z a.
+                - nra.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 0
+          failing_tactic: intros z a.
+          error_message: '(-32003, ''Coq: z is already used.'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 3], ''name'': None}, hyps=[GoalHyp(names=[''z'', ''a''], ty=''R'',
+              def_=None)], ty=''36 * (a * z) - 9 * a ^ 2 <= 36 * z ^ 2'', pp=''z, a  : R\n|-36 * (a * z) - 9 * a
+              ^ 2 <= 36 * z ^ 2'')'
+          proof_so_far: []
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Reals.
+            Open Scope R_scope.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem algebra_sqineq_36azm9asqle36zsq (z a : R) :
+              36 * (a * z) - 9 * a^2 <= 36 * z^2.
+            ```
+
+            ## Informal statement
+
+            For real numbers a and z, show that $36az - 9a^2 \leq 36z^2$.
+
+            ## Informal proof sketch
+
+            We can rewrite the inequality as $2.(3a).(6z) - (3.a)^2 \leq (6.z)^2$, then
+               $2.(3a).(6z) \leq (3.a)^2 + (6.z)^2$ . Then use that for all real numbers $x,y$,
+               $x^2+y^2 \geq 2xy$, with $x=3a$ and $y=6z$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros z a.
+              nra.
+              ```
+        - role: user
+          content: |-
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 0 in your script): `intros z a.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: z is already used.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              (none — failure occurred on the first tactic)
+
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 3], 'name': None}, hyps=[GoalHyp(names=['z', 'a'], ty='R', def_=None)], ty='36 * (a * z) - 9 * a ^ 2 <= 36 * z ^ 2', pp='z, a  : R\n|-36 * (a * z) - 9 * a ^ 2 <= 36 * z ^ 2')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          nra.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 1551
+        output_tokens: 11
+        cached_input_tokens: 1152
+        price: 0.00075275
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 11
+      prompt_tokens: 1551
+      total_tokens: 1562
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 1152
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                nra.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - nra.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/algebra/algebra_sqineq_36azm9asqle36zsq.v
+              theorem_name: algebra_sqineq_36azm9asqle36zsq
+              tactics:
+                - nra.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 0
+          failing_tactic: nra.
+          error_message: '(-32003, ''Coq: No applicable tactic.'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 3], ''name'': None}, hyps=[GoalHyp(names=[''z'', ''a''], ty=''R'',
+              def_=None)], ty=''36 * (a * z) - 9 * a ^ 2 <= 36 * z ^ 2'', pp=''z, a  : R\n|-36 * (a * z) - 9 * a
+              ^ 2 <= 36 * z ^ 2'')'
+          proof_so_far: []
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Reals.
+            Open Scope R_scope.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem algebra_sqineq_36azm9asqle36zsq (z a : R) :
+              36 * (a * z) - 9 * a^2 <= 36 * z^2.
+            ```
+
+            ## Informal statement
+
+            For real numbers a and z, show that $36az - 9a^2 \leq 36z^2$.
+
+            ## Informal proof sketch
+
+            We can rewrite the inequality as $2.(3a).(6z) - (3.a)^2 \leq (6.z)^2$, then
+               $2.(3a).(6z) \leq (3.a)^2 + (6.z)^2$ . Then use that for all real numbers $x,y$,
+               $x^2+y^2 \geq 2xy$, with $x=3a$ and $y=6z$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros z a.
+              nra.
+              ```
+        - role: user
+          content: |-
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 0 in your script): `intros z a.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: z is already used.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              (none — failure occurred on the first tactic)
+
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 3], 'name': None}, hyps=[GoalHyp(names=['z', 'a'], ty='R', def_=None)], ty='36 * (a * z) - 9 * a ^ 2 <= 36 * z ^ 2', pp='z, a  : R\n|-36 * (a * z) - 9 * a ^ 2 <= 36 * z ^ 2')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              nra.
+              ```
+        - role: user
+          content: |-
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 0 in your script): `nra.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: No applicable tactic.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              (none — failure occurred on the first tactic)
+
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 3], 'name': None}, hyps=[GoalHyp(names=['z', 'a'], ty='R', def_=None)], ty='36 * (a * z) - 9 * a ^ 2 <= 36 * z ^ 2', pp='z, a  : R\n|-36 * (a * z) - 9 * a ^ 2 <= 36 * z ^ 2')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          replace (36 * (a * z) - 9 * a ^ 2) with (36 * z ^ 2 - (3 * z - 3 * a)^2).
+          2:{
+            unfold Rminus.
+            ring.
+          }
+          apply Rle_trans with (r2 := 36 * z ^ 2 - 0).
+          2:{
+            ring_simplify.
+            apply Rle_refl.
+          }
+          apply Rplus_le_compat_l.
+          apply Ropp_le_contravar.
+          rewrite Ropp_0.
+          apply pow2_ge_0.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 1781
+        output_tokens: 123
+        cached_input_tokens: 1408
+        price: 0.00187225
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 123
+      prompt_tokens: 1781
+      total_tokens: 1904
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 1408
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                replace (36 * (a * z) - 9 * a ^ 2) with (36 * z ^ 2 - (3 * z - 3 * a)^2).
+                2:{
+                  unfold Rminus.
+                  ring.
+                }
+                apply Rle_trans with (r2 := 36 * z ^ 2 - 0).
+                2:{
+                  ring_simplify.
+                  apply Rle_refl.
+                }
+                apply Rplus_le_compat_l.
+                apply Ropp_le_contravar.
+                rewrite Ropp_0.
+                apply pow2_ge_0.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - replace (36 * (a * z) - 9 * a ^ 2) with (36 * z ^ 2 - (3 * z - 3 * a)^2).
+          - unfold Rminus.
+          - ring.
+          - apply Rle_trans with (r2 := 36 * z ^ 2 - 0).
+          - ring_simplify.
+          - apply Rle_refl.
+          - apply Rplus_le_compat_l.
+          - apply Ropp_le_contravar.
+          - rewrite Ropp_0.
+          - apply pow2_ge_0.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/algebra/algebra_sqineq_36azm9asqle36zsq.v
+              theorem_name: algebra_sqineq_36azm9asqle36zsq
+              tactics:
+                - replace (36 * (a * z) - 9 * a ^ 2) with (36 * z ^ 2 - (3 * z - 3 * a)^2).
+                - unfold Rminus.
+                - ring.
+                - apply Rle_trans with (r2 := 36 * z ^ 2 - 0).
+                - ring_simplify.
+                - apply Rle_refl.
+                - apply Rplus_le_compat_l.
+                - apply Ropp_le_contravar.
+                - rewrite Ropp_0.
+                - apply pow2_ge_0.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 2
+          failing_tactic: ring.
+          error_message: '(-32003, ''Coq: Tactic failure: Goal is not an equation (of expected equality) eq.'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 9], ''name'': None}, hyps=[GoalHyp(names=[''z'', ''a''], ty=''R'',
+              def_=None)], ty=''36 * z ^ 2 + - (3 * z + - (3 * a)) ^ 2 <= 36 * z ^ 2'', pp=''z, a  : R\n|-36 * z
+              ^ 2 + - (3 * z + - (3 * a)) ^ 2 <= 36 * z ^ 2'')'
+            - 'Goal(info={''evar'': [''Ser_Evar'', 4], ''name'': None}, hyps=[GoalHyp(names=[''z'', ''a''], ty=''R'',
+              def_=None)], ty=''36 * z ^ 2 - (3 * z - 3 * a) ^ 2 = 36 * (a * z) - 9 * a ^ 2'', pp=''z, a  : R\n|-36
+              * z ^ 2 - (3 * z - 3 * a) ^ 2 = 36 * (a * z) - 9 * a ^ 2'')'
+          proof_so_far:
+            - replace (36 * (a * z) - 9 * a ^ 2) with (36 * z ^ 2 - (3 * z - 3 * a)^2).
+            - unfold Rminus.
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Reals.
+            Open Scope R_scope.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem algebra_sqineq_36azm9asqle36zsq (z a : R) :
+              36 * (a * z) - 9 * a^2 <= 36 * z^2.
+            ```
+
+            ## Informal statement
+
+            For real numbers a and z, show that $36az - 9a^2 \leq 36z^2$.
+
+            ## Informal proof sketch
+
+            We can rewrite the inequality as $2.(3a).(6z) - (3.a)^2 \leq (6.z)^2$, then
+               $2.(3a).(6z) \leq (3.a)^2 + (6.z)^2$ . Then use that for all real numbers $x,y$,
+               $x^2+y^2 \geq 2xy$, with $x=3a$ and $y=6z$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros z a.
+              nra.
+              ```
+        - role: user
+          content: |-
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 0 in your script): `intros z a.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: z is already used.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              (none — failure occurred on the first tactic)
+
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 3], 'name': None}, hyps=[GoalHyp(names=['z', 'a'], ty='R', def_=None)], ty='36 * (a * z) - 9 * a ^ 2 <= 36 * z ^ 2', pp='z, a  : R\n|-36 * (a * z) - 9 * a ^ 2 <= 36 * z ^ 2')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              nra.
+              ```
+        - role: user
+          content: |-
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 0 in your script): `nra.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: No applicable tactic.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              (none — failure occurred on the first tactic)
+
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 3], 'name': None}, hyps=[GoalHyp(names=['z', 'a'], ty='R', def_=None)], ty='36 * (a * z) - 9 * a ^ 2 <= 36 * z ^ 2', pp='z, a  : R\n|-36 * (a * z) - 9 * a ^ 2 <= 36 * z ^ 2')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              replace (36 * (a * z) - 9 * a ^ 2) with (36 * z ^ 2 - (3 * z - 3 * a)^2).
+              2:{
+                unfold Rminus.
+                ring.
+              }
+              apply Rle_trans with (r2 := 36 * z ^ 2 - 0).
+              2:{
+                ring_simplify.
+                apply Rle_refl.
+              }
+              apply Rplus_le_compat_l.
+              apply Ropp_le_contravar.
+              rewrite Ropp_0.
+              apply pow2_ge_0.
+              ```
+        - role: user
+          content: |-
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 2 in your script): `ring.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: Tactic failure: Goal is not an equation (of expected equality) eq.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `replace (36 * (a * z) - 9 * a ^ 2) with (36 * z ^ 2 - (3 * z - 3 * a)^2).`  2. `unfold Rminus.`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 9], 'name': None}, hyps=[GoalHyp(names=['z', 'a'], ty='R', def_=None)], ty='36 * z ^ 2 + - (3 * z + - (3 * a)) ^ 2 <= 36 * z ^ 2', pp='z, a  : R\n|-36 * z ^ 2 + - (3 * z + - (3 * a)) ^ 2 <= 36 * z ^ 2')
+              ```
+              ```
+              Goal(info={'evar': ['Ser_Evar', 4], 'name': None}, hyps=[GoalHyp(names=['z', 'a'], ty='R', def_=None)], ty='36 * z ^ 2 - (3 * z - 3 * a) ^ 2 = 36 * (a * z) - 9 * a ^ 2', pp='z, a  : R\n|-36 * z ^ 2 - (3 * z - 3 * a) ^ 2 = 36 * (a * z) - 9 * a ^ 2')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          replace (36 * (a * z) - 9 * a ^ 2) with (36 * z ^ 2 - 9 * (z - a) ^ 2).
+          2:{
+            ring.
+          }
+          apply Rplus_le_reg_l with (r := 9 * (z - a) ^ 2).
+          ring_simplify.
+          apply Rmult_le_pos.
+          lra.
+          apply pow2_ge_0.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 2325
+        output_tokens: 96
+        cached_input_tokens: 1792
+        price: 0.00185025
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 96
+      prompt_tokens: 2325
+      total_tokens: 2421
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 1792
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                replace (36 * (a * z) - 9 * a ^ 2) with (36 * z ^ 2 - 9 * (z - a) ^ 2).
+                2:{
+                  ring.
+                }
+                apply Rplus_le_reg_l with (r := 9 * (z - a) ^ 2).
+                ring_simplify.
+                apply Rmult_le_pos.
+                lra.
+                apply pow2_ge_0.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - replace (36 * (a * z) - 9 * a ^ 2) with (36 * z ^ 2 - 9 * (z - a) ^ 2).
+          - ring.
+          - apply Rplus_le_reg_l with (r := 9 * (z - a) ^ 2).
+          - ring_simplify.
+          - apply Rmult_le_pos.
+          - lra.
+          - apply pow2_ge_0.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/algebra/algebra_sqineq_36azm9asqle36zsq.v
+              theorem_name: algebra_sqineq_36azm9asqle36zsq
+              tactics:
+                - replace (36 * (a * z) - 9 * a ^ 2) with (36 * z ^ 2 - 9 * (z - a) ^ 2).
+                - ring.
+                - apply Rplus_le_reg_l with (r := 9 * (z - a) ^ 2).
+                - ring_simplify.
+                - apply Rmult_le_pos.
+                - lra.
+                - apply pow2_ge_0.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 1
+          failing_tactic: ring.
+          error_message: '(-32003, ''Coq: Tactic failure: Goal is not an equation (of expected equality) eq.'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 7], ''name'': None}, hyps=[GoalHyp(names=[''z'', ''a''], ty=''R'',
+              def_=None)], ty=''36 * z ^ 2 - 9 * (z - a) ^ 2 <= 36 * z ^ 2'', pp=''z, a  : R\n|-36 * z ^ 2 - 9 *
+              (z - a) ^ 2 <= 36 * z ^ 2'')'
+            - 'Goal(info={''evar'': [''Ser_Evar'', 4], ''name'': None}, hyps=[GoalHyp(names=[''z'', ''a''], ty=''R'',
+              def_=None)], ty=''36 * z ^ 2 - 9 * (z - a) ^ 2 = 36 * (a * z) - 9 * a ^ 2'', pp=''z, a  : R\n|-36
+              * z ^ 2 - 9 * (z - a) ^ 2 = 36 * (a * z) - 9 * a ^ 2'')'
+          proof_so_far:
+            - replace (36 * (a * z) - 9 * a ^ 2) with (36 * z ^ 2 - 9 * (z - a) ^ 2).
+          finished: false
