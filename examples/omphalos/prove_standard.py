@@ -1,10 +1,15 @@
 """
-A conversational agent baseline for Rocq theorem proving in miniF2F.
+Standard baseline for Rocq theorem proving in miniF2F.
 
-Mirrors `examples/find_invariants/baseline.py`: an LLM proposes a full
-proof script, pytanque verifies it, the verifier's feedback (failing
-tactic, error, remaining goals) is fed back, and the LLM revises until
-success or the feedback budget is exhausted.
+Single-stage Hilbert-style loop: an LLM proposes a full proof script,
+pytanque verifies it, the verifier's feedback (failing tactic, error,
+remaining goals) is fed back, and the LLM revises until success or the
+feedback budget is exhausted. The LLM has *one* action available
+(propose a complete proof body); there are no tool calls. The agentic
+counterpart lives in `prove_agentic.py`.
+
+`ProofScript` and `check_proof` are also re-exported here for reuse by
+`prove_agentic.py` — they are not strategy-shape-specific.
 """
 
 from dataclasses import dataclass
@@ -31,7 +36,7 @@ Parsed into a list of tactics inside `pt.split_into_tactics`.
 
 
 @strategy
-def prove_theorem_interactive(
+def prove_theorem_standard(
     problem_file: str,
     theorem_name: str,
 ) -> Strategy[Branch, dp.PromptingPolicy, ProofScript]:
@@ -71,7 +76,7 @@ def check_proof(
 #####
 
 
-def prove_theorem_interactive_policy(
+def prove_theorem_standard_policy(
     model_name: str,
     temperature: float | None = None,
     max_feedback_cycles: int = 3,

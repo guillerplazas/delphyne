@@ -1,5 +1,5 @@
 """
-Scaffolding for the full miniF2F valid-split sweep.
+Scaffolding for the full miniF2F valid-split sweep, standard baseline.
 
 Not run as part of the dev loop. Kept here so the cost of extending the
 benchmark is mechanical: list all `valid/**/*.v` files, materialise a
@@ -7,7 +7,7 @@ benchmark is mechanical: list all `valid/**/*.v` files, materialise a
 and seeds.
 
 Usage (when ready):
-    python experiments/full_baseline_experiment.py run --max_workers=4
+    python experiments/full_standard_experiment.py run --max_workers=4
 """
 
 # pyright: strict
@@ -21,7 +21,7 @@ SEEDS = [0]
 
 
 configs = [
-    mf.BaselineConfig(
+    mf.StandardConfig(
         bench_name=name,
         model_name=model,
         temperature=None,
@@ -38,7 +38,7 @@ configs = [
 
 if __name__ == "__main__":
     dp.Experiment(
-        config_class=mf.BaselineConfig,
+        config_class=mf.StandardConfig,
         context=dp.workspace_execution_context(__file__),
         configs=configs,
         output_dir=f"experiments/output/{dp.path_stem(__file__)}",

@@ -81,13 +81,27 @@ make -j
 `_upstream/` is a temporary local checkout. It is ignored by Git and should be
 removed before preparing a PR unless you are actively regenerating the layout.
 
-## Delphyne agentic baseline
+## Delphyne baselines
 
-This directory ships a small, working Delphyne-based proving agent for
-miniF2F-Rocq. It is intentionally minimal: an LLM proposes a full proof
-script, [pytanque](https://github.com/LLM4Rocq/pytanque) verifies it,
-and the verifier's feedback (failing tactic, error, remaining goals) is
-fed back so the LLM can revise — up to a configurable number of cycles.
+This directory ships two Delphyne-based proving systems for miniF2F-Rocq,
+both single-stage Hilbert-style loops driven by `dp.interact`:
+
+1. **Standard baseline** (`prove_standard.py`) — the LLM proposes a full
+   proof script, [pytanque](https://github.com/LLM4Rocq/pytanque)
+   verifies it, the verifier's feedback (failing tactic, error,
+   remaining goals) is fed back so the LLM can revise. The LLM has *one*
+   action: propose a proof. Skill content (Rocq tactic guidance,
+   phrasebook, templates) is baked into the system prompt up front.
+2. **Agentic baseline** (`prove_agentic.py`) — same outer loop, but the
+   LLM additionally has a `ReadSkill` tool. It chooses which skill
+   markdown files under `rocq_skills_data/` to load on demand. The
+   system prompt only lists *available* skills; their content arrives
+   in chat history when (and if) the LLM requests it. The LLM now has
+   two actions, and decides how to split its request budget across
+   reading skills and proposing proofs.
+
+The two systems run on the same `dev_subset.txt`; comparing pass rates
+problem-by-problem is the headline ablation this iteration produces.
 
 Prerequisites:
 
@@ -96,30 +110,41 @@ Prerequisites:
 - An API key for the configured model (default: `gpt-5.4-2026-03-05`,
   overridable via `policy_args.model_name`).
 
-Sanity run (one problem):
+### Standard baseline
 
 ```sh
-make test
+make test-standard          # single problem, sanity check
+make test-subset-standard   # 8-problem curated sweep (via dp.Experiment)
+make replay-subset-standard # re-derive summary from cache (no LLM calls)
+make summary-standard       # regenerate the aggregate results_summary.csv
 ```
 
-Curated dev sweep (8 problems, via `delphyne.stdlib.experiments`):
+Per-config outputs land under `experiments/output/dev_standard_experiment_1/`.
+The strategy and policy live in `prove_standard.py`; LLM prompts in
+`prompts/ProposeProofScript.*.jinja`.
+
+### Agentic baseline
 
 ```sh
-make test-subset       # runs with max_workers=2; per-config outputs land in
-                       # experiments/output/dev_baseline_experiment/
-make replay-subset     # re-derives summaries from cached outputs (no LLM calls)
-make summary           # regenerates the aggregate results_summary.csv
+make test-agentic           # single problem, with tool-call agency
+make test-subset-agentic    # 8-problem sweep, agentic version
+make replay-subset-agentic
+make summary-agentic
 ```
 
-The strategy and policy live in `prove_baseline.py`; LLM prompts are in
-`prompts/`. The model sees both the informal statement *and* the
-informal proof sketch from each `.v` header — this is therefore a
-*with-hints* baseline, intended as a starting point for further
-ablations (see `bachelor_arbeit_plan.md`).
+Per-config outputs land under `experiments/output/dev_agentic_experiment/`.
+The strategy and policy live in `prove_agentic.py`; the `ReadSkill` tool
+is defined there. Prompts in `prompts/ProposeProofScriptAgentic.*.jinja`.
 
-A scaffolded `experiments/full_baseline_experiment.py` is included so
-scaling to the full valid split is a small mechanical change once the
-dev sweep is stable.
+The model still sees both the informal statement *and* the informal
+proof sketch from each `.v` header — both baselines are therefore
+*with-hints*. Further ablations (`SearchRocq` / `TryTactic` tools,
+two-stage informal/formal Hilbert split, MathComp retrieval) are on the
+thesis roadmap (see `bachelor_arbeit_plan.md`).
+
+Both baselines have a scaffolded full-sweep entry point
+(`experiments/full_standard_experiment.py`, `full_agentic_experiment.py`),
+ready for scaling beyond the dev subset.
 
 ## Provenance
 

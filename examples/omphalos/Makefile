@@ -1,20 +1,43 @@
-.PHONY: test test-subset replay-subset summary clean clean-experiments
+.PHONY: test test-standard test-agentic
+.PHONY: test-subset test-subset-standard test-subset-agentic
+.PHONY: replay-subset-standard replay-subset-agentic
+.PHONY: summary-standard summary-agentic
+.PHONY: clean clean-experiments
 
-# Single-problem sanity run via `delphyne run`.
-test:
-	delphyne run commands/prove_one.exec.yaml --cache --no-header
+# Default-aliases preserve muscle memory from the first iteration:
+# `make test` and `make test-subset` continue to run the standard baseline.
+test: test-standard
+test-subset: test-subset-standard
 
-# Full curated dev-subset sweep via the experiment launcher.
-test-subset:
-	python experiments/dev_baseline_experiment.py run --max_workers=2
+# --- standard baseline (single-stage Hilbert, no tool calls) ---
 
-# Re-derive per-config summaries from cached outputs (no LLM calls).
-replay-subset:
-	python experiments/dev_baseline_experiment.py replay
+test-standard:
+	delphyne run commands/prove_one_standard.exec.yaml --cache --no-header
 
-# Regenerate the aggregate `results_summary.csv` from the cached results.
-summary:
-	python experiments/dev_baseline_experiment.py force-summary --add-timing
+test-subset-standard:
+	python experiments/dev_standard_experiment.py run --max_workers=2
+
+replay-subset-standard:
+	python experiments/dev_standard_experiment.py replay
+
+summary-standard:
+	python experiments/dev_standard_experiment.py force-summary --add-timing
+
+# --- agentic baseline (LLM may call ReadSkill on demand) ---
+
+test-agentic:
+	delphyne run commands/prove_one_agentic.exec.yaml --cache --no-header
+
+test-subset-agentic:
+	python experiments/dev_agentic_experiment.py run --max_workers=2
+
+replay-subset-agentic:
+	python experiments/dev_agentic_experiment.py replay
+
+summary-agentic:
+	python experiments/dev_agentic_experiment.py force-summary --add-timing
+
+# --- housekeeping ---
 
 clean: clean-experiments
 	rm -rf commands/cache __pycache__ experiments/__pycache__

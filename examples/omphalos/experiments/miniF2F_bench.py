@@ -1,6 +1,12 @@
 """
-miniF2F-Rocq benchmark loader + `BaselineConfig` for the experiment
-launcher.
+miniF2F-Rocq benchmark loader + experiment-config dataclasses.
+
+Two configs live here:
+
+- `StandardConfig` — the standard baseline (single-stage Hilbert,
+  no tool calls). Driven by `prove_standard.py`.
+- `AgenticConfig` — the agentic baseline (LLM may call `ReadSkill`
+  before / between proof attempts). Driven by `prove_agentic.py`.
 
 Mirrors `examples/find_invariants/experiments/code2inv_experiments.py`.
 """
@@ -49,7 +55,7 @@ PROBLEMS: Mapping[str, tuple[str, str]] = load_dev_subset()
 
 
 @dataclass
-class BaselineConfig:
+class StandardConfig:
     bench_name: str
     model_name: str
     temperature: float | None
@@ -70,12 +76,53 @@ class BaselineConfig:
             "loop": self.loop,
         }
         return dp.RunStrategyArgs(
-            strategy="prove_theorem_interactive",
+            strategy="prove_theorem_standard",
             args={
                 "problem_file": problem_file,
                 "theorem_name": theorem_name,
             },
-            policy="prove_theorem_interactive_policy",
+            policy="prove_theorem_standard_policy",
+            policy_args=policy_args,
+            budget=budget,
+        )
+
+
+@dataclass
+class AgenticConfig:
+    """
+    Configuration for the agentic baseline.
+
+    Extra knob: `num_requests` is the *total* request budget — covers
+    both LLM proposal attempts and tool calls combined.
+    """
+
+    bench_name: str
+    model_name: str
+    temperature: float | None
+    max_feedback_cycles: int
+    num_requests: int
+    seed: int
+    loop: bool = False
+    max_dollar_budget: float | None = 0.4
+
+    def instantiate(self, context: object) -> dp.RunStrategyArgs:
+        problem_file, theorem_name = PROBLEMS[self.bench_name]
+        budget: dict[str, float] = {dp.NUM_REQUESTS: float(self.num_requests)}
+        if self.max_dollar_budget is not None:
+            budget[dp.DOLLAR_PRICE] = self.max_dollar_budget
+        policy_args: dict[str, Any] = {
+            "model_name": self.model_name,
+            "temperature": self.temperature,
+            "max_feedback_cycles": self.max_feedback_cycles,
+            "loop": self.loop,
+        }
+        return dp.RunStrategyArgs(
+            strategy="prove_theorem_agentic",
+            args={
+                "problem_file": problem_file,
+                "theorem_name": theorem_name,
+            },
+            policy="prove_theorem_agentic_policy",
             policy_args=policy_args,
             budget=budget,
         )
