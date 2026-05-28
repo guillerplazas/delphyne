@@ -31,6 +31,6 @@ if __name__ == "__main__":
         config_class=mf.StandardConfig,
         context=dp.workspace_execution_context(__file__),
         configs=configs,
-        output_dir=f"experiments/output/{dp.path_stem(__file__)}_1",
+        output_dir="experiments/output/dev_standard",
         config_naming=lambda cfg, _uid: f"{cfg.bench_name}__seed{cfg.seed}",
     ).run_cli()

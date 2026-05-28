@@ -40,6 +40,7 @@ SKILL_WHITELIST: tuple[str, ...] = (
     "tactics-reference",
     "tactic-patterns",
     "compilation-errors",
+    "compiler-guided-repair",
     "coq-stdlib-guide",
     "admitted-filling",
     "proof-golfing-patterns",

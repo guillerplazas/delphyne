@@ -1,0 +1,1158 @@
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Reals.
+            Require Import Coquelicot.Coquelicot.
+            Open Scope C_scope.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem algebra_2varlineareq_xpeeq7_2xpeeq3_eeq11_xeqn4 (x e : C)
+              (h0 : x + e = 7)
+              (h1 : 2 * x + e = 3) :
+              e = 11 /\ x = -4.
+            ```
+
+            ## Informal statement
+
+            Given two complex numbers x and e, if we assume that $x + e = 7$ and $2x + e = 3$,
+               then show that $e = 11$ and $x=-4$.
+
+            ## Informal proof sketch
+
+            First, $x = 2x + e - (x + e) = 3 - 7 = -4$. Then, substituting $x=-4$ in $x+e=7$, we
+               obtain $e=11$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          intros x e h0 h1.
+          split.
+          - assert (x = -4).
+            { lca. }
+            lca.
+          - lca.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 1318
+        output_tokens: 41
+        cached_input_tokens: 0
+        price: 0.0020575
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 41
+      prompt_tokens: 1318
+      total_tokens: 1359
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 0
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros x e h0 h1.
+                split.
+                - assert (x = -4).
+                  { lca. }
+                  lca.
+                - lca.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros x e h0 h1.
+          - split.
+          - '- assert (x = -4).'
+          - lca.
+          - '- lca.'
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/algebra/algebra_2varlineareq_xpeeq7_2xpeeq3_eeq11_xeqn4.v
+              theorem_name: algebra_2varlineareq_xpeeq7_2xpeeq3_eeq11_xeqn4
+              tactics:
+                - intros x e h0 h1.
+                - split.
+                - '- assert (x = -4).'
+                - lca.
+                - '- lca.'
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 0
+          failing_tactic: intros x e h0 h1.
+          error_message: '(-32003, ''Coq: x is already used.'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 128], ''name'': None}, hyps=[GoalHyp(names=[''x'', ''e''], ty=''C'',
+              def_=None), GoalHyp(names=[''h0''], ty=''x + e = 7'', def_=None), GoalHyp(names=[''h1''], ty=''2 *
+              x + e = 3'', def_=None)], ty=''e = 11 /\\ x = -4'', pp=''x, e  : C\nh0  : x + e = 7\nh1  : 2 * x +
+              e = 3\n|-e = 11 /\\ x = -4'')'
+          proof_so_far: []
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Reals.
+            Require Import Coquelicot.Coquelicot.
+            Open Scope C_scope.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem algebra_2varlineareq_xpeeq7_2xpeeq3_eeq11_xeqn4 (x e : C)
+              (h0 : x + e = 7)
+              (h1 : 2 * x + e = 3) :
+              e = 11 /\ x = -4.
+            ```
+
+            ## Informal statement
+
+            Given two complex numbers x and e, if we assume that $x + e = 7$ and $2x + e = 3$,
+               then show that $e = 11$ and $x=-4$.
+
+            ## Informal proof sketch
+
+            First, $x = 2x + e - (x + e) = 3 - 7 = -4$. Then, substituting $x=-4$ in $x+e=7$, we
+               obtain $e=11$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros x e h0 h1.
+              split.
+              - assert (x = -4).
+                { lca. }
+                lca.
+              - lca.
+              ```
+        - role: user
+          content: |-
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 0 in your script): `intros x e h0 h1.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: x is already used.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              (none — failure occurred on the first tactic)
+
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 128], 'name': None}, hyps=[GoalHyp(names=['x', 'e'], ty='C', def_=None), GoalHyp(names=['h0'], ty='x + e = 7', def_=None), GoalHyp(names=['h1'], ty='2 * x + e = 3', def_=None)], ty='e = 11 /\\ x = -4', pp='x, e  : C\nh0  : x + e = 7\nh1  : 2 * x + e = 3\n|-e = 11 /\\ x = -4')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          split.
+          - assert (x = -4) by lca.
+            lca.
+          - lca.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 1626
+        output_tokens: 30
+        cached_input_tokens: 1152
+        price: 0.0010364999999999999
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 30
+      prompt_tokens: 1626
+      total_tokens: 1656
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 1152
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                split.
+                - assert (x = -4) by lca.
+                  lca.
+                - lca.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - split.
+          - '- assert (x = -4) by lca.'
+          - lca.
+          - '- lca.'
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/algebra/algebra_2varlineareq_xpeeq7_2xpeeq3_eeq11_xeqn4.v
+              theorem_name: algebra_2varlineareq_xpeeq7_2xpeeq3_eeq11_xeqn4
+              tactics:
+                - split.
+                - '- assert (x = -4) by lca.'
+                - lca.
+                - '- lca.'
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 1
+          failing_tactic: '- assert (x = -4) by lca.'
+          error_message: '(-32003, ''Coq: The reference lca was not found in the current environment.'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 130], ''name'': None}, hyps=[GoalHyp(names=[''x'', ''e''], ty=''C'',
+              def_=None), GoalHyp(names=[''h0''], ty=''x + e = 7'', def_=None), GoalHyp(names=[''h1''], ty=''2 *
+              x + e = 3'', def_=None)], ty=''e = 11'', pp=''x, e  : C\nh0  : x + e = 7\nh1  : 2 * x + e = 3\n|-e
+              = 11'')'
+            - 'Goal(info={''evar'': [''Ser_Evar'', 131], ''name'': None}, hyps=[GoalHyp(names=[''x'', ''e''], ty=''C'',
+              def_=None), GoalHyp(names=[''h0''], ty=''x + e = 7'', def_=None), GoalHyp(names=[''h1''], ty=''2 *
+              x + e = 3'', def_=None)], ty=''x = -4'', pp=''x, e  : C\nh0  : x + e = 7\nh1  : 2 * x + e = 3\n|-x
+              = -4'')'
+          proof_so_far:
+            - split.
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Reals.
+            Require Import Coquelicot.Coquelicot.
+            Open Scope C_scope.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem algebra_2varlineareq_xpeeq7_2xpeeq3_eeq11_xeqn4 (x e : C)
+              (h0 : x + e = 7)
+              (h1 : 2 * x + e = 3) :
+              e = 11 /\ x = -4.
+            ```
+
+            ## Informal statement
+
+            Given two complex numbers x and e, if we assume that $x + e = 7$ and $2x + e = 3$,
+               then show that $e = 11$ and $x=-4$.
+
+            ## Informal proof sketch
+
+            First, $x = 2x + e - (x + e) = 3 - 7 = -4$. Then, substituting $x=-4$ in $x+e=7$, we
+               obtain $e=11$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros x e h0 h1.
+              split.
+              - assert (x = -4).
+                { lca. }
+                lca.
+              - lca.
+              ```
+        - role: user
+          content: |-
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 0 in your script): `intros x e h0 h1.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: x is already used.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              (none — failure occurred on the first tactic)
+
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 128], 'name': None}, hyps=[GoalHyp(names=['x', 'e'], ty='C', def_=None), GoalHyp(names=['h0'], ty='x + e = 7', def_=None), GoalHyp(names=['h1'], ty='2 * x + e = 3', def_=None)], ty='e = 11 /\\ x = -4', pp='x, e  : C\nh0  : x + e = 7\nh1  : 2 * x + e = 3\n|-e = 11 /\\ x = -4')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              split.
+              - assert (x = -4) by lca.
+                lca.
+              - lca.
+              ```
+        - role: user
+          content: |-
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 1 in your script): `- assert (x = -4) by lca.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: The reference lca was not found in the current environment.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `split.`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 130], 'name': None}, hyps=[GoalHyp(names=['x', 'e'], ty='C', def_=None), GoalHyp(names=['h0'], ty='x + e = 7', def_=None), GoalHyp(names=['h1'], ty='2 * x + e = 3', def_=None)], ty='e = 11', pp='x, e  : C\nh0  : x + e = 7\nh1  : 2 * x + e = 3\n|-e = 11')
+              ```
+              ```
+              Goal(info={'evar': ['Ser_Evar', 131], 'name': None}, hyps=[GoalHyp(names=['x', 'e'], ty='C', def_=None), GoalHyp(names=['h0'], ty='x + e = 7', def_=None), GoalHyp(names=['h1'], ty='2 * x + e = 3', def_=None)], ty='x = -4', pp='x, e  : C\nh0  : x + e = 7\nh1  : 2 * x + e = 3\n|-x = -4')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          assert (hx : x = -4).
+          { apply (f_equal (fun z => z - (x + e))) in h1.
+            rewrite h0 in h1.
+            ring_simplify in h1.
+            exact h1.
+          }
+          split.
+          - rewrite <- h0.
+            rewrite hx.
+            ring.
+          - exact hx.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 2051
+        output_tokens: 79
+        cached_input_tokens: 1536
+        price: 0.0016257499999999998
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 79
+      prompt_tokens: 2051
+      total_tokens: 2130
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 1536
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                assert (hx : x = -4).
+                { apply (f_equal (fun z => z - (x + e))) in h1.
+                  rewrite h0 in h1.
+                  ring_simplify in h1.
+                  exact h1.
+                }
+                split.
+                - rewrite <- h0.
+                  rewrite hx.
+                  ring.
+                - exact hx.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - 'assert (hx : x = -4).'
+          - '{ apply (f_equal (fun z => z - (x + e))) in h1.'
+          - rewrite h0 in h1.
+          - ring_simplify in h1.
+          - exact h1.
+          - split.
+          - '- rewrite <- h0.'
+          - rewrite hx.
+          - ring.
+          - '- exact hx.'
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/algebra/algebra_2varlineareq_xpeeq7_2xpeeq3_eeq11_xeqn4.v
+              theorem_name: algebra_2varlineareq_xpeeq7_2xpeeq3_eeq11_xeqn4
+              tactics:
+                - 'assert (hx : x = -4).'
+                - '{ apply (f_equal (fun z => z - (x + e))) in h1.'
+                - rewrite h0 in h1.
+                - ring_simplify in h1.
+                - exact h1.
+                - split.
+                - '- rewrite <- h0.'
+                - rewrite hx.
+                - ring.
+                - '- exact hx.'
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 4
+          failing_tactic: exact h1.
+          error_message: '(-32003, ''Coq: In environment\nx, e : C\nh0 : x + e = 7\nh1 : 2 * x + e - 7 = -4\nThe
+            term "h1" has type "2 * x + e - 7 = -4" while it is expected to have type\n "x = -4".'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 202], ''name'': None}, hyps=[GoalHyp(names=[''x'', ''e''], ty=''C'',
+              def_=None), GoalHyp(names=[''h0''], ty=''x + e = 7'', def_=None), GoalHyp(names=[''h1''], ty=''2 *
+              x + e - 7 = -4'', def_=None)], ty=''x = -4'', pp=''x, e  : C\nh0  : x + e = 7\nh1  : 2 * x + e - 7
+              = -4\n|-x = -4'')'
+          proof_so_far:
+            - 'assert (hx : x = -4).'
+            - '{ apply (f_equal (fun z => z - (x + e))) in h1.'
+            - rewrite h0 in h1.
+            - ring_simplify in h1.
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Reals.
+            Require Import Coquelicot.Coquelicot.
+            Open Scope C_scope.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem algebra_2varlineareq_xpeeq7_2xpeeq3_eeq11_xeqn4 (x e : C)
+              (h0 : x + e = 7)
+              (h1 : 2 * x + e = 3) :
+              e = 11 /\ x = -4.
+            ```
+
+            ## Informal statement
+
+            Given two complex numbers x and e, if we assume that $x + e = 7$ and $2x + e = 3$,
+               then show that $e = 11$ and $x=-4$.
+
+            ## Informal proof sketch
+
+            First, $x = 2x + e - (x + e) = 3 - 7 = -4$. Then, substituting $x=-4$ in $x+e=7$, we
+               obtain $e=11$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros x e h0 h1.
+              split.
+              - assert (x = -4).
+                { lca. }
+                lca.
+              - lca.
+              ```
+        - role: user
+          content: |-
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 0 in your script): `intros x e h0 h1.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: x is already used.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              (none — failure occurred on the first tactic)
+
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 128], 'name': None}, hyps=[GoalHyp(names=['x', 'e'], ty='C', def_=None), GoalHyp(names=['h0'], ty='x + e = 7', def_=None), GoalHyp(names=['h1'], ty='2 * x + e = 3', def_=None)], ty='e = 11 /\\ x = -4', pp='x, e  : C\nh0  : x + e = 7\nh1  : 2 * x + e = 3\n|-e = 11 /\\ x = -4')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              split.
+              - assert (x = -4) by lca.
+                lca.
+              - lca.
+              ```
+        - role: user
+          content: |-
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 1 in your script): `- assert (x = -4) by lca.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: The reference lca was not found in the current environment.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `split.`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 130], 'name': None}, hyps=[GoalHyp(names=['x', 'e'], ty='C', def_=None), GoalHyp(names=['h0'], ty='x + e = 7', def_=None), GoalHyp(names=['h1'], ty='2 * x + e = 3', def_=None)], ty='e = 11', pp='x, e  : C\nh0  : x + e = 7\nh1  : 2 * x + e = 3\n|-e = 11')
+              ```
+              ```
+              Goal(info={'evar': ['Ser_Evar', 131], 'name': None}, hyps=[GoalHyp(names=['x', 'e'], ty='C', def_=None), GoalHyp(names=['h0'], ty='x + e = 7', def_=None), GoalHyp(names=['h1'], ty='2 * x + e = 3', def_=None)], ty='x = -4', pp='x, e  : C\nh0  : x + e = 7\nh1  : 2 * x + e = 3\n|-x = -4')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              assert (hx : x = -4).
+              { apply (f_equal (fun z => z - (x + e))) in h1.
+                rewrite h0 in h1.
+                ring_simplify in h1.
+                exact h1.
+              }
+              split.
+              - rewrite <- h0.
+                rewrite hx.
+                ring.
+              - exact hx.
+              ```
+        - role: user
+          content: |-
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 4 in your script): `exact h1.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: In environment\nx, e : C\nh0 : x + e = 7\nh1 : 2 * x + e - 7 = -4\nThe term "h1" has type "2 * x + e - 7 = -4" while it is expected to have type\n "x = -4".')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `assert (hx : x = -4).`  2. `{ apply (f_equal (fun z => z - (x + e))) in h1.`  3. `rewrite h0 in h1.`  4. `ring_simplify in h1.`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 202], 'name': None}, hyps=[GoalHyp(names=['x', 'e'], ty='C', def_=None), GoalHyp(names=['h0'], ty='x + e = 7', def_=None), GoalHyp(names=['h1'], ty='2 * x + e - 7 = -4', def_=None)], ty='x = -4', pp='x, e  : C\nh0  : x + e = 7\nh1  : 2 * x + e - 7 = -4\n|-x = -4')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          assert (hx : x = -4).
+          {
+            apply (f_equal (fun z => z - (x + e))) in h1.
+            rewrite h0 in h1.
+            ring_simplify in h1.
+            ring_simplify.
+            exact h1.
+          }
+          split.
+          - rewrite <- h0.
+            rewrite hx.
+            ring.
+          - exact hx.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 2506
+        output_tokens: 86
+        cached_input_tokens: 1920
+        price: 0.0018325
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 86
+      prompt_tokens: 2506
+      total_tokens: 2592
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 1920
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                assert (hx : x = -4).
+                {
+                  apply (f_equal (fun z => z - (x + e))) in h1.
+                  rewrite h0 in h1.
+                  ring_simplify in h1.
+                  ring_simplify.
+                  exact h1.
+                }
+                split.
+                - rewrite <- h0.
+                  rewrite hx.
+                  ring.
+                - exact hx.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - 'assert (hx : x = -4).'
+          - apply (f_equal (fun z => z - (x + e))) in h1.
+          - rewrite h0 in h1.
+          - ring_simplify in h1.
+          - ring_simplify.
+          - exact h1.
+          - split.
+          - '- rewrite <- h0.'
+          - rewrite hx.
+          - ring.
+          - '- exact hx.'
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/algebra/algebra_2varlineareq_xpeeq7_2xpeeq3_eeq11_xeqn4.v
+              theorem_name: algebra_2varlineareq_xpeeq7_2xpeeq3_eeq11_xeqn4
+              tactics:
+                - 'assert (hx : x = -4).'
+                - apply (f_equal (fun z => z - (x + e))) in h1.
+                - rewrite h0 in h1.
+                - ring_simplify in h1.
+                - ring_simplify.
+                - exact h1.
+                - split.
+                - '- rewrite <- h0.'
+                - rewrite hx.
+                - ring.
+                - '- exact hx.'
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 5
+          failing_tactic: exact h1.
+          error_message: '(-32003, ''Coq: In environment\nx, e : C\nh0 : x + e = 7\nh1 : 2 * x + e - 7 = -4\nThe
+            term "h1" has type "2 * x + e - 7 = -4" while it is expected to have type\n "x = -4".'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 254], ''name'': None}, hyps=[GoalHyp(names=[''x'', ''e''], ty=''C'',
+              def_=None), GoalHyp(names=[''h0''], ty=''x + e = 7'', def_=None), GoalHyp(names=[''h1''], ty=''2 *
+              x + e - 7 = -4'', def_=None)], ty=''x = -4'', pp=''x, e  : C\nh0  : x + e = 7\nh1  : 2 * x + e - 7
+              = -4\n|-x = -4'')'
+            - 'Goal(info={''evar'': [''Ser_Evar'', 131], ''name'': None}, hyps=[GoalHyp(names=[''x'', ''e''], ty=''C'',
+              def_=None), GoalHyp(names=[''h0''], ty=''x + e = 7'', def_=None), GoalHyp(names=[''h1''], ty=''2 *
+              x + e = 3'', def_=None), GoalHyp(names=[''hx''], ty=''x = -4'', def_=None)], ty=''e = 11 /\\ x = -4'',
+              pp=''x, e  : C\nh0  : x + e = 7\nh1  : 2 * x + e = 3\nhx  : x = -4\n|-e = 11 /\\ x = -4'')'
+          proof_so_far:
+            - 'assert (hx : x = -4).'
+            - apply (f_equal (fun z => z - (x + e))) in h1.
+            - rewrite h0 in h1.
+            - ring_simplify in h1.
+            - ring_simplify.
+          finished: false

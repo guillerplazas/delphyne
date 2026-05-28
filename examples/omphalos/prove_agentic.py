@@ -3,15 +3,20 @@ Agentic baseline for Rocq theorem proving in miniF2F.
 
 Same outer loop as `prove_standard.py` (an LLM proposes a proof script,
 pytanque verifies it, the verifier's feedback is fed back for revision),
-but the LLM now has a second action: it can call the `ReadSkill` tool
-to load a curated Rocq skill markdown file from `rocq_skills_data/`.
-Each tool call appends the skill content to the conversation history
-before the LLM's next move.
+but the LLM has *exploration* actions available alongside proposing:
 
-This is the difference that earns the "agentic" label: the LLM chooses
-between two actions (propose a proof / lookup a skill) and allocates its
-request budget across them at its own discretion. Skill content is
-loaded on demand instead of baked into the system prompt.
+  - `ReadSkill(skill_name=...)` loads a curated Rocq skill markdown
+    file from `rocq_skills_data/` into the chat history.
+  - `SearchRocq(command=...)` runs a Rocq introspection command
+    (`Search ...`, `Check ...`, `Print ...`, `About ...`,
+    `SearchPattern ...`) against the problem's initial proof state via
+    pytanque, and returns the formatted feedback.
+
+The LLM allocates its request budget across these actions and proof
+proposals at its own discretion. `ReadSkill` is for textbook-level
+reference content; `SearchRocq` is for problem-specific lemma /
+definition discovery (i.e. answers "does the lemma I want to cite
+actually exist under this name?" before the agent commits to a tactic).
 
 Reuses `ProofScript` and `check_proof` verbatim from `prove_standard`.
 """
@@ -48,6 +53,30 @@ class ReadSkill(dp.AbstractTool[str]):
     skill_name: str
 
 
+@dataclass
+class SearchRocq(dp.AbstractTool[str]):
+    """
+    Query Rocq's interactive REPL for introspection information about
+    the current problem's context. Use this BEFORE proposing a proof,
+    or AFTER a failed attempt where a lemma name was wrong, to discover
+    real lemma names / types / definitions instead of guessing.
+
+    Pass `command` as a full Rocq command terminated with a period.
+    Examples:
+      command="Search (_ + _ <= _ + _)."   # find lemmas matching a shape
+      command="SearchPattern (_ * _)."     # narrower structural search
+      command="Check Rabs_pos."            # show a lemma's statement
+      command="Print Rsqr."                # show a definition's body
+      command="About lia."                 # short summary of a tactic
+
+    The output is whatever Rocq prints to its feedback channel. Long
+    outputs are truncated; refine your query if you hit the truncation
+    marker. Syntax errors come back as an error message that you can
+    correct on your next turn.
+    """
+    command: str
+
+
 #####
 ##### Strategy
 #####
@@ -57,6 +86,15 @@ class ReadSkill(dp.AbstractTool[str]):
 def _read_skill_handler(name: str) -> Strategy[Compute, object, str]:
     """Trivial @strategy wrapper so the tool handler returns a StrategyInstance."""
     text = yield from dp.compute(sk.read_skill)(name)
+    return text
+
+
+@strategy
+def _search_rocq_handler(
+    problem_file: str, theorem_name: str, command: str,
+) -> Strategy[Compute, object, str]:
+    """Wraps pt.query so the SearchRocq handler returns a StrategyInstance."""
+    text = yield from dp.compute(pt.query)(problem_file, theorem_name, command)
     return text
 
 
@@ -75,6 +113,9 @@ def prove_theorem_agentic(
         tools={
             ReadSkill: lambda call:
                 _read_skill_handler(call.skill_name).using(dp.just_compute),
+            SearchRocq: lambda call:
+                _search_rocq_handler(problem_file, theorem_name, call.command)
+                  .using(dp.just_compute),
         },
     )
     return script
@@ -82,7 +123,7 @@ def prove_theorem_agentic(
 
 @dataclass
 class ProposeProofScriptAgentic(
-    dp.Query[dp.Response[ProofScript, ReadSkill]]
+    dp.Query[dp.Response[ProofScript, ReadSkill | SearchRocq]]
 ):
     spec: pt.ProblemSpec
     available_skills: dict[str, str]

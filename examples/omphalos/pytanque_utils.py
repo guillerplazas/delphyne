@@ -29,6 +29,12 @@ DEFAULT_EXTRA_IMPORTS: tuple[str, ...] = (
 )
 
 
+# Soft cap on Rocq query output (Search/Print/Check/About). Search can
+# return many KB of lemmas for broad patterns; we truncate and let the
+# agent retry with a tighter query.
+DEFAULT_QUERY_OUTPUT_CHAR_CAP = 4000
+
+
 # Anchor for relative problem paths in `.exec.yaml` / experiment configs.
 # Using this module's own location means the strategy resolves paths
 # the same way regardless of cwd (CLI from anywhere, VSCode extension,
@@ -219,6 +225,83 @@ def check(
                 os.rmdir(Path(run_file).parent)
             except OSError:
                 pass
+
+
+def query(
+    file: str,
+    theorem_name: str,
+    command: str,
+    extra_imports: tuple[str, ...] = DEFAULT_EXTRA_IMPORTS,
+    char_cap: int = DEFAULT_QUERY_OUTPUT_CHAR_CAP,
+) -> str:
+    """
+    Run a Rocq introspection command (`Search ...`, `Check ...`,
+    `Print ...`, `About ...`, `SearchPattern ...`) against the initial
+    proof state of `theorem_name` in `file`, and return the formatted
+    feedback as a string.
+
+    Same session lifecycle as `check`: a fresh STDIO pytanque session
+    is opened per call and torn down on exit. The original .v file is
+    not modified — extra imports are prepended in a temp copy outside
+    the miniF2F tree so the agent's search sees lemmas from Lia / Lra
+    / Psatz / Field.
+
+    Pytanque errors (bad syntax, etc.) are caught and returned as the
+    feedback string, so the agent can self-correct on its next turn
+    instead of crashing the strategy.
+    """
+    file = _resolve(file)
+
+    if extra_imports:
+        run_file = _materialize_with_extra_imports(file, extra_imports)
+    else:
+        run_file = file
+
+    try:
+        return _query_against(run_file, theorem_name, command, char_cap)
+    finally:
+        if extra_imports:
+            try:
+                os.unlink(run_file)
+                os.rmdir(Path(run_file).parent)
+            except OSError:
+                pass
+
+
+def _query_against(
+    abs_file: str,
+    theorem_name: str,
+    command: str,
+    char_cap: int,
+) -> str:
+    with Pytanque(mode=PytanqueMode.STDIO) as client:
+        try:
+            state = client.start(abs_file, theorem_name)
+        except PetanqueError as e:
+            return f"Failed to open session: {e}"
+        try:
+            state = client.run(state, command)
+        except PetanqueError as e:
+            return f"Rocq rejected the command: {e}"
+        return _format_feedback(state, char_cap)
+
+
+def _format_feedback(state: object, char_cap: int) -> str:
+    fb = getattr(state, "feedback", None) or []
+    parts: list[str] = []
+    for entry in fb:
+        try:
+            _level, msg = entry
+        except (TypeError, ValueError):
+            msg = str(entry)
+        if msg:
+            parts.append(str(msg))
+    text = "\n".join(parts).strip()
+    if not text:
+        return "(Rocq returned no output for this command.)"
+    if len(text) > char_cap:
+        text = text[:char_cap].rstrip() + "\n[truncated; refine your query]"
+    return text
 
 
 def _check_against(

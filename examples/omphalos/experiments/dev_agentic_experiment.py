@@ -19,7 +19,7 @@ configs = [
         model_name="gpt-5.4-2026-03-05",
         temperature=None,
         max_feedback_cycles=6,
-        num_requests=12,
+        num_requests=16,
         loop=False,
         seed=0,
     )
@@ -32,6 +32,6 @@ if __name__ == "__main__":
         config_class=mf.AgenticConfig,
         context=dp.workspace_execution_context(__file__),
         configs=configs,
-        output_dir=f"experiments/output/{dp.path_stem(__file__)}_1",
+        output_dir="experiments/output/dev_agentic",
         config_naming=lambda cfg, _uid: f"{cfg.bench_name}__seed{cfg.seed}",
     ).run_cli()
