@@ -1,0 +1,1301 @@
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+
+            A **partial proof body is a legitimate move**: if every tactic you
+            submit applies cleanly but goals remain, the feedback reports your
+            verified prefix together with the exact remaining goals — and if the
+            script happens to close the goal, you win immediately. When you are
+            unsure how an opener (`induction ...`, `destruct ...`) reshapes the
+            goal, submitting just that prefix is the cheapest way to see the
+            resulting subgoals before drafting the rest.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Coq.Arith.Arith.
+            Require Import Coq.Arith.PeanoNat.
+            Require Import Coq.Init.Nat.
+            Require Import Coq.ZArith.BinInt.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem induction_ineq_nsqlefactn :
+              forall n : nat,
+              4 <= n ->
+              n^2 <= fact n.
+            ```
+
+            ## Informal statement
+
+            Show that for any integer $n \geq 4$, we have $n^2 \leq n!$.
+
+            ## Informal proof sketch
+
+            First, we observe that $n \leq (n-1)(n-2)$ as $n^2 - 4n + 2$ is positive for $n \geq
+               4$.
+               As a result, $(n-1)! \geq (n-1) (n-2) \geq n$. By multiplying by $n$ on each side, we
+               get $n! \geq n^2$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          ```rocq
+          intros n Hn.
+          destruct n as [|n]; [lia|].
+          destruct n as [|n]; [lia|].
+          destruct n as [|n]; [lia|].
+          destruct n as [|n].
+          - simpl. lia.
+          - replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.
+            apply Nat.mul_le_mono_l.
+            simpl.
+            nia.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 1420
+        output_tokens: 119
+        cached_input_tokens: 0
+        price: 0.0029649999999999998
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 119
+      prompt_tokens: 1420
+      total_tokens: 1539
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 0
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros n Hn.
+                destruct n as [|n]; [lia|].
+                destruct n as [|n]; [lia|].
+                destruct n as [|n]; [lia|].
+                destruct n as [|n].
+                - simpl. lia.
+                - replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.
+                  apply Nat.mul_le_mono_l.
+                  simpl.
+                  nia.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros n Hn.
+          - destruct n as [|n]; [lia|].
+          - destruct n as [|n]; [lia|].
+          - destruct n as [|n]; [lia|].
+          - destruct n as [|n].
+          - '- simpl. lia.'
+          - '- replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.'
+          - apply Nat.mul_le_mono_l.
+          - simpl.
+          - nia.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/induction/induction_ineq_nsqlefactn.v
+              theorem_name: induction_ineq_nsqlefactn
+              tactics:
+                - intros n Hn.
+                - destruct n as [|n]; [lia|].
+                - destruct n as [|n]; [lia|].
+                - destruct n as [|n]; [lia|].
+                - destruct n as [|n].
+                - '- simpl. lia.'
+                - '- replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.'
+                - apply Nat.mul_le_mono_l.
+                - simpl.
+                - nia.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 9
+          failing_tactic: nia.
+          error_message: '(-32003, ''Coq: Tactic failure:  Cannot find witness.'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 119], ''name'': None}, hyps=[GoalHyp(names=[''n''], ty=''nat'',
+              def_=None), GoalHyp(names=[''Hn''], ty=''4 <= S (S (S (S n)))'', def_=None)], ty=''S (S (S (S (n *
+              1)))) <=\nfact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n(fact n + n *
+              fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n (fact n + n * fact n + (fact n + n
+              * fact n + n * (fact n + n * fact n)) +\n  n *\n  (fact n + n * fact n + (fact n + n * fact n + n
+              * (fact n + n * fact n)))))'', pp=''n  : nat\nHn  : 4 <= S (S (S (S n)))\n|-S (S (S (S (n * 1))))
+              <=\nfact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n(fact n + n * fact
+              n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n (fact n + n * fact n + (fact n + n * fact
+              n + n * (fact n + n * fact n)) +\n  n *\n  (fact n + n * fact n + (fact n + n * fact n + n * (fact
+              n + n * fact n)))))'')'
+          proof_so_far:
+            - intros n Hn.
+            - destruct n as [|n]; [lia|].
+            - destruct n as [|n]; [lia|].
+            - destruct n as [|n]; [lia|].
+            - destruct n as [|n].
+            - '- simpl. lia.'
+            - '- replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.'
+            - apply Nat.mul_le_mono_l.
+            - simpl.
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+
+            A **partial proof body is a legitimate move**: if every tactic you
+            submit applies cleanly but goals remain, the feedback reports your
+            verified prefix together with the exact remaining goals — and if the
+            script happens to close the goal, you win immediately. When you are
+            unsure how an opener (`induction ...`, `destruct ...`) reshapes the
+            goal, submitting just that prefix is the cheapest way to see the
+            resulting subgoals before drafting the rest.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Coq.Arith.Arith.
+            Require Import Coq.Arith.PeanoNat.
+            Require Import Coq.Init.Nat.
+            Require Import Coq.ZArith.BinInt.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem induction_ineq_nsqlefactn :
+              forall n : nat,
+              4 <= n ->
+              n^2 <= fact n.
+            ```
+
+            ## Informal statement
+
+            Show that for any integer $n \geq 4$, we have $n^2 \leq n!$.
+
+            ## Informal proof sketch
+
+            First, we observe that $n \leq (n-1)(n-2)$ as $n^2 - 4n + 2$ is positive for $n \geq
+               4$.
+               As a result, $(n-1)! \geq (n-1) (n-2) \geq n$. By multiplying by $n$ on each side, we
+               get $n! \geq n^2$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```rocq
+              intros n Hn.
+              destruct n as [|n]; [lia|].
+              destruct n as [|n]; [lia|].
+              destruct n as [|n]; [lia|].
+              destruct n as [|n].
+              - simpl. lia.
+              - replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.
+                apply Nat.mul_le_mono_l.
+                simpl.
+                nia.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 9 in your script): `nia.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: Tactic failure:  Cannot find witness.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros n Hn.`  2. `destruct n as [|n]; [lia|].`  3. `destruct n as [|n]; [lia|].`  4. `destruct n as [|n]; [lia|].`  5. `destruct n as [|n].`  6. `- simpl. lia.`  7. `- replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.`  8. `apply Nat.mul_le_mono_l.`  9. `simpl.`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 119], 'name': None}, hyps=[GoalHyp(names=['n'], ty='nat', def_=None), GoalHyp(names=['Hn'], ty='4 <= S (S (S (S n)))', def_=None)], ty='S (S (S (S (n * 1)))) <=\nfact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n(fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n  n *\n  (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)))))', pp='n  : nat\nHn  : 4 <= S (S (S (S n)))\n|-S (S (S (S (n * 1)))) <=\nfact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n(fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n  n *\n  (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)))))')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          intros n Hn.
+          destruct n as [|n]; [lia|].
+          destruct n as [|n]; [lia|].
+          destruct n as [|n]; [lia|].
+          destruct n as [|n].
+          - simpl. lia.
+          - replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.
+            apply Nat.mul_le_mono_l.
+            replace ((S (S (S (S n)))) * (S (S (S (S n))))) with ((S (S (S (S n)))) * (n + 4)) by lia.
+            apply Nat.mul_le_mono_l.
+            simpl.
+            lia.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 2192
+        output_tokens: 172
+        cached_input_tokens: 1408
+        price: 0.0028759999999999997
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 172
+      prompt_tokens: 2192
+      total_tokens: 2364
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 1408
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros n Hn.
+                destruct n as [|n]; [lia|].
+                destruct n as [|n]; [lia|].
+                destruct n as [|n]; [lia|].
+                destruct n as [|n].
+                - simpl. lia.
+                - replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.
+                  apply Nat.mul_le_mono_l.
+                  replace ((S (S (S (S n)))) * (S (S (S (S n))))) with ((S (S (S (S n)))) * (n + 4)) by lia.
+                  apply Nat.mul_le_mono_l.
+                  simpl.
+                  lia.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros n Hn.
+          - destruct n as [|n]; [lia|].
+          - destruct n as [|n]; [lia|].
+          - destruct n as [|n]; [lia|].
+          - destruct n as [|n].
+          - '- simpl. lia.'
+          - '- replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.'
+          - apply Nat.mul_le_mono_l.
+          - replace ((S (S (S (S n)))) * (S (S (S (S n))))) with ((S (S (S (S n)))) * (n + 4)) by lia.
+          - apply Nat.mul_le_mono_l.
+          - simpl.
+          - lia.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/induction/induction_ineq_nsqlefactn.v
+              theorem_name: induction_ineq_nsqlefactn
+              tactics:
+                - intros n Hn.
+                - destruct n as [|n]; [lia|].
+                - destruct n as [|n]; [lia|].
+                - destruct n as [|n]; [lia|].
+                - destruct n as [|n].
+                - '- simpl. lia.'
+                - '- replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.'
+                - apply Nat.mul_le_mono_l.
+                - replace ((S (S (S (S n)))) * (S (S (S (S n))))) with ((S (S (S (S n)))) * (n + 4)) by lia.
+                - apply Nat.mul_le_mono_l.
+                - simpl.
+                - lia.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 9
+          failing_tactic: apply Nat.mul_le_mono_l.
+          error_message: '(-32003, ''Coq: In environment\nn : nat\nHn : 4 <= S (S (S (S n)))\nUnable to unify "S
+            (S (S n))" with "S (S (S (S n)))".'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 121], ''name'': None}, hyps=[GoalHyp(names=[''n''], ty=''nat'',
+              def_=None), GoalHyp(names=[''Hn''], ty=''4 <= S (S (S (S n)))'', def_=None)], ty=''S (S (S (S n)))
+              * 1 <= fact (S (S (S n)))'', pp=''n  : nat\nHn  : 4 <= S (S (S (S n)))\n|-S (S (S (S n))) * 1 <= fact
+              (S (S (S n)))'')'
+          proof_so_far:
+            - intros n Hn.
+            - destruct n as [|n]; [lia|].
+            - destruct n as [|n]; [lia|].
+            - destruct n as [|n]; [lia|].
+            - destruct n as [|n].
+            - '- simpl. lia.'
+            - '- replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.'
+            - apply Nat.mul_le_mono_l.
+            - replace ((S (S (S (S n)))) * (S (S (S (S n))))) with ((S (S (S (S n)))) * (n + 4)) by lia.
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+
+            A **partial proof body is a legitimate move**: if every tactic you
+            submit applies cleanly but goals remain, the feedback reports your
+            verified prefix together with the exact remaining goals — and if the
+            script happens to close the goal, you win immediately. When you are
+            unsure how an opener (`induction ...`, `destruct ...`) reshapes the
+            goal, submitting just that prefix is the cheapest way to see the
+            resulting subgoals before drafting the rest.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Coq.Arith.Arith.
+            Require Import Coq.Arith.PeanoNat.
+            Require Import Coq.Init.Nat.
+            Require Import Coq.ZArith.BinInt.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem induction_ineq_nsqlefactn :
+              forall n : nat,
+              4 <= n ->
+              n^2 <= fact n.
+            ```
+
+            ## Informal statement
+
+            Show that for any integer $n \geq 4$, we have $n^2 \leq n!$.
+
+            ## Informal proof sketch
+
+            First, we observe that $n \leq (n-1)(n-2)$ as $n^2 - 4n + 2$ is positive for $n \geq
+               4$.
+               As a result, $(n-1)! \geq (n-1) (n-2) \geq n$. By multiplying by $n$ on each side, we
+               get $n! \geq n^2$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```rocq
+              intros n Hn.
+              destruct n as [|n]; [lia|].
+              destruct n as [|n]; [lia|].
+              destruct n as [|n]; [lia|].
+              destruct n as [|n].
+              - simpl. lia.
+              - replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.
+                apply Nat.mul_le_mono_l.
+                simpl.
+                nia.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 9 in your script): `nia.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: Tactic failure:  Cannot find witness.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros n Hn.`  2. `destruct n as [|n]; [lia|].`  3. `destruct n as [|n]; [lia|].`  4. `destruct n as [|n]; [lia|].`  5. `destruct n as [|n].`  6. `- simpl. lia.`  7. `- replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.`  8. `apply Nat.mul_le_mono_l.`  9. `simpl.`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 119], 'name': None}, hyps=[GoalHyp(names=['n'], ty='nat', def_=None), GoalHyp(names=['Hn'], ty='4 <= S (S (S (S n)))', def_=None)], ty='S (S (S (S (n * 1)))) <=\nfact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n(fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n  n *\n  (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)))))', pp='n  : nat\nHn  : 4 <= S (S (S (S n)))\n|-S (S (S (S (n * 1)))) <=\nfact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n(fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n  n *\n  (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)))))')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros n Hn.
+              destruct n as [|n]; [lia|].
+              destruct n as [|n]; [lia|].
+              destruct n as [|n]; [lia|].
+              destruct n as [|n].
+              - simpl. lia.
+              - replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.
+                apply Nat.mul_le_mono_l.
+                replace ((S (S (S (S n)))) * (S (S (S (S n))))) with ((S (S (S (S n)))) * (n + 4)) by lia.
+                apply Nat.mul_le_mono_l.
+                simpl.
+                lia.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 9 in your script): `apply Nat.mul_le_mono_l.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: In environment\nn : nat\nHn : 4 <= S (S (S (S n)))\nUnable to unify "S (S (S n))" with "S (S (S (S n)))".')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros n Hn.`  2. `destruct n as [|n]; [lia|].`  3. `destruct n as [|n]; [lia|].`  4. `destruct n as [|n]; [lia|].`  5. `destruct n as [|n].`  6. `- simpl. lia.`  7. `- replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.`  8. `apply Nat.mul_le_mono_l.`  9. `replace ((S (S (S (S n)))) * (S (S (S (S n))))) with ((S (S (S (S n)))) * (n + 4)) by lia.`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 121], 'name': None}, hyps=[GoalHyp(names=['n'], ty='nat', def_=None), GoalHyp(names=['Hn'], ty='4 <= S (S (S (S n)))', def_=None)], ty='S (S (S (S n))) * 1 <= fact (S (S (S n)))', pp='n  : nat\nHn  : 4 <= S (S (S (S n)))\n|-S (S (S (S n))) * 1 <= fact (S (S (S n)))')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          intros n Hn.
+          destruct n as [|n]; [lia|].
+          destruct n as [|n]; [lia|].
+          destruct n as [|n]; [lia|].
+          destruct n as [|n].
+          - simpl. lia.
+          - replace (fact (S (S (S (S n))))) with (S (S (S (S n))) * fact (S (S (S n)))) by reflexivity.
+            apply Nat.mul_le_mono_l.
+            simpl.
+            lia.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 2855
+        output_tokens: 118
+        cached_input_tokens: 2176
+        price: 0.00230075
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 118
+      prompt_tokens: 2855
+      total_tokens: 2973
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 2176
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros n Hn.
+                destruct n as [|n]; [lia|].
+                destruct n as [|n]; [lia|].
+                destruct n as [|n]; [lia|].
+                destruct n as [|n].
+                - simpl. lia.
+                - replace (fact (S (S (S (S n))))) with (S (S (S (S n))) * fact (S (S (S n)))) by reflexivity.
+                  apply Nat.mul_le_mono_l.
+                  simpl.
+                  lia.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros n Hn.
+          - destruct n as [|n]; [lia|].
+          - destruct n as [|n]; [lia|].
+          - destruct n as [|n]; [lia|].
+          - destruct n as [|n].
+          - '- simpl. lia.'
+          - '- replace (fact (S (S (S (S n))))) with (S (S (S (S n))) * fact (S (S (S n)))) by reflexivity.'
+          - apply Nat.mul_le_mono_l.
+          - simpl.
+          - lia.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/induction/induction_ineq_nsqlefactn.v
+              theorem_name: induction_ineq_nsqlefactn
+              tactics:
+                - intros n Hn.
+                - destruct n as [|n]; [lia|].
+                - destruct n as [|n]; [lia|].
+                - destruct n as [|n]; [lia|].
+                - destruct n as [|n].
+                - '- simpl. lia.'
+                - '- replace (fact (S (S (S (S n))))) with (S (S (S (S n))) * fact (S (S (S n)))) by reflexivity.'
+                - apply Nat.mul_le_mono_l.
+                - simpl.
+                - lia.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 9
+          failing_tactic: lia.
+          error_message: '(-32003, ''Coq: Tactic failure:  Cannot find witness.'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 119], ''name'': None}, hyps=[GoalHyp(names=[''n''], ty=''nat'',
+              def_=None), GoalHyp(names=[''Hn''], ty=''4 <= S (S (S (S n)))'', def_=None)], ty=''S (S (S (S (n *
+              1)))) <=\nfact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n(fact n + n *
+              fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n (fact n + n * fact n + (fact n + n
+              * fact n + n * (fact n + n * fact n)) +\n  n *\n  (fact n + n * fact n + (fact n + n * fact n + n
+              * (fact n + n * fact n)))))'', pp=''n  : nat\nHn  : 4 <= S (S (S (S n)))\n|-S (S (S (S (n * 1))))
+              <=\nfact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n(fact n + n * fact
+              n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n (fact n + n * fact n + (fact n + n * fact
+              n + n * (fact n + n * fact n)) +\n  n *\n  (fact n + n * fact n + (fact n + n * fact n + n * (fact
+              n + n * fact n)))))'')'
+          proof_so_far:
+            - intros n Hn.
+            - destruct n as [|n]; [lia|].
+            - destruct n as [|n]; [lia|].
+            - destruct n as [|n]; [lia|].
+            - destruct n as [|n].
+            - '- simpl. lia.'
+            - '- replace (fact (S (S (S (S n))))) with (S (S (S (S n))) * fact (S (S (S n)))) by reflexivity.'
+            - apply Nat.mul_le_mono_l.
+            - simpl.
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+
+            A **partial proof body is a legitimate move**: if every tactic you
+            submit applies cleanly but goals remain, the feedback reports your
+            verified prefix together with the exact remaining goals — and if the
+            script happens to close the goal, you win immediately. When you are
+            unsure how an opener (`induction ...`, `destruct ...`) reshapes the
+            goal, submitting just that prefix is the cheapest way to see the
+            resulting subgoals before drafting the rest.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Coq.Arith.Arith.
+            Require Import Coq.Arith.PeanoNat.
+            Require Import Coq.Init.Nat.
+            Require Import Coq.ZArith.BinInt.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem induction_ineq_nsqlefactn :
+              forall n : nat,
+              4 <= n ->
+              n^2 <= fact n.
+            ```
+
+            ## Informal statement
+
+            Show that for any integer $n \geq 4$, we have $n^2 \leq n!$.
+
+            ## Informal proof sketch
+
+            First, we observe that $n \leq (n-1)(n-2)$ as $n^2 - 4n + 2$ is positive for $n \geq
+               4$.
+               As a result, $(n-1)! \geq (n-1) (n-2) \geq n$. By multiplying by $n$ on each side, we
+               get $n! \geq n^2$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```rocq
+              intros n Hn.
+              destruct n as [|n]; [lia|].
+              destruct n as [|n]; [lia|].
+              destruct n as [|n]; [lia|].
+              destruct n as [|n].
+              - simpl. lia.
+              - replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.
+                apply Nat.mul_le_mono_l.
+                simpl.
+                nia.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 9 in your script): `nia.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: Tactic failure:  Cannot find witness.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros n Hn.`  2. `destruct n as [|n]; [lia|].`  3. `destruct n as [|n]; [lia|].`  4. `destruct n as [|n]; [lia|].`  5. `destruct n as [|n].`  6. `- simpl. lia.`  7. `- replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.`  8. `apply Nat.mul_le_mono_l.`  9. `simpl.`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 119], 'name': None}, hyps=[GoalHyp(names=['n'], ty='nat', def_=None), GoalHyp(names=['Hn'], ty='4 <= S (S (S (S n)))', def_=None)], ty='S (S (S (S (n * 1)))) <=\nfact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n(fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n  n *\n  (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)))))', pp='n  : nat\nHn  : 4 <= S (S (S (S n)))\n|-S (S (S (S (n * 1)))) <=\nfact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n(fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n  n *\n  (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)))))')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros n Hn.
+              destruct n as [|n]; [lia|].
+              destruct n as [|n]; [lia|].
+              destruct n as [|n]; [lia|].
+              destruct n as [|n].
+              - simpl. lia.
+              - replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.
+                apply Nat.mul_le_mono_l.
+                replace ((S (S (S (S n)))) * (S (S (S (S n))))) with ((S (S (S (S n)))) * (n + 4)) by lia.
+                apply Nat.mul_le_mono_l.
+                simpl.
+                lia.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 9 in your script): `apply Nat.mul_le_mono_l.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: In environment\nn : nat\nHn : 4 <= S (S (S (S n)))\nUnable to unify "S (S (S n))" with "S (S (S (S n)))".')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros n Hn.`  2. `destruct n as [|n]; [lia|].`  3. `destruct n as [|n]; [lia|].`  4. `destruct n as [|n]; [lia|].`  5. `destruct n as [|n].`  6. `- simpl. lia.`  7. `- replace (fact (S (S (S (S n))))) with ((S (S (S (S n)))) * fact (S (S (S n)))) by reflexivity.`  8. `apply Nat.mul_le_mono_l.`  9. `replace ((S (S (S (S n)))) * (S (S (S (S n))))) with ((S (S (S (S n)))) * (n + 4)) by lia.`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 121], 'name': None}, hyps=[GoalHyp(names=['n'], ty='nat', def_=None), GoalHyp(names=['Hn'], ty='4 <= S (S (S (S n)))', def_=None)], ty='S (S (S (S n))) * 1 <= fact (S (S (S n)))', pp='n  : nat\nHn  : 4 <= S (S (S (S n)))\n|-S (S (S (S n))) * 1 <= fact (S (S (S n)))')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros n Hn.
+              destruct n as [|n]; [lia|].
+              destruct n as [|n]; [lia|].
+              destruct n as [|n]; [lia|].
+              destruct n as [|n].
+              - simpl. lia.
+              - replace (fact (S (S (S (S n))))) with (S (S (S (S n))) * fact (S (S (S n)))) by reflexivity.
+                apply Nat.mul_le_mono_l.
+                simpl.
+                lia.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 9 in your script): `lia.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: Tactic failure:  Cannot find witness.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros n Hn.`  2. `destruct n as [|n]; [lia|].`  3. `destruct n as [|n]; [lia|].`  4. `destruct n as [|n]; [lia|].`  5. `destruct n as [|n].`  6. `- simpl. lia.`  7. `- replace (fact (S (S (S (S n))))) with (S (S (S (S n))) * fact (S (S (S n)))) by reflexivity.`  8. `apply Nat.mul_le_mono_l.`  9. `simpl.`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 119], 'name': None}, hyps=[GoalHyp(names=['n'], ty='nat', def_=None), GoalHyp(names=['Hn'], ty='4 <= S (S (S (S n)))', def_=None)], ty='S (S (S (S (n * 1)))) <=\nfact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n(fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n  n *\n  (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)))))', pp='n  : nat\nHn  : 4 <= S (S (S (S n)))\n|-S (S (S (S (n * 1)))) <=\nfact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n(fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)) +\n  n *\n  (fact n + n * fact n + (fact n + n * fact n + n * (fact n + n * fact n)))))')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          intros n Hn.
+          induction n as [|n IH].
+          - lia.
+          - destruct n as [|n].
+            + lia.
+            + destruct n as [|n].
+              * lia.
+              * destruct n as [|n].
+                { simpl. lia. }
+                { replace (fact (S (S (S (S (S n)))))) with (S (S (S (S (S n)))) * fact (S (S (S (S n))))) by reflexivity.
+                  assert (Hfact : S (S (S (S n))) <= fact (S (S (S n)))).
+                  { simpl. lia. }
+                  apply Nat.mul_le_mono_l.
+                  exact Hfact. }
+          Qed.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 3626
+        output_tokens: 165
+        cached_input_tokens: 2816
+        price: 0.0030145
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 165
+      prompt_tokens: 3626
+      total_tokens: 3791
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 2816
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros n Hn.
+                induction n as [|n IH].
+                - lia.
+                - destruct n as [|n].
+                  + lia.
+                  + destruct n as [|n].
+                    * lia.
+                    * destruct n as [|n].
+                      { simpl. lia. }
+                      { replace (fact (S (S (S (S (S n)))))) with (S (S (S (S (S n)))) * fact (S (S (S (S n))))) by reflexivity.
+                        assert (Hfact : S (S (S (S n))) <= fact (S (S (S n)))).
+                        { simpl. lia. }
+                        apply Nat.mul_le_mono_l.
+                        exact Hfact. }
+                Qed.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros n Hn.
+          - induction n as [|n IH].
+          - '- lia.'
+          - '- destruct n as [|n].'
+          - + lia.
+          - + destruct n as [|n].
+          - '* lia.'
+          - '* destruct n as [|n].'
+          - '{ replace (fact (S (S (S (S (S n)))))) with (S (S (S (S (S n)))) * fact (S (S (S (S n))))) by reflexivity.'
+          - 'assert (Hfact : S (S (S (S n))) <= fact (S (S (S n)))).'
+          - apply Nat.mul_le_mono_l.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/induction/induction_ineq_nsqlefactn.v
+              theorem_name: induction_ineq_nsqlefactn
+              tactics:
+                - intros n Hn.
+                - induction n as [|n IH].
+                - '- lia.'
+                - '- destruct n as [|n].'
+                - + lia.
+                - + destruct n as [|n].
+                - '* lia.'
+                - '* destruct n as [|n].'
+                - '{ replace (fact (S (S (S (S (S n)))))) with (S (S (S (S (S n)))) * fact (S (S (S (S n))))) by reflexivity.'
+                - 'assert (Hfact : S (S (S (S n))) <= fact (S (S (S n)))).'
+                - apply Nat.mul_le_mono_l.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 8
+          failing_tactic: '{ replace (fact (S (S (S (S (S n)))))) with (S (S (S (S (S n)))) * fact (S (S (S (S n)))))
+            by reflexivity.'
+          error_message: '(-32003, ''Coq: The variable n was not found in the current environment.'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 125], ''name'': None}, hyps=[GoalHyp(names=[''Hn''], ty=''4 <=
+              3'', def_=None), GoalHyp(names=[''IH''], ty=''4 <= 2 -> 2 ^ 2 <= fact 2'', def_=None)], ty=''3 ^ 2
+              <= fact 3'', pp=''Hn  : 4 <= 3\nIH  : 4 <= 2 -> 2 ^ 2 <= fact 2\n|-3 ^ 2 <= fact 3'')'
+            - 'Goal(info={''evar'': [''Ser_Evar'', 128], ''name'': None}, hyps=[GoalHyp(names=[''n''], ty=''nat'',
+              def_=None), GoalHyp(names=[''Hn''], ty=''4 <= S (S (S (S n)))'', def_=None), GoalHyp(names=[''IH''],
+              ty=''4 <= S (S (S n)) -> S (S (S n)) ^ 2 <= fact (S (S (S n)))'', def_=None)], ty=''S (S (S (S n)))
+              ^ 2 <= fact (S (S (S (S n))))'', pp=''n  : nat\nHn  : 4 <= S (S (S (S n)))\nIH  : 4 <= S (S (S n))
+              -> S (S (S n)) ^ 2 <= fact (S (S (S n)))\n|-S (S (S (S n))) ^ 2 <= fact (S (S (S (S n))))'')'
+          proof_so_far:
+            - intros n Hn.
+            - induction n as [|n IH].
+            - '- lia.'
+            - '- destruct n as [|n].'
+            - + lia.
+            - + destruct n as [|n].
+            - '* lia.'
+            - '* destruct n as [|n].'
+          finished: false

@@ -31,6 +31,8 @@ if __name__ == "__main__":
         config_class=mf.StandardConfig,
         context=dp.workspace_execution_context(__file__),
         configs=configs,
-        output_dir="experiments/output/dev_standard",
+        # `dev_standard` (pre partial-proposal feedback) is kept as an
+        # archive; v2 re-runs the same configs on the new `check_proof`.
+        output_dir="experiments/output/dev_standard_v2",
         config_naming=lambda cfg, _uid: f"{cfg.bench_name}__seed{cfg.seed}",
     ).run_cli()

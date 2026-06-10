@@ -12,7 +12,10 @@ exposes two pure-Python entry points used by `prove_agentic.py`:
 
 The MCP / cycle-engine / subagent-workflows references are *not*
 exposed: they describe a Claude-Code-plugin runtime that we are not
-using, and would only add noise to the agent's context.
+using, and would only add noise to the agent's context. The
+admitted-filling / proof-golfing-patterns / axiom-elimination
+references are excluded too: they are about transforming *existing*
+proofs, which never comes up when proving a miniF2F goal from scratch.
 
 Pure Python — no Delphyne imports — so callers can wrap these in
 `dp.compute(...)` cleanly.
@@ -42,9 +45,6 @@ SKILL_WHITELIST: tuple[str, ...] = (
     "compilation-errors",
     "compiler-guided-repair",
     "coq-stdlib-guide",
-    "admitted-filling",
-    "proof-golfing-patterns",
-    "axiom-elimination",
 )
 
 

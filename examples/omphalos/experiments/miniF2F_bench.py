@@ -92,18 +92,29 @@ class AgenticConfig:
     """
     Configuration for the agentic baseline.
 
-    Extra knob: `num_requests` is the *total* request budget — covers
-    both LLM proposal attempts and tool calls combined.
+    Extra knobs compared to `StandardConfig`:
+
+    - `toolset`: `"full"` (ReadSkill + SearchRocq + TryTactic) or
+      `"lean"` (no TryTactic; partial proposals cover structural
+      exploration).
+    - `num_requests`: the *total* request budget — LLM proposal
+      attempts and tool calls draw from this one pool. It is the
+      binding constraint and is also surfaced to the model as the
+      `turn_budget` of the proposal query.
+    - `max_turns`: optional dfs depth cap on assistant turns. `None`
+      (the default) leaves depth unbounded so only `num_requests` and
+      `max_dollar_budget` bind.
     """
 
     bench_name: str
     model_name: str
     temperature: float | None
-    max_feedback_cycles: int
+    toolset: str
     num_requests: int
     seed: int
+    max_turns: int | None = None
     loop: bool = False
-    max_dollar_budget: float | None = 0.4
+    max_dollar_budget: float | None = 0.5
 
     def instantiate(self, context: object) -> dp.RunStrategyArgs:
         problem_file, theorem_name = PROBLEMS[self.bench_name]
@@ -113,7 +124,7 @@ class AgenticConfig:
         policy_args: dict[str, Any] = {
             "model_name": self.model_name,
             "temperature": self.temperature,
-            "max_feedback_cycles": self.max_feedback_cycles,
+            "max_turns": self.max_turns,
             "loop": self.loop,
         }
         return dp.RunStrategyArgs(
@@ -121,6 +132,8 @@ class AgenticConfig:
             args={
                 "problem_file": problem_file,
                 "theorem_name": theorem_name,
+                "toolset": self.toolset,
+                "turn_budget": self.num_requests,
             },
             policy="prove_theorem_agentic_policy",
             policy_args=policy_args,

@@ -1,0 +1,396 @@
+# delphyne-command
+
+command: run_strategy
+args:
+  strategy: prove_theorem_agentic
+  args:
+    problem_file: miniF2F/valid/amc/amc12_2001_p2.v
+    theorem_name: amc12_2001_p2
+    toolset: lean
+    turn_budget: 16
+  policy: prove_theorem_agentic_policy
+  policy_args:
+    model_name: gpt-5.4-2026-03-05
+    temperature: null
+    max_turns: null
+    loop: false
+  budget:
+    num_requests: 16.0
+    price: 0.5
+  cache_file: configs/amc12_2001_p2__lean__seed0/cache.yaml
+  embeddings_cache_file: configs/amc12_2001_p2__lean__seed0/embeddings.cache.h5
+  cache_mode: create
+outcome:
+  diagnostics: []
+  result:
+    success: false
+    values: []
+    spent_budget:
+      num_requests: 1
+      num_completions: 1
+      input_tokens: 2002
+      output_tokens: 51
+      cached_input_tokens: 0
+      price: 0.0030125
+    success_nodes: []
+    raw_trace:
+      nodes:
+        1: nested($0)
+      spaces:
+        0: main
+        1: local(%1, cands)
+      answers:
+        1:
+          space: 1
+          answer:
+            mode: null
+            content: |-
+              intros Ha Hb Hn1 Hn2.
+              subst n.
+              assert (9 * a = a * b) by lia.
+              assert (a <> 0) by lia.
+              destruct a.
+              - contradiction.
+              - lia.
+              ```
+    log:
+      - message: llm_request
+        level: info
+        message_id: 0
+        time: 2026-06-10 16:48:24.481910
+        space: 1
+        metadata:
+          query: ProposeProofScriptAgentic
+          request:
+            chat:
+              - role: system
+                content: |-
+                  You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+                  in miniF2F problems formalized in Rocq.
+
+                  ## Your actions
+
+                  On each turn you either **propose a proof** or call a tool. Use your
+                  own judgment about which action moves you toward a verified proof
+                  fastest.
+
+                  1. **Propose a proof.** End your message with a single fenced code
+                     block containing only the body tactics of the proof. Each tactic
+                     must terminate with a `.`. No `Theorem ...`, no `Proof.`, no `Qed.`,
+                     no surrounding prose inside the fence. Example:
+
+                     ```rocq
+                     intros a b.
+                     nra.
+                     ```
+
+                     **Partial proposals are free previews.** If every tactic in your
+                     script applies cleanly but goals remain, the verifier reports your
+                     verified prefix together with the exact remaining goals — and if
+                     the script closes the goal, you win immediately. When you are
+                     unsure how an opener (`induction ...`, `destruct ...`) reshapes
+                     the goal, submitting just that prefix is often the cheapest way to
+                     see the resulting subgoals before drafting the rest. Most simple
+                     algebraic goals close with one automation tactic (`lia.`, `nra.`,
+                     `lra.`, `ring.`, `field.`); just propose those directly.
+
+                  2. **`ReadSkill(skill_name=...)`** loads a curated markdown reference
+                     into this conversation. It pays off when you want textbook-level
+                     guidance: tactic patterns for a problem family, proof templates
+                     for induction/case analysis, or repair recipes for a confusing
+                     error message. The system prompt only lists skill *names*; content
+                     arrives when you request it.
+
+                  3. **`SearchRocq(command=...)`** runs a Rocq introspection command
+                     against this problem's initial proof state and returns whatever
+                     Rocq prints. It pays off when lemma discovery is the bottleneck:
+                     the verifier said an identifier was not found, or you are about to
+                     cite a stdlib lemma name you are not sure exists. Examples:
+
+                     - `SearchRocq(command="Search (_ + _ <= _ + _).")` — find lemmas
+                       whose statement matches a shape.
+                     - `SearchRocq(command="Check Rabs_pos.")` — confirm a lemma exists
+                       and inspect its type before citing it.
+                     - `SearchRocq(command="Print Rsqr.")` — show a definition's body.
+
+                  ## Available skills
+
+                  You can call `ReadSkill(skill_name=...)` with any of:
+
+                  | name | description |
+                  |---|---|
+                  | `rocq-phrasebook` | Common math-to-Rocq translations. |
+                  | `proof-templates` | Structured proof skeletons for common patterns in Rocq. |
+                  | `tactics-reference` | Comprehensive tactics reference for Rocq theorem proving. |
+                  | `tactic-patterns` | Quick reference for choosing tactics based on goal structure. |
+                  | `compilation-errors` | Error-by-error guidance for Rocq compilation errors. Read this first for any build error. |
+                  | `compiler-guided-repair` | Quick reference for compiler-guided proof repair. Escalation-only — not first-pass. |
+                  | `coq-stdlib-guide` | Navigation guide for the Coq standard library and common packages. |
+
+                  Calling with any other name returns an error.
+
+                  ## Rocq introspection cheatsheet (for `SearchRocq`)
+
+                  Pass the full Rocq command (verb + argument + trailing period) as
+                  `command`. Useful verbs:
+
+                  | verb | what it shows |
+                  |---|---|
+                  | `Search` | every lemma whose statement matches a pattern |
+                  | `SearchPattern` | structural pattern match (narrower than `Search`) |
+                  | `Check` | the *type* of a term (lemma, definition, expression) |
+                  | `Print` | the *body* of a definition or proof |
+                  | `About` | short summary (type + which module it lives in) |
+
+                  Pattern syntax notes:
+
+                  - `_` is a wildcard. Parenthesize compound shapes:
+                    `Search (_ + _ <= _ * _).` is well-formed; without parentheses it
+                    is not.
+                  - For real numbers (`R`): stdlib statements write squares as `Rsqr x`
+                    (notation `x²`); `x ^ 2` is `pow x 2`, a *different* form. If you
+                    mean "the real square," search `(_²)`, not `(_ ^ 2)`.
+                  - Narrow patterns beat broad ones: prefer `Search (0 <= _²).` over
+                    `Search (0 <= _).`.
+                  - If a query returns nothing, the pattern likely doesn't match
+                    stdlib's phrasing — try a different shape, or `Check` a name you
+                    suspect exists.
+
+                  ## Budget
+
+                  You have roughly 16 assistant turns for this
+                  problem. Every message — tool call or proposal — costs one turn, and
+                  unused turns are worthless: only a proposal that passes the verifier's
+                  `Qed` check finishes the job. Spend your turns however you judge best,
+                  but if the same approach has failed twice, change something structural
+                  (a different tactic family, a skill you haven't read, a search for the
+                  right lemma) rather than re-submitting a near-duplicate.
+
+                  ## Output format
+
+                  Reason briefly before acting. A proof proposal must be the **last**
+                  thing in your message: one fenced code block, body tactics only, each
+                  terminated with a `.`.
+              - role: user
+                content: "Prove the following theorem in Rocq.\n\n## Imports already in scope\n\n```rocq\n\
+                  Require Import Coq.Arith.Arith.\n```\n\n## Theorem\n\n```rocq\nTheorem amc12_2001_p2\
+                  \ (a b n : nat) :\n  (1 <= a <= 9) -> (0 <= b <= 9) -> (n = 10 * a + b) -> (n = a *\
+                  \ b + a + b) -> \n  (b = 9).\n```\n\n## Informal statement\n\nLet $P(n)$ and $S(n)$\
+                  \ denote the product and the sum, respectively, of the digits\n   of the integer $n$.\
+                  \ For example, $P(23) = 6$ and $S(23) = 5$. Suppose $N$ is a\n   two-digit number such\
+                  \ that $N = P(N)+S(N)$. What is the units digit of $N$?\n\n   $\\text{(A)}\\ 2\\qquad\
+                  \ \\text{(B)}\\ 3\\qquad \\text{(C)}\\ 6\\qquad \\text{(D)}\\ 8\\qquad\n   \\text{(E)}\\\
+                  \ 9$ Show that it is (\\text{E})9.\n\n## Informal proof sketch\n\nDenote $a$ and $b$\
+                  \ as the tens and units digit of $N$, respectively. Then $N =\n   10a+b$. It follows\
+                  \ that $10a+b=ab+a+b$, which implies that $9a=ab$. Since $a\\neq0$,\n   $b=9$. So the\
+                  \ units digit of $N$ is $(\\text{E})9$.\n\nReply with a fenced code block containing\
+                  \ only the body of the proof\n(no `Proof.`, no `Qed.`)."
+            options: {}
+            tools:
+              - name: ReadSkill
+                description: |-
+                  Load a Rocq skill reference and append its full content to this
+                  conversation. Use this before (or between) proof attempts when you
+                  need detailed tactic guidance, stdlib lemma cheatsheets, error
+                  explanations, or proof templates.
+
+                  The set of legal `skill_name` values is shown to you as a table in
+                  the system prompt; calling with any other name returns an error
+                  message.
+                schema:
+                  properties:
+                    skill_name:
+                      title: Skill Name
+                      type: string
+                  required:
+                    - skill_name
+                  title: ReadSkill
+                  type: object
+              - name: SearchRocq
+                description: |-
+                  Query Rocq's interactive REPL for introspection information about
+                  the current problem's context. Use this BEFORE proposing a proof,
+                  or AFTER a failed attempt where a lemma name was wrong, to discover
+                  real lemma names / types / definitions instead of guessing.
+
+                  Pass `command` as a full Rocq command terminated with a period.
+                  Examples:
+                    command="Search (_ + _ <= _ + _)."   # find lemmas matching a shape
+                    command="SearchPattern (_ * _)."     # narrower structural search
+                    command="Check Rabs_pos."            # show a lemma's statement
+                    command="Print Rsqr."                # show a definition's body
+                    command="About lia."                 # short summary of a tactic
+
+                  The output is whatever Rocq prints to its feedback channel. Long
+                  outputs are truncated; refine your query if you hit the truncation
+                  marker. Syntax errors come back as an error message that you can
+                  correct on your next turn.
+                schema:
+                  properties:
+                    command:
+                      title: Command
+                      type: string
+                  required:
+                    - command
+                  title: SearchRocq
+                  type: object
+      - message: llm_response
+        level: info
+        message_id: 1
+        related:
+          - 0
+        time: 2026-06-10 16:48:33.772969
+        space: 1
+        metadata:
+          response:
+            outputs:
+              - content: |-
+                  intros Ha Hb Hn1 Hn2.
+                  subst n.
+                  assert (9 * a = a * b) by lia.
+                  assert (a <> 0) by lia.
+                  destruct a.
+                  - contradiction.
+                  - lia.
+                  ```
+                tool_calls: []
+            budget:
+              values:
+                num_requests: 1
+                num_completions: 1
+                input_tokens: 2002
+                output_tokens: 51
+                cached_input_tokens: 0
+                price: 0.0030125
+            log_items: []
+            model_name: gpt-5.4-2026-03-05
+            usage_info:
+              completion_tokens: 51
+              prompt_tokens: 2002
+              total_tokens: 2053
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 0
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 0
+          usage:
+            model: gpt-5.4-2026-03-05
+            usage:
+              completion_tokens: 51
+              prompt_tokens: 2002
+              total_tokens: 2053
+              completion_tokens_details:
+                accepted_prediction_tokens: 0
+                audio_tokens: 0
+                reasoning_tokens: 0
+                rejected_prediction_tokens: 0
+              prompt_tokens_details:
+                audio_tokens: 0
+                cached_tokens: 0
+      - message: parse_error
+        level: info
+        message_id: 2
+        time: 2026-06-10 16:48:33.773092
+        space: 1
+        metadata:
+          error:
+            label: parse_error
+            description: No code block found.
+            meta:
+              source: |-
+                intros Ha Hb Hn1 Hn2.
+                subst n.
+                assert (9 * a = a * b) by lia.
+                assert (a <> 0) by lia.
+                destruct a.
+                - contradiction.
+                - lia.
+                ```
+    browsable_trace:
+      nodes:
+        1:
+          kind: Branch
+          success_value: null
+          summary_message: null
+          leaf_node: false
+          label: ProposeProofScriptAgentic
+          tags:
+            - ProposeProofScriptAgentic
+          properties:
+            - - with_ids: cands
+                with_hints: null
+              - 1
+              - kind: query
+                name: ProposeProofScriptAgentic
+                args:
+                  spec:
+                    file: /home/guille/anaconda3/envs/guille/delphyne/examples/omphalos/miniF2F/valid/amc/amc12_2001_p2.v
+                    theorem_name: amc12_2001_p2
+                    theorem_statement: "(a b n : nat) :\n  (1 <= a <= 9) -> (0 <= b <= 9) -> (n = 10 *\
+                      \ a + b) -> (n = a * b + a + b) -> \n  (b = 9)"
+                    informal_statement: |-
+                      Let $P(n)$ and $S(n)$ denote the product and the sum, respectively, of the digits
+                         of the integer $n$. For example, $P(23) = 6$ and $S(23) = 5$. Suppose $N$ is a
+                         two-digit number such that $N = P(N)+S(N)$. What is the units digit of $N$?
+
+                         $\text{(A)}\ 2\qquad \text{(B)}\ 3\qquad \text{(C)}\ 6\qquad \text{(D)}\ 8\qquad
+                         \text{(E)}\ 9$ Show that it is (\text{E})9.
+                    informal_proof: |-
+                      Denote $a$ and $b$ as the tens and units digit of $N$, respectively. Then $N =
+                         10a+b$. It follows that $10a+b=ab+a+b$, which implies that $9a=ab$. Since $a\neq0$,
+                         $b=9$. So the units digit of $N$ is $(\text{E})9$.
+                    imports: Require Import Coq.Arith.Arith.
+                  available_skills:
+                    rocq-phrasebook: Common math-to-Rocq translations.
+                    proof-templates: Structured proof skeletons for common patterns in Rocq.
+                    tactics-reference: Comprehensive tactics reference for Rocq theorem proving.
+                    tactic-patterns: Quick reference for choosing tactics based on goal structure.
+                    compilation-errors: Error-by-error guidance for Rocq compilation errors. Read this
+                      first for any build error.
+                    compiler-guided-repair: Quick reference for compiler-guided proof repair. Escalation-only
+                      — not first-pass.
+                    coq-stdlib-guide: Navigation guide for the Coq standard library and common packages.
+                  toolset: lean
+                  turn_budget: 16
+                  prefix: []
+                tags:
+                  - ProposeProofScriptAgentic
+                answers:
+                  - id: 1
+                    hint: null
+                    value:
+                      short: |-
+                        parse_error
+
+                        No code block found.
+
+                        {'source': 'intros Ha Hb Hn1 Hn2.\n'
+                                   'subst n.\n'
+                                   'assert (9 * a = a * b) by lia.\n'
+                                   'assert (a <> 0) by lia.\n'
+                                   'destruct a.\n'
+                                   '- contradiction.\n'
+                                   '- lia.\n'
+                                   '```'}
+                      long: |-
+                        ParseError(label='parse_error',
+                                   description='No code block found.',
+                                   meta={'source': 'intros Ha Hb Hn1 Hn2.\n'
+                                                   'subst n.\n'
+                                                   'assert (9 * a = a * b) by lia.\n'
+                                                   'assert (a <> 0) by lia.\n'
+                                                   'destruct a.\n'
+                                                   '- contradiction.\n'
+                                                   '- lia.\n'
+                                                   '```'})
+                      json_provided: false
+                      json: null
+          actions: []
+          origin: root
+      spaces:
+        1:
+          - 1
+          - 0

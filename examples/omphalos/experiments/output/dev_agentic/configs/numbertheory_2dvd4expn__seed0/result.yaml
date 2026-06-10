@@ -25,18 +25,18 @@ outcome:
     values:
       - |
         intros n Hn.
-        destruct n as [|n].
+        destruct n as [|n'].
         - contradiction.
-        - exists (2 * 4 ^ n).
+        - exists (2 * 4 ^ n').
           simpl.
           lia.
     spent_budget:
       num_requests: 3
       num_completions: 3
-      input_tokens: 9081
-      output_tokens: 109
-      cached_input_tokens: 7040
-      price: 0.004521249999999999
+      input_tokens: 13694
+      output_tokens: 111
+      cached_input_tokens: 11136
+      price: 0.005699499999999999
     success_nodes:
       - 15
     raw_trace:
@@ -260,9 +260,9 @@ outcome:
             content: |-
               ```rocq
               intros n Hn.
-              destruct n as [|n].
+              destruct n as [|n'].
               - contradiction.
-              - exists (2 * 4 ^ n).
+              - exists (2 * 4 ^ n').
                 simpl.
                 rewrite Nat.mul_assoc.
                 reflexivity.
@@ -273,9 +273,9 @@ outcome:
             mode: null
             content: |
               - intros n Hn.
-              - destruct n as [|n].
+              - destruct n as [|n'].
               - '- contradiction.'
-              - '- exists (2 * 4 ^ n).'
+              - '- exists (2 * 4 ^ n'').'
               - simpl.
               - rewrite Nat.mul_assoc.
               - reflexivity.
@@ -290,15 +290,15 @@ outcome:
               error_message: '(-32003, ''Coq: Found no subterm matching "?M1830 * (?M1831 * ?M1832)" in the current
                 goal.'')'
               remaining_goals:
-                - 'Goal(info={''evar'': [''Ser_Evar'', 18], ''name'': None}, hyps=[GoalHyp(names=[''n''], ty=''nat'',
-                  def_=None), GoalHyp(names=[''Hn''], ty=''S n <> 0'', def_=None)], ty=''4 ^ n + (4 ^ n + (4 ^ n + (4
-                  ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2'', pp=''n  : nat\nHn  : S n <> 0\n|-4 ^ n + (4 ^ n + (4 ^ n
-                  + (4 ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2'')'
+                - 'Goal(info={''evar'': [''Ser_Evar'', 18], ''name'': None}, hyps=[GoalHyp(names=["n''"], ty=''nat'',
+                  def_=None), GoalHyp(names=[''Hn''], ty="S n'' <> 0", def_=None)], ty="4 ^ n'' + (4 ^ n'' + (4 ^ n''
+                  + (4 ^ n'' + 0))) = (4 ^ n'' + (4 ^ n'' + 0)) * 2", pp="n''  : nat\nHn  : S n'' <> 0\n|-4 ^ n'' +
+                  (4 ^ n'' + (4 ^ n'' + (4 ^ n'' + 0))) = (4 ^ n'' + (4 ^ n'' + 0)) * 2")'
               proof_so_far:
                 - intros n Hn.
-                - destruct n as [|n].
+                - destruct n as [|n'].
                 - '- contradiction.'
-                - '- exists (2 * 4 ^ n).'
+                - '- exists (2 * 4 ^ n'').'
                 - simpl.
               finished: false
         6:
@@ -308,9 +308,9 @@ outcome:
             content: |-
               ```rocq
               intros n Hn.
-              destruct n as [|n].
+              destruct n as [|n'].
               - contradiction.
-              - exists (2 * 4 ^ n).
+              - exists (2 * 4 ^ n').
                 simpl.
                 lia.
               ```
@@ -320,9 +320,9 @@ outcome:
             mode: null
             content: |
               - intros n Hn.
-              - destruct n as [|n].
+              - destruct n as [|n'].
               - '- contradiction.'
-              - '- exists (2 * 4 ^ n).'
+              - '- exists (2 * 4 ^ n'').'
               - simpl.
               - lia.
         8:
@@ -337,9 +337,9 @@ outcome:
               remaining_goals: []
               proof_so_far:
                 - intros n Hn.
-                - destruct n as [|n].
+                - destruct n as [|n'].
                 - '- contradiction.'
-                - '- exists (2 * 4 ^ n).'
+                - '- exists (2 * 4 ^ n'').'
                 - simpl.
                 - lia.
               finished: true
@@ -347,7 +347,7 @@ outcome:
       - message: llm_request
         level: info
         message_id: 0
-        time: 2026-05-28 14:16:32.449373
+        time: 2026-05-28 17:03:22.372005
         space: 1
         metadata:
           query: ProposeProofScriptAgentic
@@ -360,7 +360,7 @@ outcome:
 
                   ## How you can act
 
-                  You have three actions available, and you decide when to use each:
+                  You have four actions available, and you decide when to use each:
 
                   1. **Propose a proof.** End your message with a single fenced code
                      block containing only the body tactics of the proof. Each tactic
@@ -389,6 +389,34 @@ outcome:
                      - `SearchRocq(command="Check Rabs_pos.")` — confirm a lemma exists
                        and inspect its type before citing it in a tactic.
                      - `SearchRocq(command="Print Rsqr.")` — show a definition's body.
+
+                  4. **Call the `TryTactic` tool.** Previews the effect of a tactic
+                     prefix on the theorem's *initial* proof state, WITHOUT committing.
+                     Rocq proof state is functional, so this is a non-destructive look
+                     at what `induction n.` / `destruct b.` / `case_eq ...` would do
+                     before you draft a full script. The tool returns either the
+                     resulting goal(s), `PROOF FINISHED` if the prefix closes the goal
+                     (then emit those tactics verbatim as your final proof), or the
+                     failing tactic + Rocq error if a step fails. Each `TryTactic` call
+                     re-applies from scratch — there is no shared state between
+                     invocations, so include any prerequisite tactics (e.g.
+                     `intros n.`) in every preview. Examples:
+
+                     - `TryTactic(tactics="intros n.\ninduction n.")` — see what the
+                       base / step cases look like before drafting.
+                     - `TryTactic(tactics="intros b.\ndestruct b.")` — see whether the
+                       two cases simplify to something tractable.
+                     - `TryTactic(tactics="intros n u H0 Hrec.\ninduction n as [|n IH].")`
+                       — preview a structural opener with named hypotheses.
+
+                     `TryTactic` is for **structural exploration** only. It is **not**
+                     for pre-verifying single-tactic automation: do not preview
+                     `intros. lia.` / `intros. nra.` / `intros. lra.` /
+                     `intros. ring.` / `intros. auto.` / `intros. trivial.` and the
+                     like. Just *propose* those — a failed proposal returns the same
+                     error message as a failed preview, and a successful proposal
+                     closes the proof while a successful preview still costs you the
+                     request you need to commit it.
 
                   ## Available skills
 
@@ -427,10 +455,13 @@ outcome:
                   _.` is not. If you make a syntax mistake, you'll see Rocq's error in
                   the tool result and can correct it on your next turn.
 
-                  ## How to use your three actions effectively
+                  ## How to use your four actions effectively
 
                   The system prompt above does **not** contain skill content; it only
-                  lists names you can request. The default workflow is:
+                  lists names you can request. The default workflow has **proposing as
+                  the centre of gravity** — every exploration step needs a concrete
+                  trigger, and `TryTactic` in particular is held in reserve as an
+                  escalation, not a warm-up.
 
                   1. **Read one skill before your first proposal.** Pick the skill
                      whose description fits the problem best. Suggested first picks:
@@ -471,11 +502,49 @@ outcome:
                      wastes turns when the bottleneck is tactic structure.
 
                      On those structural failures (the anti-triggers above), the right
-                     escalation is to read `compiler-guided-repair` instead. Its
-                     error-type table maps each pattern to a concrete fix (`change A
-                     with B`, `unfold` / `simpl` before `rewrite`, adjust bullet
-                     structure, etc.) — it complements `SearchRocq`, which only
-                     addresses unknown-identifier failures.
+                     escalation is `TryTactic` (probe a different opener and see the
+                     actual goal state) or `compiler-guided-repair` (read the error-
+                     type table for a concrete fix recipe). They complement
+                     `SearchRocq`, which only addresses unknown-identifier failures.
+
+                  4. **`TryTactic` is available as an escalation, not a routine
+                     step.** Invoke it at most once per problem, and only in one of
+                     these specific situations:
+                     - You have already had two proposals fail at the *same* deep
+                       point (failing tactic index ≥ 2) and need to see the
+                       intermediate goal to localize the wrong step, or
+                     - You are about to commit to a non-obvious structural maneuver
+                       (an `induction` / `destruct` whose case shapes you cannot
+                       predict, or an algebraic restructure like
+                       `apply ... with ...; ring_simplify; replace ... by ring` whose
+                       intermediate goal you genuinely cannot foresee).
+
+                     Do **not** preview proposals you would otherwise just submit —
+                     most algebraic goals close in one tactic, and a failed proposal
+                     carries the same diagnostic as a failed preview while a
+                     successful proposal *closes* the goal. The default is to
+                     propose, not to preview.
+
+                  5. **Same-error escape hatch.** If two consecutive proposals fail
+                     with the same Rocq error class (e.g. both report
+                     `No applicable tactic`, both report `Cannot find witness`, both
+                     cite the same unknown identifier), the next action **must not**
+                     be a near-duplicate proposal. Pick exactly one of:
+                     - a `ReadSkill` you have not yet loaded (e.g.
+                       `compiler-guided-repair` for structural failures,
+                       `coq-stdlib-guide` for missing-lemma chains),
+                     - a `SearchRocq` for the unknown identifier or for a lemma in
+                       the family that's failing,
+                     - a `TryTactic` previewing a structurally *different* opener
+                       (different tactic family — switch from `nra`-style automation
+                       to `Rplus_le_reg_l` + restructure, or from blind `lia` to
+                       `destruct` over the discriminating variable), or
+                     - a proposal that swaps in a different tactic family
+                       (automation → restructure, restructure → induction, induction
+                       → case analysis), not a parameter tweak of the failing tactic.
+
+                     Re-emitting essentially the same proposal twice in a row burns
+                     the request budget without changing the verifier's diagnosis.
 
                   ## Syntax notes for `SearchRocq` patterns
 
@@ -491,12 +560,32 @@ outcome:
 
                   ## Budget discipline
 
-                  Every tool call costs one request. At most two exploration steps
-                  per problem total (across both tools), unless a verifier failure
-                  specifically warrants another `SearchRocq`. After three failed
-                  proposals on the same problem, prefer to refactor your proof
-                  structure (read `proof-templates`, change tactic family) rather
-                  than searching again.
+                  Every tool call costs one request. The headline rule: **the default
+                  action on every turn is to propose**, not to explore. Exploration
+                  calls are escalations, not warm-ups.
+
+                  Hard caps:
+
+                  - At most **one `ReadSkill`** before the first proposal (mandatory)
+                    and **one additional `ReadSkill`** across the rest of the run
+                    (only if a failure points at a skill you haven't read yet).
+                  - `SearchRocq` fires on demand, but only when the verifier says
+                    an identifier was not found. One call per unknown identifier.
+                  - `TryTactic` is the *most expensive* explorer per pass-rate
+                    return on this benchmark family: a routine TryTactic costs a
+                    request that would otherwise be a proposal, and a successful
+                    preview still needs a separate commit turn. Use it only under
+                    the action-4 escalation rules above. **At most one `TryTactic`
+                    per problem.**
+                  - Across the whole run, total exploration calls (every
+                    `ReadSkill` / `SearchRocq` / `TryTactic`) should sit at
+                    **1–2 for an easy problem** and **2–3 for a hard one**. Above
+                    that, you are exploring instead of proving.
+
+                  After three failed proposals on the same problem, refactor your
+                  proof structure (different tactic family, a `proof-templates`
+                  skill if not yet read) rather than continuing to chip at the
+                  current draft.
               - role: user
                 content: |-
                   Prove the following theorem in Rocq.
@@ -577,12 +666,52 @@ outcome:
                     - command
                   title: SearchRocq
                   type: object
+              - name: TryTactic
+                description: |-
+                  Preview the effect of applying a tactic (or short tactic prefix) to
+                  the theorem's *initial* proof state, WITHOUT committing. Use this
+                  when you're uncertain whether a structural choice (`induction n.`,
+                  `destruct b.`, `case_eq ...`) will produce tractable subgoals, or
+                  when a prior proposal died several tactics deep and you want to
+                  confirm which step actually went wrong before redrafting.
+
+                  Pass `tactics` as a Rocq proof body — one or more tactics, each
+                  terminated with `.`, optionally fenced or newline-separated. The
+                  tool replays them in order from the theorem's initial state and
+                  returns:
+
+                    - the resulting goal(s) if every tactic succeeded;
+                    - "PROOF FINISHED" plus the closing tactics if the prefix
+                      actually closes the goal (then emit them verbatim as your
+                      final proof);
+                    - the failing tactic + Rocq error if any step fails, along with
+                      the prefix that did succeed.
+
+                  The pytanque session is fresh per call, so there is NO shared
+                  state between TryTactic invocations: every preview re-applies from
+                  scratch. To preview after `intros a b.`, include `intros a b.` in
+                  your `tactics` argument. Each call costs one request; prefer a few
+                  informed previews over many speculative ones.
+
+                  Examples:
+                    tactics="intros a b.\ninduction a."
+                    tactics="intros n.\ndestruct n as [|n']."
+                    tactics="intros.\nlia."
+                schema:
+                  properties:
+                    tactics:
+                      title: Tactics
+                      type: string
+                  required:
+                    - tactics
+                  title: TryTactic
+                  type: object
       - message: llm_response
         level: info
         message_id: 1
         related:
           - 0
-        time: 2026-05-28 14:16:33.524834
+        time: 2026-05-28 17:03:23.332515
         space: 1
         metadata:
           response:
@@ -597,16 +726,16 @@ outcome:
               values:
                 num_requests: 1
                 num_completions: 1
-                input_tokens: 2253
+                input_tokens: 3785
                 output_tokens: 20
-                cached_input_tokens: 1664
-                price: 0.0011442499999999999
+                cached_input_tokens: 2688
+                price: 0.0019072499999999997
             log_items: []
             model_name: gpt-5.4-2026-03-05
             usage_info:
               completion_tokens: 20
-              prompt_tokens: 2253
-              total_tokens: 2273
+              prompt_tokens: 3785
+              total_tokens: 3805
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -614,13 +743,13 @@ outcome:
                 rejected_prediction_tokens: 0
               prompt_tokens_details:
                 audio_tokens: 0
-                cached_tokens: 1664
+                cached_tokens: 2688
           usage:
             model: gpt-5.4-2026-03-05
             usage:
               completion_tokens: 20
-              prompt_tokens: 2253
-              total_tokens: 2273
+              prompt_tokens: 3785
+              total_tokens: 3805
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -628,11 +757,11 @@ outcome:
                 rejected_prediction_tokens: 0
               prompt_tokens_details:
                 audio_tokens: 0
-                cached_tokens: 1664
+                cached_tokens: 2688
       - message: llm_request
         level: info
         message_id: 2
-        time: 2026-05-28 14:16:33.535636
+        time: 2026-05-28 17:03:23.345354
         space: 4
         metadata:
           query: ProposeProofScriptAgentic
@@ -645,7 +774,7 @@ outcome:
 
                   ## How you can act
 
-                  You have three actions available, and you decide when to use each:
+                  You have four actions available, and you decide when to use each:
 
                   1. **Propose a proof.** End your message with a single fenced code
                      block containing only the body tactics of the proof. Each tactic
@@ -674,6 +803,34 @@ outcome:
                      - `SearchRocq(command="Check Rabs_pos.")` — confirm a lemma exists
                        and inspect its type before citing it in a tactic.
                      - `SearchRocq(command="Print Rsqr.")` — show a definition's body.
+
+                  4. **Call the `TryTactic` tool.** Previews the effect of a tactic
+                     prefix on the theorem's *initial* proof state, WITHOUT committing.
+                     Rocq proof state is functional, so this is a non-destructive look
+                     at what `induction n.` / `destruct b.` / `case_eq ...` would do
+                     before you draft a full script. The tool returns either the
+                     resulting goal(s), `PROOF FINISHED` if the prefix closes the goal
+                     (then emit those tactics verbatim as your final proof), or the
+                     failing tactic + Rocq error if a step fails. Each `TryTactic` call
+                     re-applies from scratch — there is no shared state between
+                     invocations, so include any prerequisite tactics (e.g.
+                     `intros n.`) in every preview. Examples:
+
+                     - `TryTactic(tactics="intros n.\ninduction n.")` — see what the
+                       base / step cases look like before drafting.
+                     - `TryTactic(tactics="intros b.\ndestruct b.")` — see whether the
+                       two cases simplify to something tractable.
+                     - `TryTactic(tactics="intros n u H0 Hrec.\ninduction n as [|n IH].")`
+                       — preview a structural opener with named hypotheses.
+
+                     `TryTactic` is for **structural exploration** only. It is **not**
+                     for pre-verifying single-tactic automation: do not preview
+                     `intros. lia.` / `intros. nra.` / `intros. lra.` /
+                     `intros. ring.` / `intros. auto.` / `intros. trivial.` and the
+                     like. Just *propose* those — a failed proposal returns the same
+                     error message as a failed preview, and a successful proposal
+                     closes the proof while a successful preview still costs you the
+                     request you need to commit it.
 
                   ## Available skills
 
@@ -712,10 +869,13 @@ outcome:
                   _.` is not. If you make a syntax mistake, you'll see Rocq's error in
                   the tool result and can correct it on your next turn.
 
-                  ## How to use your three actions effectively
+                  ## How to use your four actions effectively
 
                   The system prompt above does **not** contain skill content; it only
-                  lists names you can request. The default workflow is:
+                  lists names you can request. The default workflow has **proposing as
+                  the centre of gravity** — every exploration step needs a concrete
+                  trigger, and `TryTactic` in particular is held in reserve as an
+                  escalation, not a warm-up.
 
                   1. **Read one skill before your first proposal.** Pick the skill
                      whose description fits the problem best. Suggested first picks:
@@ -756,11 +916,49 @@ outcome:
                      wastes turns when the bottleneck is tactic structure.
 
                      On those structural failures (the anti-triggers above), the right
-                     escalation is to read `compiler-guided-repair` instead. Its
-                     error-type table maps each pattern to a concrete fix (`change A
-                     with B`, `unfold` / `simpl` before `rewrite`, adjust bullet
-                     structure, etc.) — it complements `SearchRocq`, which only
-                     addresses unknown-identifier failures.
+                     escalation is `TryTactic` (probe a different opener and see the
+                     actual goal state) or `compiler-guided-repair` (read the error-
+                     type table for a concrete fix recipe). They complement
+                     `SearchRocq`, which only addresses unknown-identifier failures.
+
+                  4. **`TryTactic` is available as an escalation, not a routine
+                     step.** Invoke it at most once per problem, and only in one of
+                     these specific situations:
+                     - You have already had two proposals fail at the *same* deep
+                       point (failing tactic index ≥ 2) and need to see the
+                       intermediate goal to localize the wrong step, or
+                     - You are about to commit to a non-obvious structural maneuver
+                       (an `induction` / `destruct` whose case shapes you cannot
+                       predict, or an algebraic restructure like
+                       `apply ... with ...; ring_simplify; replace ... by ring` whose
+                       intermediate goal you genuinely cannot foresee).
+
+                     Do **not** preview proposals you would otherwise just submit —
+                     most algebraic goals close in one tactic, and a failed proposal
+                     carries the same diagnostic as a failed preview while a
+                     successful proposal *closes* the goal. The default is to
+                     propose, not to preview.
+
+                  5. **Same-error escape hatch.** If two consecutive proposals fail
+                     with the same Rocq error class (e.g. both report
+                     `No applicable tactic`, both report `Cannot find witness`, both
+                     cite the same unknown identifier), the next action **must not**
+                     be a near-duplicate proposal. Pick exactly one of:
+                     - a `ReadSkill` you have not yet loaded (e.g.
+                       `compiler-guided-repair` for structural failures,
+                       `coq-stdlib-guide` for missing-lemma chains),
+                     - a `SearchRocq` for the unknown identifier or for a lemma in
+                       the family that's failing,
+                     - a `TryTactic` previewing a structurally *different* opener
+                       (different tactic family — switch from `nra`-style automation
+                       to `Rplus_le_reg_l` + restructure, or from blind `lia` to
+                       `destruct` over the discriminating variable), or
+                     - a proposal that swaps in a different tactic family
+                       (automation → restructure, restructure → induction, induction
+                       → case analysis), not a parameter tweak of the failing tactic.
+
+                     Re-emitting essentially the same proposal twice in a row burns
+                     the request budget without changing the verifier's diagnosis.
 
                   ## Syntax notes for `SearchRocq` patterns
 
@@ -776,12 +974,32 @@ outcome:
 
                   ## Budget discipline
 
-                  Every tool call costs one request. At most two exploration steps
-                  per problem total (across both tools), unless a verifier failure
-                  specifically warrants another `SearchRocq`. After three failed
-                  proposals on the same problem, prefer to refactor your proof
-                  structure (read `proof-templates`, change tactic family) rather
-                  than searching again.
+                  Every tool call costs one request. The headline rule: **the default
+                  action on every turn is to propose**, not to explore. Exploration
+                  calls are escalations, not warm-ups.
+
+                  Hard caps:
+
+                  - At most **one `ReadSkill`** before the first proposal (mandatory)
+                    and **one additional `ReadSkill`** across the rest of the run
+                    (only if a failure points at a skill you haven't read yet).
+                  - `SearchRocq` fires on demand, but only when the verifier says
+                    an identifier was not found. One call per unknown identifier.
+                  - `TryTactic` is the *most expensive* explorer per pass-rate
+                    return on this benchmark family: a routine TryTactic costs a
+                    request that would otherwise be a proposal, and a successful
+                    preview still needs a separate commit turn. Use it only under
+                    the action-4 escalation rules above. **At most one `TryTactic`
+                    per problem.**
+                  - Across the whole run, total exploration calls (every
+                    `ReadSkill` / `SearchRocq` / `TryTactic`) should sit at
+                    **1–2 for an easy problem** and **2–3 for a hard one**. Above
+                    that, you are exploring instead of proving.
+
+                  After three failed proposals on the same problem, refactor your
+                  proof structure (different tactic family, a `proof-templates`
+                  skill if not yet read) rather than continuing to chip at the
+                  current draft.
               - role: user
                 content: |-
                   Prove the following theorem in Rocq.
@@ -1044,12 +1262,52 @@ outcome:
                     - command
                   title: SearchRocq
                   type: object
+              - name: TryTactic
+                description: |-
+                  Preview the effect of applying a tactic (or short tactic prefix) to
+                  the theorem's *initial* proof state, WITHOUT committing. Use this
+                  when you're uncertain whether a structural choice (`induction n.`,
+                  `destruct b.`, `case_eq ...`) will produce tractable subgoals, or
+                  when a prior proposal died several tactics deep and you want to
+                  confirm which step actually went wrong before redrafting.
+
+                  Pass `tactics` as a Rocq proof body — one or more tactics, each
+                  terminated with `.`, optionally fenced or newline-separated. The
+                  tool replays them in order from the theorem's initial state and
+                  returns:
+
+                    - the resulting goal(s) if every tactic succeeded;
+                    - "PROOF FINISHED" plus the closing tactics if the prefix
+                      actually closes the goal (then emit them verbatim as your
+                      final proof);
+                    - the failing tactic + Rocq error if any step fails, along with
+                      the prefix that did succeed.
+
+                  The pytanque session is fresh per call, so there is NO shared
+                  state between TryTactic invocations: every preview re-applies from
+                  scratch. To preview after `intros a b.`, include `intros a b.` in
+                  your `tactics` argument. Each call costs one request; prefer a few
+                  informed previews over many speculative ones.
+
+                  Examples:
+                    tactics="intros a b.\ninduction a."
+                    tactics="intros n.\ndestruct n as [|n']."
+                    tactics="intros.\nlia."
+                schema:
+                  properties:
+                    tactics:
+                      title: Tactics
+                      type: string
+                  required:
+                    - tactics
+                  title: TryTactic
+                  type: object
       - message: llm_response
         level: info
         message_id: 3
         related:
           - 2
-        time: 2026-05-28 14:16:35.565867
+        time: 2026-05-28 17:03:25.043461
         space: 4
         metadata:
           response:
@@ -1057,9 +1315,9 @@ outcome:
               - content: |-
                   ```rocq
                   intros n Hn.
-                  destruct n as [|n].
+                  destruct n as [|n'].
                   - contradiction.
-                  - exists (2 * 4 ^ n).
+                  - exists (2 * 4 ^ n').
                     simpl.
                     rewrite Nat.mul_assoc.
                     reflexivity.
@@ -1069,16 +1327,16 @@ outcome:
               values:
                 num_requests: 1
                 num_completions: 1
-                input_tokens: 3218
-                output_tokens: 48
-                cached_input_tokens: 2176
-                price: 0.0020545
+                input_tokens: 4750
+                output_tokens: 49
+                cached_input_tokens: 3712
+                price: 0.0022515
             log_items: []
             model_name: gpt-5.4-2026-03-05
             usage_info:
-              completion_tokens: 48
-              prompt_tokens: 3218
-              total_tokens: 3266
+              completion_tokens: 49
+              prompt_tokens: 4750
+              total_tokens: 4799
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -1086,13 +1344,13 @@ outcome:
                 rejected_prediction_tokens: 0
               prompt_tokens_details:
                 audio_tokens: 0
-                cached_tokens: 2176
+                cached_tokens: 3712
           usage:
             model: gpt-5.4-2026-03-05
             usage:
-              completion_tokens: 48
-              prompt_tokens: 3218
-              total_tokens: 3266
+              completion_tokens: 49
+              prompt_tokens: 4750
+              total_tokens: 4799
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -1100,11 +1358,11 @@ outcome:
                 rejected_prediction_tokens: 0
               prompt_tokens_details:
                 audio_tokens: 0
-                cached_tokens: 2176
+                cached_tokens: 3712
       - message: llm_request
         level: info
         message_id: 4
-        time: 2026-05-28 14:16:36.122667
+        time: 2026-05-28 17:03:25.610623
         space: 8
         metadata:
           query: ProposeProofScriptAgentic
@@ -1117,7 +1375,7 @@ outcome:
 
                   ## How you can act
 
-                  You have three actions available, and you decide when to use each:
+                  You have four actions available, and you decide when to use each:
 
                   1. **Propose a proof.** End your message with a single fenced code
                      block containing only the body tactics of the proof. Each tactic
@@ -1146,6 +1404,34 @@ outcome:
                      - `SearchRocq(command="Check Rabs_pos.")` — confirm a lemma exists
                        and inspect its type before citing it in a tactic.
                      - `SearchRocq(command="Print Rsqr.")` — show a definition's body.
+
+                  4. **Call the `TryTactic` tool.** Previews the effect of a tactic
+                     prefix on the theorem's *initial* proof state, WITHOUT committing.
+                     Rocq proof state is functional, so this is a non-destructive look
+                     at what `induction n.` / `destruct b.` / `case_eq ...` would do
+                     before you draft a full script. The tool returns either the
+                     resulting goal(s), `PROOF FINISHED` if the prefix closes the goal
+                     (then emit those tactics verbatim as your final proof), or the
+                     failing tactic + Rocq error if a step fails. Each `TryTactic` call
+                     re-applies from scratch — there is no shared state between
+                     invocations, so include any prerequisite tactics (e.g.
+                     `intros n.`) in every preview. Examples:
+
+                     - `TryTactic(tactics="intros n.\ninduction n.")` — see what the
+                       base / step cases look like before drafting.
+                     - `TryTactic(tactics="intros b.\ndestruct b.")` — see whether the
+                       two cases simplify to something tractable.
+                     - `TryTactic(tactics="intros n u H0 Hrec.\ninduction n as [|n IH].")`
+                       — preview a structural opener with named hypotheses.
+
+                     `TryTactic` is for **structural exploration** only. It is **not**
+                     for pre-verifying single-tactic automation: do not preview
+                     `intros. lia.` / `intros. nra.` / `intros. lra.` /
+                     `intros. ring.` / `intros. auto.` / `intros. trivial.` and the
+                     like. Just *propose* those — a failed proposal returns the same
+                     error message as a failed preview, and a successful proposal
+                     closes the proof while a successful preview still costs you the
+                     request you need to commit it.
 
                   ## Available skills
 
@@ -1184,10 +1470,13 @@ outcome:
                   _.` is not. If you make a syntax mistake, you'll see Rocq's error in
                   the tool result and can correct it on your next turn.
 
-                  ## How to use your three actions effectively
+                  ## How to use your four actions effectively
 
                   The system prompt above does **not** contain skill content; it only
-                  lists names you can request. The default workflow is:
+                  lists names you can request. The default workflow has **proposing as
+                  the centre of gravity** — every exploration step needs a concrete
+                  trigger, and `TryTactic` in particular is held in reserve as an
+                  escalation, not a warm-up.
 
                   1. **Read one skill before your first proposal.** Pick the skill
                      whose description fits the problem best. Suggested first picks:
@@ -1228,11 +1517,49 @@ outcome:
                      wastes turns when the bottleneck is tactic structure.
 
                      On those structural failures (the anti-triggers above), the right
-                     escalation is to read `compiler-guided-repair` instead. Its
-                     error-type table maps each pattern to a concrete fix (`change A
-                     with B`, `unfold` / `simpl` before `rewrite`, adjust bullet
-                     structure, etc.) — it complements `SearchRocq`, which only
-                     addresses unknown-identifier failures.
+                     escalation is `TryTactic` (probe a different opener and see the
+                     actual goal state) or `compiler-guided-repair` (read the error-
+                     type table for a concrete fix recipe). They complement
+                     `SearchRocq`, which only addresses unknown-identifier failures.
+
+                  4. **`TryTactic` is available as an escalation, not a routine
+                     step.** Invoke it at most once per problem, and only in one of
+                     these specific situations:
+                     - You have already had two proposals fail at the *same* deep
+                       point (failing tactic index ≥ 2) and need to see the
+                       intermediate goal to localize the wrong step, or
+                     - You are about to commit to a non-obvious structural maneuver
+                       (an `induction` / `destruct` whose case shapes you cannot
+                       predict, or an algebraic restructure like
+                       `apply ... with ...; ring_simplify; replace ... by ring` whose
+                       intermediate goal you genuinely cannot foresee).
+
+                     Do **not** preview proposals you would otherwise just submit —
+                     most algebraic goals close in one tactic, and a failed proposal
+                     carries the same diagnostic as a failed preview while a
+                     successful proposal *closes* the goal. The default is to
+                     propose, not to preview.
+
+                  5. **Same-error escape hatch.** If two consecutive proposals fail
+                     with the same Rocq error class (e.g. both report
+                     `No applicable tactic`, both report `Cannot find witness`, both
+                     cite the same unknown identifier), the next action **must not**
+                     be a near-duplicate proposal. Pick exactly one of:
+                     - a `ReadSkill` you have not yet loaded (e.g.
+                       `compiler-guided-repair` for structural failures,
+                       `coq-stdlib-guide` for missing-lemma chains),
+                     - a `SearchRocq` for the unknown identifier or for a lemma in
+                       the family that's failing,
+                     - a `TryTactic` previewing a structurally *different* opener
+                       (different tactic family — switch from `nra`-style automation
+                       to `Rplus_le_reg_l` + restructure, or from blind `lia` to
+                       `destruct` over the discriminating variable), or
+                     - a proposal that swaps in a different tactic family
+                       (automation → restructure, restructure → induction, induction
+                       → case analysis), not a parameter tweak of the failing tactic.
+
+                     Re-emitting essentially the same proposal twice in a row burns
+                     the request budget without changing the verifier's diagnosis.
 
                   ## Syntax notes for `SearchRocq` patterns
 
@@ -1248,12 +1575,32 @@ outcome:
 
                   ## Budget discipline
 
-                  Every tool call costs one request. At most two exploration steps
-                  per problem total (across both tools), unless a verifier failure
-                  specifically warrants another `SearchRocq`. After three failed
-                  proposals on the same problem, prefer to refactor your proof
-                  structure (read `proof-templates`, change tactic family) rather
-                  than searching again.
+                  Every tool call costs one request. The headline rule: **the default
+                  action on every turn is to propose**, not to explore. Exploration
+                  calls are escalations, not warm-ups.
+
+                  Hard caps:
+
+                  - At most **one `ReadSkill`** before the first proposal (mandatory)
+                    and **one additional `ReadSkill`** across the rest of the run
+                    (only if a failure points at a skill you haven't read yet).
+                  - `SearchRocq` fires on demand, but only when the verifier says
+                    an identifier was not found. One call per unknown identifier.
+                  - `TryTactic` is the *most expensive* explorer per pass-rate
+                    return on this benchmark family: a routine TryTactic costs a
+                    request that would otherwise be a proposal, and a successful
+                    preview still needs a separate commit turn. Use it only under
+                    the action-4 escalation rules above. **At most one `TryTactic`
+                    per problem.**
+                  - Across the whole run, total exploration calls (every
+                    `ReadSkill` / `SearchRocq` / `TryTactic`) should sit at
+                    **1–2 for an easy problem** and **2–3 for a hard one**. Above
+                    that, you are exploring instead of proving.
+
+                  After three failed proposals on the same problem, refactor your
+                  proof structure (different tactic family, a `proof-templates`
+                  skill if not yet read) rather than continuing to chip at the
+                  current draft.
               - role: user
                 content: |-
                   Prove the following theorem in Rocq.
@@ -1473,9 +1820,9 @@ outcome:
                   content: |-
                     ```rocq
                     intros n Hn.
-                    destruct n as [|n].
+                    destruct n as [|n'].
                     - contradiction.
-                    - exists (2 * 4 ^ n).
+                    - exists (2 * 4 ^ n').
                       simpl.
                       rewrite Nat.mul_assoc.
                       reflexivity.
@@ -1492,10 +1839,10 @@ outcome:
                     """
 
                   - **Tactics that succeeded before the failure**:
-                    1. `intros n Hn.`  2. `destruct n as [|n].`  3. `- contradiction.`  4. `- exists (2 * 4 ^ n).`  5. `simpl.`
+                    1. `intros n Hn.`  2. `destruct n as [|n'].`  3. `- contradiction.`  4. `- exists (2 * 4 ^ n').`  5. `simpl.`
                   - **Goals remaining at the point of failure**:
                     ```
-                    Goal(info={'evar': ['Ser_Evar', 18], 'name': None}, hyps=[GoalHyp(names=['n'], ty='nat', def_=None), GoalHyp(names=['Hn'], ty='S n <> 0', def_=None)], ty='4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2', pp='n  : nat\nHn  : S n <> 0\n|-4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2')
+                    Goal(info={'evar': ['Ser_Evar', 18], 'name': None}, hyps=[GoalHyp(names=["n'"], ty='nat', def_=None), GoalHyp(names=['Hn'], ty="S n' <> 0", def_=None)], ty="4 ^ n' + (4 ^ n' + (4 ^ n' + (4 ^ n' + 0))) = (4 ^ n' + (4 ^ n' + 0)) * 2", pp="n'  : nat\nHn  : S n' <> 0\n|-4 ^ n' + (4 ^ n' + (4 ^ n' + (4 ^ n' + 0))) = (4 ^ n' + (4 ^ n' + 0)) * 2")
                     ```
 
                   Revise the whole proof body and reply with one fenced code block in the
@@ -1549,12 +1896,52 @@ outcome:
                     - command
                   title: SearchRocq
                   type: object
+              - name: TryTactic
+                description: |-
+                  Preview the effect of applying a tactic (or short tactic prefix) to
+                  the theorem's *initial* proof state, WITHOUT committing. Use this
+                  when you're uncertain whether a structural choice (`induction n.`,
+                  `destruct b.`, `case_eq ...`) will produce tractable subgoals, or
+                  when a prior proposal died several tactics deep and you want to
+                  confirm which step actually went wrong before redrafting.
+
+                  Pass `tactics` as a Rocq proof body — one or more tactics, each
+                  terminated with `.`, optionally fenced or newline-separated. The
+                  tool replays them in order from the theorem's initial state and
+                  returns:
+
+                    - the resulting goal(s) if every tactic succeeded;
+                    - "PROOF FINISHED" plus the closing tactics if the prefix
+                      actually closes the goal (then emit them verbatim as your
+                      final proof);
+                    - the failing tactic + Rocq error if any step fails, along with
+                      the prefix that did succeed.
+
+                  The pytanque session is fresh per call, so there is NO shared
+                  state between TryTactic invocations: every preview re-applies from
+                  scratch. To preview after `intros a b.`, include `intros a b.` in
+                  your `tactics` argument. Each call costs one request; prefer a few
+                  informed previews over many speculative ones.
+
+                  Examples:
+                    tactics="intros a b.\ninduction a."
+                    tactics="intros n.\ndestruct n as [|n']."
+                    tactics="intros.\nlia."
+                schema:
+                  properties:
+                    tactics:
+                      title: Tactics
+                      type: string
+                  required:
+                    - tactics
+                  title: TryTactic
+                  type: object
       - message: llm_response
         level: info
         message_id: 5
         related:
           - 4
-        time: 2026-05-28 14:16:37.552573
+        time: 2026-05-28 17:03:27.243161
         space: 8
         metadata:
           response:
@@ -1562,9 +1949,9 @@ outcome:
               - content: |-
                   ```rocq
                   intros n Hn.
-                  destruct n as [|n].
+                  destruct n as [|n'].
                   - contradiction.
-                  - exists (2 * 4 ^ n).
+                  - exists (2 * 4 ^ n').
                     simpl.
                     lia.
                   ```
@@ -1573,16 +1960,16 @@ outcome:
               values:
                 num_requests: 1
                 num_completions: 1
-                input_tokens: 3610
-                output_tokens: 41
-                cached_input_tokens: 3200
-                price: 0.0013224999999999999
+                input_tokens: 5159
+                output_tokens: 42
+                cached_input_tokens: 4736
+                price: 0.0015407499999999998
             log_items: []
             model_name: gpt-5.4-2026-03-05
             usage_info:
-              completion_tokens: 41
-              prompt_tokens: 3610
-              total_tokens: 3651
+              completion_tokens: 42
+              prompt_tokens: 5159
+              total_tokens: 5201
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -1590,13 +1977,13 @@ outcome:
                 rejected_prediction_tokens: 0
               prompt_tokens_details:
                 audio_tokens: 0
-                cached_tokens: 3200
+                cached_tokens: 4736
           usage:
             model: gpt-5.4-2026-03-05
             usage:
-              completion_tokens: 41
-              prompt_tokens: 3610
-              total_tokens: 3651
+              completion_tokens: 42
+              prompt_tokens: 5159
+              total_tokens: 5201
               completion_tokens_details:
                 accepted_prediction_tokens: 0
                 audio_tokens: 0
@@ -1604,7 +1991,7 @@ outcome:
                 rejected_prediction_tokens: 0
               prompt_tokens_details:
                 audio_tokens: 0
-                cached_tokens: 3200
+                cached_tokens: 4736
     browsable_trace:
       nodes:
         1:
@@ -4066,17 +4453,17 @@ outcome:
                   - id: 3
                     hint: null
                     value:
-                      short: Response(answer=Answer(mode=None, content='```rocq\nintros n Hn.\ndestruct
-                        n as [|n].\n- contradiction.\n- exists (2 * 4 ^ n).\n  simpl.\n  rewrite Nat.mul_assoc.\n  reflexivity.\n```',
-                        tool_calls=(), justification=None), parsed=FinalAnswer(final='intros n Hn.\ndestruct
-                        n as [|n].\n- contradiction.\n- exists (2 * 4 ^ n).\n  simpl.\n  rewrite Nat.mul_assoc.\n  reflexivity.\n'))
+                      short: Response(answer=Answer(mode=None, content="```rocq\nintros n Hn.\ndestruct
+                        n as [|n'].\n- contradiction.\n- exists (2 * 4 ^ n').\n  simpl.\n  rewrite Nat.mul_assoc.\n  reflexivity.\n```",
+                        tool_calls=(), justification=None), parsed=FinalAnswer(final="intros n Hn.\ndestruct
+                        n as [|n'].\n- contradiction.\n- exists (2 * 4 ^ n').\n  simpl.\n  rewrite Nat.mul_assoc.\n  reflexivity.\n"))
                       long: |-
                         Response(answer=Answer(mode=None,
                                                content='```rocq\n'
                                                        'intros n Hn.\n'
-                                                       'destruct n as [|n].\n'
+                                                       "destruct n as [|n'].\n"
                                                        '- contradiction.\n'
-                                                       '- exists (2 * 4 ^ n).\n'
+                                                       "- exists (2 * 4 ^ n').\n"
                                                        '  simpl.\n'
                                                        '  rewrite Nat.mul_assoc.\n'
                                                        '  reflexivity.\n'
@@ -4084,9 +4471,9 @@ outcome:
                                                tool_calls=(),
                                                justification=None),
                                  parsed=FinalAnswer(final='intros n Hn.\n'
-                                                          'destruct n as [|n].\n'
+                                                          "destruct n as [|n'].\n"
                                                           '- contradiction.\n'
-                                                          '- exists (2 * 4 ^ n).\n'
+                                                          "- exists (2 * 4 ^ n').\n"
                                                           '  simpl.\n'
                                                           '  rewrite Nat.mul_assoc.\n'
                                                           '  reflexivity.\n'))
@@ -4097,9 +4484,9 @@ outcome:
                           content: |-
                             ```rocq
                             intros n Hn.
-                            destruct n as [|n].
+                            destruct n as [|n'].
                             - contradiction.
-                            - exists (2 * 4 ^ n).
+                            - exists (2 * 4 ^ n').
                               simpl.
                               rewrite Nat.mul_assoc.
                               reflexivity.
@@ -4107,9 +4494,9 @@ outcome:
                         parsed:
                           final: |
                             intros n Hn.
-                            destruct n as [|n].
+                            destruct n as [|n'].
                             - contradiction.
-                            - exists (2 * 4 ^ n).
+                            - exists (2 * 4 ^ n').
                               simpl.
                               rewrite Nat.mul_assoc.
                               reflexivity.
@@ -4122,17 +4509,17 @@ outcome:
               related_answers:
                 - 3
               value:
-                short: Response(answer=Answer(mode=None, content='```rocq\nintros n Hn.\ndestruct n as
-                  [|n].\n- contradiction.\n- exists (2 * 4 ^ n).\n  simpl.\n  rewrite Nat.mul_assoc.\n  reflexivity.\n```',
-                  tool_calls=(), justification=None), parsed=FinalAnswer(final='intros n Hn.\ndestruct
-                  n as [|n].\n- contradiction.\n- exists (2 * 4 ^ n).\n  simpl.\n  rewrite Nat.mul_assoc.\n  reflexivity.\n'))
+                short: Response(answer=Answer(mode=None, content="```rocq\nintros n Hn.\ndestruct n as
+                  [|n'].\n- contradiction.\n- exists (2 * 4 ^ n').\n  simpl.\n  rewrite Nat.mul_assoc.\n  reflexivity.\n```",
+                  tool_calls=(), justification=None), parsed=FinalAnswer(final="intros n Hn.\ndestruct
+                  n as [|n'].\n- contradiction.\n- exists (2 * 4 ^ n').\n  simpl.\n  rewrite Nat.mul_assoc.\n  reflexivity.\n"))
                 long: |-
                   Response(answer=Answer(mode=None,
                                          content='```rocq\n'
                                                  'intros n Hn.\n'
-                                                 'destruct n as [|n].\n'
+                                                 "destruct n as [|n'].\n"
                                                  '- contradiction.\n'
-                                                 '- exists (2 * 4 ^ n).\n'
+                                                 "- exists (2 * 4 ^ n').\n"
                                                  '  simpl.\n'
                                                  '  rewrite Nat.mul_assoc.\n'
                                                  '  reflexivity.\n'
@@ -4140,9 +4527,9 @@ outcome:
                                          tool_calls=(),
                                          justification=None),
                            parsed=FinalAnswer(final='intros n Hn.\n'
-                                                    'destruct n as [|n].\n'
+                                                    "destruct n as [|n'].\n"
                                                     '- contradiction.\n'
-                                                    '- exists (2 * 4 ^ n).\n'
+                                                    "- exists (2 * 4 ^ n').\n"
                                                     '  simpl.\n'
                                                     '  rewrite Nat.mul_assoc.\n'
                                                     '  reflexivity.\n'))
@@ -4153,9 +4540,9 @@ outcome:
                     content: |-
                       ```rocq
                       intros n Hn.
-                      destruct n as [|n].
+                      destruct n as [|n'].
                       - contradiction.
-                      - exists (2 * 4 ^ n).
+                      - exists (2 * 4 ^ n').
                         simpl.
                         rewrite Nat.mul_assoc.
                         reflexivity.
@@ -4163,9 +4550,9 @@ outcome:
                   parsed:
                     final: |
                       intros n Hn.
-                      destruct n as [|n].
+                      destruct n as [|n'].
                       - contradiction.
-                      - exists (2 * 4 ^ n).
+                      - exists (2 * 4 ^ n').
                         simpl.
                         rewrite Nat.mul_assoc.
                         reflexivity.
@@ -4202,26 +4589,26 @@ outcome:
                   script:
                     short: |
                       intros n Hn.
-                      destruct n as [|n].
+                      destruct n as [|n'].
                       - contradiction.
-                      - exists (2 * 4 ^ n).
+                      - exists (2 * 4 ^ n').
                         simpl.
                         rewrite Nat.mul_assoc.
                         reflexivity.
                     long: |-
                       ('intros n Hn.\n'
-                       'destruct n as [|n].\n'
+                       "destruct n as [|n'].\n"
                        '- contradiction.\n'
-                       '- exists (2 * 4 ^ n).\n'
+                       "- exists (2 * 4 ^ n').\n"
                        '  simpl.\n'
                        '  rewrite Nat.mul_assoc.\n'
                        '  reflexivity.\n')
                     json_provided: true
                     json: |
                       intros n Hn.
-                      destruct n as [|n].
+                      destruct n as [|n'].
                       - contradiction.
-                      - exists (2 * 4 ^ n).
+                      - exists (2 * 4 ^ n').
                         simpl.
                         rewrite Nat.mul_assoc.
                         reflexivity.
@@ -4246,16 +4633,17 @@ outcome:
                            error_message='(-32003, \'Coq: Found no subterm matching "?M1830 * '
                                          '(?M1831 * ?M1832)" in the current goal.\')',
                            remaining_goals=["Goal(info={'evar': ['Ser_Evar', 18], 'name': None}, "
-                                            "hyps=[GoalHyp(names=['n'], ty='nat', def_=None), "
-                                            "GoalHyp(names=['Hn'], ty='S n <> 0', def_=None)], "
-                                            "ty='4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ "
-                                            "n + (4 ^ n + 0)) * 2', pp='n  : nat\\nHn  : S n <> "
-                                            '0\\n|-4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 '
-                                            "^ n + (4 ^ n + 0)) * 2')"],
+                                            'hyps=[GoalHyp(names=["n\'"], ty=\'nat\', '
+                                            'def_=None), GoalHyp(names=[\'Hn\'], ty="S n\' <> '
+                                            '0", def_=None)], ty="4 ^ n\' + (4 ^ n\' + (4 ^ n\' '
+                                            '+ (4 ^ n\' + 0))) = (4 ^ n\' + (4 ^ n\' + 0)) * 2", '
+                                            'pp="n\'  : nat\\nHn  : S n\' <> 0\\n|-4 ^ n\' + (4 '
+                                            "^ n' + (4 ^ n' + (4 ^ n' + 0))) = (4 ^ n' + (4 ^ n' "
+                                            '+ 0)) * 2")'],
                            proof_so_far=['intros n Hn.',
-                                         'destruct n as [|n].',
+                                         "destruct n as [|n'].",
                                          '- contradiction.',
-                                         '- exists (2 * 4 ^ n).',
+                                         "- exists (2 * 4 ^ n').",
                                          'simpl.'],
                            finished=False)
                 long: |-
@@ -4269,17 +4657,18 @@ outcome:
                                                     "goal.')",
                                       remaining_goals=["Goal(info={'evar': ['Ser_Evar', 18], "
                                                        "'name': None}, "
-                                                       "hyps=[GoalHyp(names=['n'], ty='nat', "
-                                                       "def_=None), GoalHyp(names=['Hn'], ty='S "
-                                                       "n <> 0', def_=None)], ty='4 ^ n + (4 ^ n "
-                                                       '+ (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ '
-                                                       "n + 0)) * 2', pp='n  : nat\\nHn  : S n "
-                                                       '<> 0\\n|-4 ^ n + (4 ^ n + (4 ^ n + (4 ^ '
-                                                       "n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2')"],
+                                                       'hyps=[GoalHyp(names=["n\'"], ty=\'nat\', '
+                                                       "def_=None), GoalHyp(names=['Hn'], "
+                                                       'ty="S n\' <> 0", def_=None)], ty="4 ^ '
+                                                       "n' + (4 ^ n' + (4 ^ n' + (4 ^ n' + 0))) "
+                                                       '= (4 ^ n\' + (4 ^ n\' + 0)) * 2", '
+                                                       'pp="n\'  : nat\\nHn  : S n\' <> 0\\n|-4 '
+                                                       "^ n' + (4 ^ n' + (4 ^ n' + (4 ^ n' + "
+                                                       '0))) = (4 ^ n\' + (4 ^ n\' + 0)) * 2")'],
                                       proof_so_far=['intros n Hn.',
-                                                    'destruct n as [|n].',
+                                                    "destruct n as [|n'].",
                                                     '- contradiction.',
-                                                    '- exists (2 * 4 ^ n).',
+                                                    "- exists (2 * 4 ^ n').",
                                                     'simpl.'],
                                       finished=False))
                 json_provided: true
@@ -4292,16 +4681,16 @@ outcome:
                     error_message: '(-32003, ''Coq: Found no subterm matching "?M1830 * (?M1831 * ?M1832)"
                       in the current goal.'')'
                     remaining_goals:
-                      - 'Goal(info={''evar'': [''Ser_Evar'', 18], ''name'': None}, hyps=[GoalHyp(names=[''n''],
-                        ty=''nat'', def_=None), GoalHyp(names=[''Hn''], ty=''S n <> 0'', def_=None)],
-                        ty=''4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2'', pp=''n  :
-                        nat\nHn  : S n <> 0\n|-4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^
-                        n + 0)) * 2'')'
+                      - 'Goal(info={''evar'': [''Ser_Evar'', 18], ''name'': None}, hyps=[GoalHyp(names=["n''"],
+                        ty=''nat'', def_=None), GoalHyp(names=[''Hn''], ty="S n'' <> 0", def_=None)],
+                        ty="4 ^ n'' + (4 ^ n'' + (4 ^ n'' + (4 ^ n'' + 0))) = (4 ^ n'' + (4 ^ n'' + 0))
+                        * 2", pp="n''  : nat\nHn  : S n'' <> 0\n|-4 ^ n'' + (4 ^ n'' + (4 ^ n'' + (4 ^
+                        n'' + 0))) = (4 ^ n'' + (4 ^ n'' + 0)) * 2")'
                     proof_so_far:
                       - intros n Hn.
-                      - destruct n as [|n].
+                      - destruct n as [|n'].
                       - '- contradiction.'
-                      - '- exists (2 * 4 ^ n).'
+                      - '- exists (2 * 4 ^ n'').'
                       - simpl.
                     finished: false
               destination: 10
@@ -4327,9 +4716,9 @@ outcome:
                   args:
                     script: |
                       intros n Hn.
-                      destruct n as [|n].
+                      destruct n as [|n'].
                       - contradiction.
-                      - exists (2 * 4 ^ n).
+                      - exists (2 * 4 ^ n').
                         simpl.
                         rewrite Nat.mul_assoc.
                         reflexivity.
@@ -4339,22 +4728,22 @@ outcome:
                   - id: 4
                     hint: null
                     value:
-                      short: '[''intros n Hn.'', ''destruct n as [|n].'', ''- contradiction.'', ''- exists
-                        (2 * 4 ^ n).'', ''simpl.'', ''rewrite Nat.mul_assoc.'', ''reflexivity.'']'
+                      short: '[''intros n Hn.'', "destruct n as [|n''].", ''- contradiction.'', "- exists
+                        (2 * 4 ^ n'').", ''simpl.'', ''rewrite Nat.mul_assoc.'', ''reflexivity.'']'
                       long: |-
                         ['intros n Hn.',
-                         'destruct n as [|n].',
+                         "destruct n as [|n'].",
                          '- contradiction.',
-                         '- exists (2 * 4 ^ n).',
+                         "- exists (2 * 4 ^ n').",
                          'simpl.',
                          'rewrite Nat.mul_assoc.',
                          'reflexivity.']
                       json_provided: true
                       json:
                         - intros n Hn.
-                        - destruct n as [|n].
+                        - destruct n as [|n'].
                         - '- contradiction.'
-                        - '- exists (2 * 4 ^ n).'
+                        - '- exists (2 * 4 ^ n'').'
                         - simpl.
                         - rewrite Nat.mul_assoc.
                         - reflexivity.
@@ -4367,22 +4756,22 @@ outcome:
               related_answers:
                 - 4
               value:
-                short: '[''intros n Hn.'', ''destruct n as [|n].'', ''- contradiction.'', ''- exists (2
-                  * 4 ^ n).'', ''simpl.'', ''rewrite Nat.mul_assoc.'', ''reflexivity.'']'
+                short: '[''intros n Hn.'', "destruct n as [|n''].", ''- contradiction.'', "- exists (2
+                  * 4 ^ n'').", ''simpl.'', ''rewrite Nat.mul_assoc.'', ''reflexivity.'']'
                 long: |-
                   ['intros n Hn.',
-                   'destruct n as [|n].',
+                   "destruct n as [|n'].",
                    '- contradiction.',
-                   '- exists (2 * 4 ^ n).',
+                   "- exists (2 * 4 ^ n').",
                    'simpl.',
                    'rewrite Nat.mul_assoc.',
                    'reflexivity.']
                 json_provided: true
                 json:
                   - intros n Hn.
-                  - destruct n as [|n].
+                  - destruct n as [|n'].
                   - '- contradiction.'
-                  - '- exists (2 * 4 ^ n).'
+                  - '- exists (2 * 4 ^ n'').'
                   - simpl.
                   - rewrite Nat.mul_assoc.
                   - reflexivity.
@@ -4411,9 +4800,9 @@ outcome:
                     theorem_name: numbertheory_2dvd4expn
                     tactics:
                       - intros n Hn.
-                      - destruct n as [|n].
+                      - destruct n as [|n'].
                       - '- contradiction.'
-                      - '- exists (2 * 4 ^ n).'
+                      - '- exists (2 * 4 ^ n'').'
                       - simpl.
                       - rewrite Nat.mul_assoc.
                       - reflexivity.
@@ -4426,12 +4815,13 @@ outcome:
                       short: '{''success'': False, ''failing_index'': 5, ''failing_tactic'': ''rewrite
                         Nat.mul_assoc.'', ''error_message'': ''(-32003, \''Coq: Found no subterm matching
                         "?M1830 * (?M1831 * ?M1832)" in the current goal.\'')'', ''remaining_goals'':
-                        ["Goal(info={''evar'': [''Ser_Evar'', 18], ''name'': None}, hyps=[GoalHyp(names=[''n''],
-                        ty=''nat'', def_=None), GoalHyp(names=[''Hn''], ty=''S n <> 0'', def_=None)],
-                        ty=''4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2'', pp=''n  :
-                        nat\\nHn  : S n <> 0\\n|-4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4
-                        ^ n + 0)) * 2'')"], ''proof_so_far'': [''intros n Hn.'', ''destruct n as [|n].'',
-                        ''- contradiction.'', ''- exists (2 * 4 ^ n).'', ''simpl.''], ''finished'': False}'
+                        [''Goal(info={\''evar\'': [\''Ser_Evar\'', 18], \''name\'': None}, hyps=[GoalHyp(names=["n\''"],
+                        ty=\''nat\'', def_=None), GoalHyp(names=[\''Hn\''], ty="S n\'' <> 0", def_=None)],
+                        ty="4 ^ n\'' + (4 ^ n\'' + (4 ^ n\'' + (4 ^ n\'' + 0))) = (4 ^ n\'' + (4 ^ n\''
+                        + 0)) * 2", pp="n\''  : nat\\nHn  : S n\'' <> 0\\n|-4 ^ n\'' + (4 ^ n\'' + (4
+                        ^ n\'' + (4 ^ n\'' + 0))) = (4 ^ n\'' + (4 ^ n\'' + 0)) * 2")''], ''proof_so_far'':
+                        [''intros n Hn.'', "destruct n as [|n''].", ''- contradiction.'', "- exists (2
+                        * 4 ^ n'').", ''simpl.''], ''finished'': False}'
                       long: |-
                         {'success': False,
                          'failing_index': 5,
@@ -4439,16 +4829,16 @@ outcome:
                          'error_message': '(-32003, \'Coq: Found no subterm matching "?M1830 * (?M1831 '
                                           '* ?M1832)" in the current goal.\')',
                          'remaining_goals': ["Goal(info={'evar': ['Ser_Evar', 18], 'name': None}, "
-                                             "hyps=[GoalHyp(names=['n'], ty='nat', def_=None), "
-                                             "GoalHyp(names=['Hn'], ty='S n <> 0', def_=None)], ty='4 "
-                                             '^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ n '
-                                             "+ 0)) * 2', pp='n  : nat\\nHn  : S n <> 0\\n|-4 ^ n + (4 "
-                                             '^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * '
-                                             "2')"],
+                                             'hyps=[GoalHyp(names=["n\'"], ty=\'nat\', def_=None), '
+                                             'GoalHyp(names=[\'Hn\'], ty="S n\' <> 0", def_=None)], '
+                                             'ty="4 ^ n\' + (4 ^ n\' + (4 ^ n\' + (4 ^ n\' + 0))) = (4 '
+                                             '^ n\' + (4 ^ n\' + 0)) * 2", pp="n\'  : nat\\nHn  : S '
+                                             "n' <> 0\\n|-4 ^ n' + (4 ^ n' + (4 ^ n' + (4 ^ n' + 0))) "
+                                             '= (4 ^ n\' + (4 ^ n\' + 0)) * 2")'],
                          'proof_so_far': ['intros n Hn.',
-                                          'destruct n as [|n].',
+                                          "destruct n as [|n'].",
                                           '- contradiction.',
-                                          '- exists (2 * 4 ^ n).',
+                                          "- exists (2 * 4 ^ n').",
                                           'simpl.'],
                          'finished': False}
                       json_provided: true
@@ -4459,16 +4849,16 @@ outcome:
                         error_message: '(-32003, ''Coq: Found no subterm matching "?M1830 * (?M1831 *
                           ?M1832)" in the current goal.'')'
                         remaining_goals:
-                          - 'Goal(info={''evar'': [''Ser_Evar'', 18], ''name'': None}, hyps=[GoalHyp(names=[''n''],
-                            ty=''nat'', def_=None), GoalHyp(names=[''Hn''], ty=''S n <> 0'', def_=None)],
-                            ty=''4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2'',
-                            pp=''n  : nat\nHn  : S n <> 0\n|-4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) =
-                            (4 ^ n + (4 ^ n + 0)) * 2'')'
+                          - 'Goal(info={''evar'': [''Ser_Evar'', 18], ''name'': None}, hyps=[GoalHyp(names=["n''"],
+                            ty=''nat'', def_=None), GoalHyp(names=[''Hn''], ty="S n'' <> 0", def_=None)],
+                            ty="4 ^ n'' + (4 ^ n'' + (4 ^ n'' + (4 ^ n'' + 0))) = (4 ^ n'' + (4 ^ n''
+                            + 0)) * 2", pp="n''  : nat\nHn  : S n'' <> 0\n|-4 ^ n'' + (4 ^ n'' + (4 ^
+                            n'' + (4 ^ n'' + 0))) = (4 ^ n'' + (4 ^ n'' + 0)) * 2")'
                         proof_so_far:
                           - intros n Hn.
-                          - destruct n as [|n].
+                          - destruct n as [|n'].
                           - '- contradiction.'
-                          - '- exists (2 * 4 ^ n).'
+                          - '- exists (2 * 4 ^ n'').'
                           - simpl.
                         finished: false
           actions:
@@ -4482,12 +4872,13 @@ outcome:
               value:
                 short: '{''success'': False, ''failing_index'': 5, ''failing_tactic'': ''rewrite Nat.mul_assoc.'',
                   ''error_message'': ''(-32003, \''Coq: Found no subterm matching "?M1830 * (?M1831 *
-                  ?M1832)" in the current goal.\'')'', ''remaining_goals'': ["Goal(info={''evar'': [''Ser_Evar'',
-                  18], ''name'': None}, hyps=[GoalHyp(names=[''n''], ty=''nat'', def_=None), GoalHyp(names=[''Hn''],
-                  ty=''S n <> 0'', def_=None)], ty=''4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n
-                  + (4 ^ n + 0)) * 2'', pp=''n  : nat\\nHn  : S n <> 0\\n|-4 ^ n + (4 ^ n + (4 ^ n + (4
-                  ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2'')"], ''proof_so_far'': [''intros n Hn.'', ''destruct
-                  n as [|n].'', ''- contradiction.'', ''- exists (2 * 4 ^ n).'', ''simpl.''], ''finished'':
+                  ?M1832)" in the current goal.\'')'', ''remaining_goals'': [''Goal(info={\''evar\'':
+                  [\''Ser_Evar\'', 18], \''name\'': None}, hyps=[GoalHyp(names=["n\''"], ty=\''nat\'',
+                  def_=None), GoalHyp(names=[\''Hn\''], ty="S n\'' <> 0", def_=None)], ty="4 ^ n\'' +
+                  (4 ^ n\'' + (4 ^ n\'' + (4 ^ n\'' + 0))) = (4 ^ n\'' + (4 ^ n\'' + 0)) * 2", pp="n\''  :
+                  nat\\nHn  : S n\'' <> 0\\n|-4 ^ n\'' + (4 ^ n\'' + (4 ^ n\'' + (4 ^ n\'' + 0))) = (4
+                  ^ n\'' + (4 ^ n\'' + 0)) * 2")''], ''proof_so_far'': [''intros n Hn.'', "destruct n
+                  as [|n''].", ''- contradiction.'', "- exists (2 * 4 ^ n'').", ''simpl.''], ''finished'':
                   False}'
                 long: |-
                   {'success': False,
@@ -4496,16 +4887,16 @@ outcome:
                    'error_message': '(-32003, \'Coq: Found no subterm matching "?M1830 * (?M1831 '
                                     '* ?M1832)" in the current goal.\')',
                    'remaining_goals': ["Goal(info={'evar': ['Ser_Evar', 18], 'name': None}, "
-                                       "hyps=[GoalHyp(names=['n'], ty='nat', def_=None), "
-                                       "GoalHyp(names=['Hn'], ty='S n <> 0', def_=None)], ty='4 "
-                                       '^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ n '
-                                       "+ 0)) * 2', pp='n  : nat\\nHn  : S n <> 0\\n|-4 ^ n + (4 "
-                                       '^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * '
-                                       "2')"],
+                                       'hyps=[GoalHyp(names=["n\'"], ty=\'nat\', def_=None), '
+                                       'GoalHyp(names=[\'Hn\'], ty="S n\' <> 0", def_=None)], '
+                                       'ty="4 ^ n\' + (4 ^ n\' + (4 ^ n\' + (4 ^ n\' + 0))) = (4 '
+                                       '^ n\' + (4 ^ n\' + 0)) * 2", pp="n\'  : nat\\nHn  : S '
+                                       "n' <> 0\\n|-4 ^ n' + (4 ^ n' + (4 ^ n' + (4 ^ n' + 0))) "
+                                       '= (4 ^ n\' + (4 ^ n\' + 0)) * 2")'],
                    'proof_so_far': ['intros n Hn.',
-                                    'destruct n as [|n].',
+                                    "destruct n as [|n'].",
                                     '- contradiction.',
-                                    '- exists (2 * 4 ^ n).',
+                                    "- exists (2 * 4 ^ n').",
                                     'simpl.'],
                    'finished': False}
                 json_provided: true
@@ -4516,15 +4907,16 @@ outcome:
                   error_message: '(-32003, ''Coq: Found no subterm matching "?M1830 * (?M1831 * ?M1832)"
                     in the current goal.'')'
                   remaining_goals:
-                    - 'Goal(info={''evar'': [''Ser_Evar'', 18], ''name'': None}, hyps=[GoalHyp(names=[''n''],
-                      ty=''nat'', def_=None), GoalHyp(names=[''Hn''], ty=''S n <> 0'', def_=None)], ty=''4
-                      ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2'', pp=''n  : nat\nHn  :
-                      S n <> 0\n|-4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2'')'
+                    - 'Goal(info={''evar'': [''Ser_Evar'', 18], ''name'': None}, hyps=[GoalHyp(names=["n''"],
+                      ty=''nat'', def_=None), GoalHyp(names=[''Hn''], ty="S n'' <> 0", def_=None)], ty="4
+                      ^ n'' + (4 ^ n'' + (4 ^ n'' + (4 ^ n'' + 0))) = (4 ^ n'' + (4 ^ n'' + 0)) * 2",
+                      pp="n''  : nat\nHn  : S n'' <> 0\n|-4 ^ n'' + (4 ^ n'' + (4 ^ n'' + (4 ^ n'' + 0)))
+                      = (4 ^ n'' + (4 ^ n'' + 0)) * 2")'
                   proof_so_far:
                     - intros n Hn.
-                    - destruct n as [|n].
+                    - destruct n as [|n'].
                     - '- contradiction.'
-                    - '- exists (2 * 4 ^ n).'
+                    - '- exists (2 * 4 ^ n'').'
                     - simpl.
                   finished: false
               destination: 9
@@ -4544,16 +4936,17 @@ outcome:
                        error_message='(-32003, \'Coq: Found no subterm matching "?M1830 * '
                                      '(?M1831 * ?M1832)" in the current goal.\')',
                        remaining_goals=["Goal(info={'evar': ['Ser_Evar', 18], 'name': None}, "
-                                        "hyps=[GoalHyp(names=['n'], ty='nat', def_=None), "
-                                        "GoalHyp(names=['Hn'], ty='S n <> 0', def_=None)], "
-                                        "ty='4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ "
-                                        "n + (4 ^ n + 0)) * 2', pp='n  : nat\\nHn  : S n <> "
-                                        '0\\n|-4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 '
-                                        "^ n + (4 ^ n + 0)) * 2')"],
+                                        'hyps=[GoalHyp(names=["n\'"], ty=\'nat\', '
+                                        'def_=None), GoalHyp(names=[\'Hn\'], ty="S n\' <> '
+                                        '0", def_=None)], ty="4 ^ n\' + (4 ^ n\' + (4 ^ n\' '
+                                        '+ (4 ^ n\' + 0))) = (4 ^ n\' + (4 ^ n\' + 0)) * 2", '
+                                        'pp="n\'  : nat\\nHn  : S n\' <> 0\\n|-4 ^ n\' + (4 '
+                                        "^ n' + (4 ^ n' + (4 ^ n' + 0))) = (4 ^ n' + (4 ^ n' "
+                                        '+ 0)) * 2")'],
                        proof_so_far=['intros n Hn.',
-                                     'destruct n as [|n].',
+                                     "destruct n as [|n'].",
                                      '- contradiction.',
-                                     '- exists (2 * 4 ^ n).',
+                                     "- exists (2 * 4 ^ n').",
                                      'simpl.'],
                        finished=False)
             long: |-
@@ -4567,17 +4960,18 @@ outcome:
                                                 "goal.')",
                                   remaining_goals=["Goal(info={'evar': ['Ser_Evar', 18], "
                                                    "'name': None}, "
-                                                   "hyps=[GoalHyp(names=['n'], ty='nat', "
-                                                   "def_=None), GoalHyp(names=['Hn'], ty='S "
-                                                   "n <> 0', def_=None)], ty='4 ^ n + (4 ^ n "
-                                                   '+ (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ '
-                                                   "n + 0)) * 2', pp='n  : nat\\nHn  : S n "
-                                                   '<> 0\\n|-4 ^ n + (4 ^ n + (4 ^ n + (4 ^ '
-                                                   "n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2')"],
+                                                   'hyps=[GoalHyp(names=["n\'"], ty=\'nat\', '
+                                                   "def_=None), GoalHyp(names=['Hn'], "
+                                                   'ty="S n\' <> 0", def_=None)], ty="4 ^ '
+                                                   "n' + (4 ^ n' + (4 ^ n' + (4 ^ n' + 0))) "
+                                                   '= (4 ^ n\' + (4 ^ n\' + 0)) * 2", '
+                                                   'pp="n\'  : nat\\nHn  : S n\' <> 0\\n|-4 '
+                                                   "^ n' + (4 ^ n' + (4 ^ n' + (4 ^ n' + "
+                                                   '0))) = (4 ^ n\' + (4 ^ n\' + 0)) * 2")'],
                                   proof_so_far=['intros n Hn.',
-                                                'destruct n as [|n].',
+                                                "destruct n as [|n'].",
                                                 '- contradiction.',
-                                                '- exists (2 * 4 ^ n).',
+                                                "- exists (2 * 4 ^ n').",
                                                 'simpl.'],
                                   finished=False))
             json_provided: true
@@ -4590,15 +4984,16 @@ outcome:
                 error_message: '(-32003, ''Coq: Found no subterm matching "?M1830 * (?M1831 * ?M1832)"
                   in the current goal.'')'
                 remaining_goals:
-                  - 'Goal(info={''evar'': [''Ser_Evar'', 18], ''name'': None}, hyps=[GoalHyp(names=[''n''],
-                    ty=''nat'', def_=None), GoalHyp(names=[''Hn''], ty=''S n <> 0'', def_=None)], ty=''4
-                    ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2'', pp=''n  : nat\nHn  :
-                    S n <> 0\n|-4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2'')'
+                  - 'Goal(info={''evar'': [''Ser_Evar'', 18], ''name'': None}, hyps=[GoalHyp(names=["n''"],
+                    ty=''nat'', def_=None), GoalHyp(names=[''Hn''], ty="S n'' <> 0", def_=None)], ty="4
+                    ^ n'' + (4 ^ n'' + (4 ^ n'' + (4 ^ n'' + 0))) = (4 ^ n'' + (4 ^ n'' + 0)) * 2", pp="n''  :
+                    nat\nHn  : S n'' <> 0\n|-4 ^ n'' + (4 ^ n'' + (4 ^ n'' + (4 ^ n'' + 0))) = (4 ^ n''
+                    + (4 ^ n'' + 0)) * 2")'
                 proof_so_far:
                   - intros n Hn.
-                  - destruct n as [|n].
+                  - destruct n as [|n'].
                   - '- contradiction.'
-                  - '- exists (2 * 4 ^ n).'
+                  - '- exists (2 * 4 ^ n'').'
                   - simpl.
                 finished: false
           summary_message: null
@@ -4846,9 +5241,9 @@ outcome:
                         content: |-
                           ```rocq
                           intros n Hn.
-                          destruct n as [|n].
+                          destruct n as [|n'].
                           - contradiction.
-                          - exists (2 * 4 ^ n).
+                          - exists (2 * 4 ^ n').
                             simpl.
                             rewrite Nat.mul_assoc.
                             reflexivity.
@@ -4865,16 +5260,16 @@ outcome:
                         error_message: '(-32003, ''Coq: Found no subterm matching "?M1830 * (?M1831 *
                           ?M1832)" in the current goal.'')'
                         remaining_goals:
-                          - 'Goal(info={''evar'': [''Ser_Evar'', 18], ''name'': None}, hyps=[GoalHyp(names=[''n''],
-                            ty=''nat'', def_=None), GoalHyp(names=[''Hn''], ty=''S n <> 0'', def_=None)],
-                            ty=''4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) = (4 ^ n + (4 ^ n + 0)) * 2'',
-                            pp=''n  : nat\nHn  : S n <> 0\n|-4 ^ n + (4 ^ n + (4 ^ n + (4 ^ n + 0))) =
-                            (4 ^ n + (4 ^ n + 0)) * 2'')'
+                          - 'Goal(info={''evar'': [''Ser_Evar'', 18], ''name'': None}, hyps=[GoalHyp(names=["n''"],
+                            ty=''nat'', def_=None), GoalHyp(names=[''Hn''], ty="S n'' <> 0", def_=None)],
+                            ty="4 ^ n'' + (4 ^ n'' + (4 ^ n'' + (4 ^ n'' + 0))) = (4 ^ n'' + (4 ^ n''
+                            + 0)) * 2", pp="n''  : nat\nHn  : S n'' <> 0\n|-4 ^ n'' + (4 ^ n'' + (4 ^
+                            n'' + (4 ^ n'' + 0))) = (4 ^ n'' + (4 ^ n'' + 0)) * 2")'
                         proof_so_far:
                           - intros n Hn.
-                          - destruct n as [|n].
+                          - destruct n as [|n'].
                           - '- contradiction.'
-                          - '- exists (2 * 4 ^ n).'
+                          - '- exists (2 * 4 ^ n'').'
                           - simpl.
                         finished: false
                 tags:
@@ -4883,26 +5278,26 @@ outcome:
                   - id: 6
                     hint: null
                     value:
-                      short: Response(answer=Answer(mode=None, content='```rocq\nintros n Hn.\ndestruct
-                        n as [|n].\n- contradiction.\n- exists (2 * 4 ^ n).\n  simpl.\n  lia.\n```', tool_calls=(),
-                        justification=None), parsed=FinalAnswer(final='intros n Hn.\ndestruct n as [|n].\n-
-                        contradiction.\n- exists (2 * 4 ^ n).\n  simpl.\n  lia.\n'))
+                      short: Response(answer=Answer(mode=None, content="```rocq\nintros n Hn.\ndestruct
+                        n as [|n'].\n- contradiction.\n- exists (2 * 4 ^ n').\n  simpl.\n  lia.\n```",
+                        tool_calls=(), justification=None), parsed=FinalAnswer(final="intros n Hn.\ndestruct
+                        n as [|n'].\n- contradiction.\n- exists (2 * 4 ^ n').\n  simpl.\n  lia.\n"))
                       long: |-
                         Response(answer=Answer(mode=None,
                                                content='```rocq\n'
                                                        'intros n Hn.\n'
-                                                       'destruct n as [|n].\n'
+                                                       "destruct n as [|n'].\n"
                                                        '- contradiction.\n'
-                                                       '- exists (2 * 4 ^ n).\n'
+                                                       "- exists (2 * 4 ^ n').\n"
                                                        '  simpl.\n'
                                                        '  lia.\n'
                                                        '```',
                                                tool_calls=(),
                                                justification=None),
                                  parsed=FinalAnswer(final='intros n Hn.\n'
-                                                          'destruct n as [|n].\n'
+                                                          "destruct n as [|n'].\n"
                                                           '- contradiction.\n'
-                                                          '- exists (2 * 4 ^ n).\n'
+                                                          "- exists (2 * 4 ^ n').\n"
                                                           '  simpl.\n'
                                                           '  lia.\n'))
                       json_provided: true
@@ -4912,18 +5307,18 @@ outcome:
                           content: |-
                             ```rocq
                             intros n Hn.
-                            destruct n as [|n].
+                            destruct n as [|n'].
                             - contradiction.
-                            - exists (2 * 4 ^ n).
+                            - exists (2 * 4 ^ n').
                               simpl.
                               lia.
                             ```
                         parsed:
                           final: |
                             intros n Hn.
-                            destruct n as [|n].
+                            destruct n as [|n'].
                             - contradiction.
-                            - exists (2 * 4 ^ n).
+                            - exists (2 * 4 ^ n').
                               simpl.
                               lia.
           actions:
@@ -4935,26 +5330,26 @@ outcome:
               related_answers:
                 - 6
               value:
-                short: Response(answer=Answer(mode=None, content='```rocq\nintros n Hn.\ndestruct n as
-                  [|n].\n- contradiction.\n- exists (2 * 4 ^ n).\n  simpl.\n  lia.\n```', tool_calls=(),
-                  justification=None), parsed=FinalAnswer(final='intros n Hn.\ndestruct n as [|n].\n-
-                  contradiction.\n- exists (2 * 4 ^ n).\n  simpl.\n  lia.\n'))
+                short: Response(answer=Answer(mode=None, content="```rocq\nintros n Hn.\ndestruct n as
+                  [|n'].\n- contradiction.\n- exists (2 * 4 ^ n').\n  simpl.\n  lia.\n```", tool_calls=(),
+                  justification=None), parsed=FinalAnswer(final="intros n Hn.\ndestruct n as [|n'].\n-
+                  contradiction.\n- exists (2 * 4 ^ n').\n  simpl.\n  lia.\n"))
                 long: |-
                   Response(answer=Answer(mode=None,
                                          content='```rocq\n'
                                                  'intros n Hn.\n'
-                                                 'destruct n as [|n].\n'
+                                                 "destruct n as [|n'].\n"
                                                  '- contradiction.\n'
-                                                 '- exists (2 * 4 ^ n).\n'
+                                                 "- exists (2 * 4 ^ n').\n"
                                                  '  simpl.\n'
                                                  '  lia.\n'
                                                  '```',
                                          tool_calls=(),
                                          justification=None),
                            parsed=FinalAnswer(final='intros n Hn.\n'
-                                                    'destruct n as [|n].\n'
+                                                    "destruct n as [|n'].\n"
                                                     '- contradiction.\n'
-                                                    '- exists (2 * 4 ^ n).\n'
+                                                    "- exists (2 * 4 ^ n').\n"
                                                     '  simpl.\n'
                                                     '  lia.\n'))
                 json_provided: true
@@ -4964,18 +5359,18 @@ outcome:
                     content: |-
                       ```rocq
                       intros n Hn.
-                      destruct n as [|n].
+                      destruct n as [|n'].
                       - contradiction.
-                      - exists (2 * 4 ^ n).
+                      - exists (2 * 4 ^ n').
                         simpl.
                         lia.
                       ```
                   parsed:
                     final: |
                       intros n Hn.
-                      destruct n as [|n].
+                      destruct n as [|n'].
                       - contradiction.
-                      - exists (2 * 4 ^ n).
+                      - exists (2 * 4 ^ n').
                         simpl.
                         lia.
               destination: 11
@@ -5011,24 +5406,24 @@ outcome:
                   script:
                     short: |
                       intros n Hn.
-                      destruct n as [|n].
+                      destruct n as [|n'].
                       - contradiction.
-                      - exists (2 * 4 ^ n).
+                      - exists (2 * 4 ^ n').
                         simpl.
                         lia.
                     long: |-
                       ('intros n Hn.\n'
-                       'destruct n as [|n].\n'
+                       "destruct n as [|n'].\n"
                        '- contradiction.\n'
-                       '- exists (2 * 4 ^ n).\n'
+                       "- exists (2 * 4 ^ n').\n"
                        '  simpl.\n'
                        '  lia.\n')
                     json_provided: true
                     json: |
                       intros n Hn.
-                      destruct n as [|n].
+                      destruct n as [|n'].
                       - contradiction.
-                      - exists (2 * 4 ^ n).
+                      - exists (2 * 4 ^ n').
                         simpl.
                         lia.
                 tags:
@@ -5045,24 +5440,24 @@ outcome:
               value:
                 short: |
                   intros n Hn.
-                  destruct n as [|n].
+                  destruct n as [|n'].
                   - contradiction.
-                  - exists (2 * 4 ^ n).
+                  - exists (2 * 4 ^ n').
                     simpl.
                     lia.
                 long: |-
                   ('intros n Hn.\n'
-                   'destruct n as [|n].\n'
+                   "destruct n as [|n'].\n"
                    '- contradiction.\n'
-                   '- exists (2 * 4 ^ n).\n'
+                   "- exists (2 * 4 ^ n').\n"
                    '  simpl.\n'
                    '  lia.\n')
                 json_provided: true
                 json: |
                   intros n Hn.
-                  destruct n as [|n].
+                  destruct n as [|n'].
                   - contradiction.
-                  - exists (2 * 4 ^ n).
+                  - exists (2 * 4 ^ n').
                     simpl.
                     lia.
               destination: 15
@@ -5088,9 +5483,9 @@ outcome:
                   args:
                     script: |
                       intros n Hn.
-                      destruct n as [|n].
+                      destruct n as [|n'].
                       - contradiction.
-                      - exists (2 * 4 ^ n).
+                      - exists (2 * 4 ^ n').
                         simpl.
                         lia.
                 tags:
@@ -5099,21 +5494,21 @@ outcome:
                   - id: 7
                     hint: null
                     value:
-                      short: '[''intros n Hn.'', ''destruct n as [|n].'', ''- contradiction.'', ''- exists
-                        (2 * 4 ^ n).'', ''simpl.'', ''lia.'']'
+                      short: '[''intros n Hn.'', "destruct n as [|n''].", ''- contradiction.'', "- exists
+                        (2 * 4 ^ n'').", ''simpl.'', ''lia.'']'
                       long: |-
                         ['intros n Hn.',
-                         'destruct n as [|n].',
+                         "destruct n as [|n'].",
                          '- contradiction.',
-                         '- exists (2 * 4 ^ n).',
+                         "- exists (2 * 4 ^ n').",
                          'simpl.',
                          'lia.']
                       json_provided: true
                       json:
                         - intros n Hn.
-                        - destruct n as [|n].
+                        - destruct n as [|n'].
                         - '- contradiction.'
-                        - '- exists (2 * 4 ^ n).'
+                        - '- exists (2 * 4 ^ n'').'
                         - simpl.
                         - lia.
           actions:
@@ -5125,21 +5520,21 @@ outcome:
               related_answers:
                 - 7
               value:
-                short: '[''intros n Hn.'', ''destruct n as [|n].'', ''- contradiction.'', ''- exists (2
-                  * 4 ^ n).'', ''simpl.'', ''lia.'']'
+                short: '[''intros n Hn.'', "destruct n as [|n''].", ''- contradiction.'', "- exists (2
+                  * 4 ^ n'').", ''simpl.'', ''lia.'']'
                 long: |-
                   ['intros n Hn.',
-                   'destruct n as [|n].',
+                   "destruct n as [|n'].",
                    '- contradiction.',
-                   '- exists (2 * 4 ^ n).',
+                   "- exists (2 * 4 ^ n').",
                    'simpl.',
                    'lia.']
                 json_provided: true
                 json:
                   - intros n Hn.
-                  - destruct n as [|n].
+                  - destruct n as [|n'].
                   - '- contradiction.'
-                  - '- exists (2 * 4 ^ n).'
+                  - '- exists (2 * 4 ^ n'').'
                   - simpl.
                   - lia.
               destination: 13
@@ -5167,9 +5562,9 @@ outcome:
                     theorem_name: numbertheory_2dvd4expn
                     tactics:
                       - intros n Hn.
-                      - destruct n as [|n].
+                      - destruct n as [|n'].
                       - '- contradiction.'
-                      - '- exists (2 * 4 ^ n).'
+                      - '- exists (2 * 4 ^ n'').'
                       - simpl.
                       - lia.
                 tags:
@@ -5179,8 +5574,8 @@ outcome:
                     hint: null
                     value:
                       short: '{''success'': True, ''failing_index'': None, ''failing_tactic'': None, ''error_message'':
-                        None, ''remaining_goals'': [], ''proof_so_far'': [''intros n Hn.'', ''destruct
-                        n as [|n].'', ''- contradiction.'', ''- exists (2 * 4 ^ n).'', ''simpl.'', ''lia.''],
+                        None, ''remaining_goals'': [], ''proof_so_far'': [''intros n Hn.'', "destruct
+                        n as [|n''].", ''- contradiction.'', "- exists (2 * 4 ^ n'').", ''simpl.'', ''lia.''],
                         ''finished'': True}'
                       long: |-
                         {'success': True,
@@ -5189,9 +5584,9 @@ outcome:
                          'error_message': None,
                          'remaining_goals': [],
                          'proof_so_far': ['intros n Hn.',
-                                          'destruct n as [|n].',
+                                          "destruct n as [|n'].",
                                           '- contradiction.',
-                                          '- exists (2 * 4 ^ n).',
+                                          "- exists (2 * 4 ^ n').",
                                           'simpl.',
                                           'lia.'],
                          'finished': True}
@@ -5204,9 +5599,9 @@ outcome:
                         remaining_goals: []
                         proof_so_far:
                           - intros n Hn.
-                          - destruct n as [|n].
+                          - destruct n as [|n'].
                           - '- contradiction.'
-                          - '- exists (2 * 4 ^ n).'
+                          - '- exists (2 * 4 ^ n'').'
                           - simpl.
                           - lia.
                         finished: true
@@ -5220,8 +5615,8 @@ outcome:
                 - 8
               value:
                 short: '{''success'': True, ''failing_index'': None, ''failing_tactic'': None, ''error_message'':
-                  None, ''remaining_goals'': [], ''proof_so_far'': [''intros n Hn.'', ''destruct n as
-                  [|n].'', ''- contradiction.'', ''- exists (2 * 4 ^ n).'', ''simpl.'', ''lia.''], ''finished'':
+                  None, ''remaining_goals'': [], ''proof_so_far'': [''intros n Hn.'', "destruct n as [|n''].",
+                  ''- contradiction.'', "- exists (2 * 4 ^ n'').", ''simpl.'', ''lia.''], ''finished'':
                   True}'
                 long: |-
                   {'success': True,
@@ -5230,9 +5625,9 @@ outcome:
                    'error_message': None,
                    'remaining_goals': [],
                    'proof_so_far': ['intros n Hn.',
-                                    'destruct n as [|n].',
+                                    "destruct n as [|n'].",
                                     '- contradiction.',
-                                    '- exists (2 * 4 ^ n).',
+                                    "- exists (2 * 4 ^ n').",
                                     'simpl.',
                                     'lia.'],
                    'finished': True}
@@ -5245,9 +5640,9 @@ outcome:
                   remaining_goals: []
                   proof_so_far:
                     - intros n Hn.
-                    - destruct n as [|n].
+                    - destruct n as [|n'].
                     - '- contradiction.'
-                    - '- exists (2 * 4 ^ n).'
+                    - '- exists (2 * 4 ^ n'').'
                     - simpl.
                     - lia.
                   finished: true
@@ -5261,24 +5656,24 @@ outcome:
           success_value:
             short: |
               intros n Hn.
-              destruct n as [|n].
+              destruct n as [|n'].
               - contradiction.
-              - exists (2 * 4 ^ n).
+              - exists (2 * 4 ^ n').
                 simpl.
                 lia.
             long: |-
               ('intros n Hn.\n'
-               'destruct n as [|n].\n'
+               "destruct n as [|n'].\n"
                '- contradiction.\n'
-               '- exists (2 * 4 ^ n).\n'
+               "- exists (2 * 4 ^ n').\n"
                '  simpl.\n'
                '  lia.\n')
             json_provided: true
             json: |
               intros n Hn.
-              destruct n as [|n].
+              destruct n as [|n'].
               - contradiction.
-              - exists (2 * 4 ^ n).
+              - exists (2 * 4 ^ n').
                 simpl.
                 lia.
           summary_message: null
@@ -5296,24 +5691,24 @@ outcome:
           success_value:
             short: |
               intros n Hn.
-              destruct n as [|n].
+              destruct n as [|n'].
               - contradiction.
-              - exists (2 * 4 ^ n).
+              - exists (2 * 4 ^ n').
                 simpl.
                 lia.
             long: |-
               ('intros n Hn.\n'
-               'destruct n as [|n].\n'
+               "destruct n as [|n'].\n"
                '- contradiction.\n'
-               '- exists (2 * 4 ^ n).\n'
+               "- exists (2 * 4 ^ n').\n"
                '  simpl.\n'
                '  lia.\n')
             json_provided: true
             json: |
               intros n Hn.
-              destruct n as [|n].
+              destruct n as [|n'].
               - contradiction.
-              - exists (2 * 4 ^ n).
+              - exists (2 * 4 ^ n').
                 simpl.
                 lia.
           summary_message: null

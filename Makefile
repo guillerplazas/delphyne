@@ -41,6 +41,8 @@ pyright:
 	pyright examples/mini_eqns
 	@echo "\n\nChecking small"
 	pyright examples/small
+	@echo "\n\nChecking omphalos"
+	pyright -p examples/omphalos
 
 
 # Run a quick, minimal test suite. These tests should not require additional

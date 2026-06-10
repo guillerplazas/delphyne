@@ -5,6 +5,10 @@ Pure Python: no Delphyne imports, so this module can be called from
 `dp.compute(...)` boundaries without dragging strategy state in.
 """
 
+# `pytanque` ships no type stubs, so strict mode drowns this module in
+# unknown-type reports at the library boundary.
+# pyright: basic
+
 from __future__ import annotations
 
 import os
@@ -227,6 +231,59 @@ def check(
                 pass
 
 
+def try_tactic(
+    file: str,
+    theorem_name: str,
+    tactics_script: str,
+    extra_imports: tuple[str, ...] = DEFAULT_EXTRA_IMPORTS,
+    char_cap: int = DEFAULT_QUERY_OUTPUT_CHAR_CAP,
+) -> str:
+    """
+    Preview the effect of applying a sequence of tactics to the initial
+    proof state of `theorem_name` in `file`, *without committing*.
+
+    Rocq proof state is functional: `client.run(state, tac)` returns a
+    new state and leaves the original valid. We open a fresh pytanque
+    session, replay the tactics one-by-one from the theorem's initial
+    state, and return a human-readable summary of where we landed:
+
+    - all tactics succeeded and the proof finished → "PROOF FINISHED"
+      report (this prefix actually closes the goal — emit it as the
+      final proof body!);
+    - all tactics succeeded, goals remain → the remaining goal state;
+    - one tactic failed → the failing tactic, error message, the prefix
+      of tactics that succeeded, and the goals at the point of failure.
+
+    No `Qed.` is attempted here — this is preview, not verification.
+    Call `check` (via the proposal flow) once you're confident.
+
+    Pytanque errors are caught and rendered as the tool result so the
+    agent can self-correct on its next turn instead of crashing.
+    """
+    file = _resolve(file)
+    tactics = split_into_tactics(tactics_script)
+    if not tactics:
+        return (
+            "No tactics to preview. Pass a fenced Rocq block (each "
+            "tactic ending with `.`) as the `tactics` argument."
+        )
+
+    if extra_imports:
+        run_file = _materialize_with_extra_imports(file, extra_imports)
+    else:
+        run_file = file
+
+    try:
+        return _try_tactic_against(run_file, theorem_name, tactics, char_cap)
+    finally:
+        if extra_imports:
+            try:
+                os.unlink(run_file)
+                os.rmdir(Path(run_file).parent)
+            except OSError:
+                pass
+
+
 def query(
     file: str,
     theorem_name: str,
@@ -266,6 +323,152 @@ def query(
                 os.rmdir(Path(run_file).parent)
             except OSError:
                 pass
+
+
+def _try_tactic_against(
+    abs_file: str,
+    theorem_name: str,
+    tactics: list[str],
+    char_cap: int,
+) -> str:
+    """
+    Inner implementation of `try_tactic`. Opens a pytanque STDIO session,
+    replays `tactics` from the theorem's initial state, returns a
+    formatted string describing the resulting state.
+    """
+    with Pytanque(mode=PytanqueMode.STDIO) as client:
+        try:
+            state = client.start(abs_file, theorem_name)
+        except PetanqueError as e:
+            return f"Failed to open session: {e}"
+
+        succeeded: list[str] = []
+        for i, tac in enumerate(tactics):
+            try:
+                state = client.run(state, tac)
+            except PetanqueError as e:
+                return _format_try_failure(
+                    failing_index=i,
+                    failing_tactic=tac,
+                    error_message=str(e),
+                    succeeded=succeeded,
+                    remaining_goals=_safe_goals(client, state),
+                    char_cap=char_cap,
+                )
+            succeeded.append(tac)
+
+            if getattr(state, "proof_finished", False):
+                return _format_try_proof_finished(
+                    succeeded=succeeded,
+                    leftover=tactics[i + 1:],
+                )
+
+        return _format_try_success(
+            succeeded=succeeded,
+            remaining_goals=_safe_goals(client, state),
+            char_cap=char_cap,
+        )
+
+
+def _format_try_proof_finished(
+    succeeded: list[str],
+    leftover: list[str],
+) -> str:
+    parts = [
+        "PROOF FINISHED: this prefix closes the goal "
+        "(no remaining subgoals).",
+        "",
+        "Tactics that ran (in order):",
+    ]
+    for i, t in enumerate(succeeded, 1):
+        parts.append(f"  {i}. {t}")
+    if leftover:
+        parts.append("")
+        parts.append(
+            "Note: the following tactics from your input were "
+            "not executed because the proof had already closed:"
+        )
+        for t in leftover:
+            parts.append(f"  - {t}")
+    parts.append("")
+    parts.append(
+        "If you want this proof, emit these tactics verbatim as your "
+        "final fenced proof body."
+    )
+    return "\n".join(parts)
+
+
+def _format_try_success(
+    succeeded: list[str],
+    remaining_goals: list[str],
+    char_cap: int,
+) -> str:
+    parts: list[str] = []
+    parts.append("All previewed tactics applied successfully.")
+    parts.append("")
+    parts.append("Tactics that ran (in order):")
+    for i, t in enumerate(succeeded, 1):
+        parts.append(f"  {i}. {t}")
+    parts.append("")
+    if not remaining_goals:
+        parts.append(
+            "No remaining goals reported, but the proof has not yet "
+            "been marked finished — try `Qed.` in your final proposal."
+        )
+    else:
+        parts.append(f"Remaining goals ({len(remaining_goals)}):")
+        for g in remaining_goals:
+            parts.append("")
+            parts.append("```")
+            parts.append(str(g).strip())
+            parts.append("```")
+    text = "\n".join(parts)
+    if len(text) > char_cap:
+        text = text[:char_cap].rstrip() + "\n[truncated; tighten preview]"
+    return text
+
+
+def _format_try_failure(
+    failing_index: int,
+    failing_tactic: str,
+    error_message: str,
+    succeeded: list[str],
+    remaining_goals: list[str],
+    char_cap: int,
+) -> str:
+    parts: list[str] = []
+    parts.append(
+        f"Preview FAILED at tactic #{failing_index + 1}: "
+        f"`{failing_tactic}`"
+    )
+    parts.append("")
+    parts.append("Rocq error:")
+    parts.append("```")
+    parts.append(error_message.strip())
+    parts.append("```")
+    parts.append("")
+    if succeeded:
+        parts.append("Tactics that succeeded before the failure:")
+        for i, t in enumerate(succeeded, 1):
+            parts.append(f"  {i}. {t}")
+    else:
+        parts.append(
+            "No tactics succeeded — the very first tactic was rejected."
+        )
+    parts.append("")
+    if remaining_goals:
+        parts.append("Goals at the point of failure:")
+        for g in remaining_goals:
+            parts.append("")
+            parts.append("```")
+            parts.append(str(g).strip())
+            parts.append("```")
+    else:
+        parts.append("No goal state reported at the point of failure.")
+    text = "\n".join(parts)
+    if len(text) > char_cap:
+        text = text[:char_cap].rstrip() + "\n[truncated; tighten preview]"
+    return text
 
 
 def _query_against(

@@ -1,32 +1,33 @@
 # Demonstrations of the agentic baseline `prove_theorem_agentic`.
 #
-# The agentic baseline extends the standard one with TWO tools:
+# The agentic baseline extends the standard one with exploration tools:
 #
 # - `ReadSkill(skill_name)` — load a curated Rocq skill reference (the
-#   markdown content lands in chat history). Surfaces general tactic
-#   guidance, proof templates, error-message families, stdlib pointers.
+#   markdown content lands in chat history).
 #
 # - `SearchRocq(command)` — run a Rocq introspection command (`Search …`,
 #   `Check …`, `Print …`, `About …`, `SearchPattern …`) against the
 #   problem's initial proof state and return Rocq's output.
 #
-# The LLM has three actions: propose a proof, call `ReadSkill`, or call
-# `SearchRocq`. It allocates its request budget across them at its own
-# discretion.
+# - `TryTactic(tactics)` — non-destructively preview a tactic prefix on
+#   the theorem's initial proof state (only advertised under the
+#   `"full"` toolset; the `"lean"` toolset relies on partial proposals
+#   instead, which return the verified prefix + remaining goals through
+#   the verifier).
 #
-# The single demo below is a strategy demo that replays the cached
-# successful agentic run on `algebra_sqineq_4bap1lt4bsqpap1sq`. The
-# trace at `commands/cache/prove_one_agentic.exec.yaml` uses BOTH
-# `ReadSkill` and `SearchRocq` and closes the proof in 5 turns —
-# inspect that file directly to see the full conversation, the
-# concrete tool-call YAML shape, and the resulting tool-result
-# messages.
+# The LLM allocates one shared request budget across tool calls and
+# proof proposals at its own discretion (`turn_budget` mirrors that
+# budget into the system prompt).
+#
+# The demos below are strategy demos replaying cached runs from the
+# `commands/` directory; inspect the source `.exec.yaml` files for the
+# full conversation and concrete tool-call YAML shapes.
 #
 # (Standalone `QueryDemo` entries showing just a tool-call answer in
 # isolation are intentionally NOT included here: OpenAI's API requires
 # any assistant message carrying `tool_calls` to be immediately
 # followed by tool-result messages, so single-turn tool-call examples
-# break few-shot injection. Use the strategy trace above to see the
+# break few-shot injection. Use the strategy traces above to see the
 # complete tool-call -> tool-result handshake.)
 
 - demonstration: agentic_dev_smoke
@@ -34,8 +35,41 @@
   args:
     problem_file: "miniF2F/valid/algebra/algebra_sqineq_4bap1lt4bsqpap1sq.v"
     theorem_name: "algebra_sqineq_4bap1lt4bsqpap1sq"
+    toolset: "full"
+    turn_budget: 16
   tests:
     - run | success
   using:
-    - command: commands/cache/prove_one_agentic.exec.yaml
+    - command: commands/prove_one_agentic.exec.yaml
+  queries: []
+
+- demonstration: agentic_lean_dev_smoke
+  strategy: prove_theorem_agentic
+  args:
+    problem_file: "miniF2F/valid/algebra/algebra_sqineq_4bap1lt4bsqpap1sq.v"
+    theorem_name: "algebra_sqineq_4bap1lt4bsqpap1sq"
+    toolset: "lean"
+    turn_budget: 16
+  tests:
+    - run | success
+  using:
+    - command: commands/prove_one_agentic_lean.exec.yaml
+  queries: []
+
+# `agentic_trytactic_dev_smoke` anchors on an induction problem
+# (`induction_seq_mul2pnp1`) where previewing an induction prefix with
+# `TryTactic` before committing is a natural move under the "full"
+# toolset.
+
+- demonstration: agentic_trytactic_dev_smoke
+  strategy: prove_theorem_agentic
+  args:
+    problem_file: "miniF2F/valid/induction/induction_seq_mul2pnp1.v"
+    theorem_name: "induction_seq_mul2pnp1"
+    toolset: "full"
+    turn_budget: 16
+  tests:
+    - run
+  using:
+    - command: commands/prove_one_trytactic.exec.yaml
   queries: []

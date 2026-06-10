@@ -8,7 +8,7 @@
 
             ## How you can act
 
-            You have three actions available, and you decide when to use each:
+            You have four actions available, and you decide when to use each:
 
             1. **Propose a proof.** End your message with a single fenced code
                block containing only the body tactics of the proof. Each tactic
@@ -37,6 +37,34 @@
                - `SearchRocq(command="Check Rabs_pos.")` — confirm a lemma exists
                  and inspect its type before citing it in a tactic.
                - `SearchRocq(command="Print Rsqr.")` — show a definition's body.
+
+            4. **Call the `TryTactic` tool.** Previews the effect of a tactic
+               prefix on the theorem's *initial* proof state, WITHOUT committing.
+               Rocq proof state is functional, so this is a non-destructive look
+               at what `induction n.` / `destruct b.` / `case_eq ...` would do
+               before you draft a full script. The tool returns either the
+               resulting goal(s), `PROOF FINISHED` if the prefix closes the goal
+               (then emit those tactics verbatim as your final proof), or the
+               failing tactic + Rocq error if a step fails. Each `TryTactic` call
+               re-applies from scratch — there is no shared state between
+               invocations, so include any prerequisite tactics (e.g.
+               `intros n.`) in every preview. Examples:
+
+               - `TryTactic(tactics="intros n.\ninduction n.")` — see what the
+                 base / step cases look like before drafting.
+               - `TryTactic(tactics="intros b.\ndestruct b.")` — see whether the
+                 two cases simplify to something tractable.
+               - `TryTactic(tactics="intros n u H0 Hrec.\ninduction n as [|n IH].")`
+                 — preview a structural opener with named hypotheses.
+
+               `TryTactic` is for **structural exploration** only. It is **not**
+               for pre-verifying single-tactic automation: do not preview
+               `intros. lia.` / `intros. nra.` / `intros. lra.` /
+               `intros. ring.` / `intros. auto.` / `intros. trivial.` and the
+               like. Just *propose* those — a failed proposal returns the same
+               error message as a failed preview, and a successful proposal
+               closes the proof while a successful preview still costs you the
+               request you need to commit it.
 
             ## Available skills
 
@@ -75,10 +103,13 @@
             _.` is not. If you make a syntax mistake, you'll see Rocq's error in
             the tool result and can correct it on your next turn.
 
-            ## How to use your three actions effectively
+            ## How to use your four actions effectively
 
             The system prompt above does **not** contain skill content; it only
-            lists names you can request. The default workflow is:
+            lists names you can request. The default workflow has **proposing as
+            the centre of gravity** — every exploration step needs a concrete
+            trigger, and `TryTactic` in particular is held in reserve as an
+            escalation, not a warm-up.
 
             1. **Read one skill before your first proposal.** Pick the skill
                whose description fits the problem best. Suggested first picks:
@@ -119,11 +150,49 @@
                wastes turns when the bottleneck is tactic structure.
 
                On those structural failures (the anti-triggers above), the right
-               escalation is to read `compiler-guided-repair` instead. Its
-               error-type table maps each pattern to a concrete fix (`change A
-               with B`, `unfold` / `simpl` before `rewrite`, adjust bullet
-               structure, etc.) — it complements `SearchRocq`, which only
-               addresses unknown-identifier failures.
+               escalation is `TryTactic` (probe a different opener and see the
+               actual goal state) or `compiler-guided-repair` (read the error-
+               type table for a concrete fix recipe). They complement
+               `SearchRocq`, which only addresses unknown-identifier failures.
+
+            4. **`TryTactic` is available as an escalation, not a routine
+               step.** Invoke it at most once per problem, and only in one of
+               these specific situations:
+               - You have already had two proposals fail at the *same* deep
+                 point (failing tactic index ≥ 2) and need to see the
+                 intermediate goal to localize the wrong step, or
+               - You are about to commit to a non-obvious structural maneuver
+                 (an `induction` / `destruct` whose case shapes you cannot
+                 predict, or an algebraic restructure like
+                 `apply ... with ...; ring_simplify; replace ... by ring` whose
+                 intermediate goal you genuinely cannot foresee).
+
+               Do **not** preview proposals you would otherwise just submit —
+               most algebraic goals close in one tactic, and a failed proposal
+               carries the same diagnostic as a failed preview while a
+               successful proposal *closes* the goal. The default is to
+               propose, not to preview.
+
+            5. **Same-error escape hatch.** If two consecutive proposals fail
+               with the same Rocq error class (e.g. both report
+               `No applicable tactic`, both report `Cannot find witness`, both
+               cite the same unknown identifier), the next action **must not**
+               be a near-duplicate proposal. Pick exactly one of:
+               - a `ReadSkill` you have not yet loaded (e.g.
+                 `compiler-guided-repair` for structural failures,
+                 `coq-stdlib-guide` for missing-lemma chains),
+               - a `SearchRocq` for the unknown identifier or for a lemma in
+                 the family that's failing,
+               - a `TryTactic` previewing a structurally *different* opener
+                 (different tactic family — switch from `nra`-style automation
+                 to `Rplus_le_reg_l` + restructure, or from blind `lia` to
+                 `destruct` over the discriminating variable), or
+               - a proposal that swaps in a different tactic family
+                 (automation → restructure, restructure → induction, induction
+                 → case analysis), not a parameter tweak of the failing tactic.
+
+               Re-emitting essentially the same proposal twice in a row burns
+               the request budget without changing the verifier's diagnosis.
 
             ## Syntax notes for `SearchRocq` patterns
 
@@ -139,12 +208,32 @@
 
             ## Budget discipline
 
-            Every tool call costs one request. At most two exploration steps
-            per problem total (across both tools), unless a verifier failure
-            specifically warrants another `SearchRocq`. After three failed
-            proposals on the same problem, prefer to refactor your proof
-            structure (read `proof-templates`, change tactic family) rather
-            than searching again.
+            Every tool call costs one request. The headline rule: **the default
+            action on every turn is to propose**, not to explore. Exploration
+            calls are escalations, not warm-ups.
+
+            Hard caps:
+
+            - At most **one `ReadSkill`** before the first proposal (mandatory)
+              and **one additional `ReadSkill`** across the rest of the run
+              (only if a failure points at a skill you haven't read yet).
+            - `SearchRocq` fires on demand, but only when the verifier says
+              an identifier was not found. One call per unknown identifier.
+            - `TryTactic` is the *most expensive* explorer per pass-rate
+              return on this benchmark family: a routine TryTactic costs a
+              request that would otherwise be a proposal, and a successful
+              preview still needs a separate commit turn. Use it only under
+              the action-4 escalation rules above. **At most one `TryTactic`
+              per problem.**
+            - Across the whole run, total exploration calls (every
+              `ReadSkill` / `SearchRocq` / `TryTactic`) should sit at
+              **1–2 for an easy problem** and **2–3 for a hard one**. Above
+              that, you are exploring instead of proving.
+
+            After three failed proposals on the same problem, refactor your
+            proof structure (different tactic family, a `proof-templates`
+            skill if not yet read) rather than continuing to chip at the
+            current draft.
         - role: user
           content: |-
             Prove the following theorem in Rocq.
@@ -224,6 +313,46 @@
               - command
             title: SearchRocq
             type: object
+        - name: TryTactic
+          description: |-
+            Preview the effect of applying a tactic (or short tactic prefix) to
+            the theorem's *initial* proof state, WITHOUT committing. Use this
+            when you're uncertain whether a structural choice (`induction n.`,
+            `destruct b.`, `case_eq ...`) will produce tractable subgoals, or
+            when a prior proposal died several tactics deep and you want to
+            confirm which step actually went wrong before redrafting.
+
+            Pass `tactics` as a Rocq proof body — one or more tactics, each
+            terminated with `.`, optionally fenced or newline-separated. The
+            tool replays them in order from the theorem's initial state and
+            returns:
+
+              - the resulting goal(s) if every tactic succeeded;
+              - "PROOF FINISHED" plus the closing tactics if the prefix
+                actually closes the goal (then emit them verbatim as your
+                final proof);
+              - the failing tactic + Rocq error if any step fails, along with
+                the prefix that did succeed.
+
+            The pytanque session is fresh per call, so there is NO shared
+            state between TryTactic invocations: every preview re-applies from
+            scratch. To preview after `intros a b.`, include `intros a b.` in
+            your `tactics` argument. Each call costs one request; prefer a few
+            informed previews over many speculative ones.
+
+            Examples:
+              tactics="intros a b.\ninduction a."
+              tactics="intros n.\ndestruct n as [|n']."
+              tactics="intros.\nlia."
+          schema:
+            properties:
+              tactics:
+                title: Tactics
+                type: string
+            required:
+              - tactics
+            title: TryTactic
+            type: object
     iter: 1
   output:
     outputs:
@@ -237,16 +366,16 @@
       values:
         num_requests: 1
         num_completions: 1
-        input_tokens: 2266
+        input_tokens: 3798
         output_tokens: 21
-        cached_input_tokens: 1664
-        price: 0.0011704999999999999
+        cached_input_tokens: 2688
+        price: 0.0019334999999999997
     log_items: []
     model_name: gpt-5.4-2026-03-05
     usage_info:
       completion_tokens: 21
-      prompt_tokens: 2266
-      total_tokens: 2287
+      prompt_tokens: 3798
+      total_tokens: 3819
       completion_tokens_details:
         accepted_prediction_tokens: 0
         audio_tokens: 0
@@ -254,7 +383,7 @@
         rejected_prediction_tokens: 0
       prompt_tokens_details:
         audio_tokens: 0
-        cached_tokens: 1664
+        cached_tokens: 2688
 - input:
     request:
       chat:
@@ -399,7 +528,7 @@
 
             ## How you can act
 
-            You have three actions available, and you decide when to use each:
+            You have four actions available, and you decide when to use each:
 
             1. **Propose a proof.** End your message with a single fenced code
                block containing only the body tactics of the proof. Each tactic
@@ -428,6 +557,34 @@
                - `SearchRocq(command="Check Rabs_pos.")` — confirm a lemma exists
                  and inspect its type before citing it in a tactic.
                - `SearchRocq(command="Print Rsqr.")` — show a definition's body.
+
+            4. **Call the `TryTactic` tool.** Previews the effect of a tactic
+               prefix on the theorem's *initial* proof state, WITHOUT committing.
+               Rocq proof state is functional, so this is a non-destructive look
+               at what `induction n.` / `destruct b.` / `case_eq ...` would do
+               before you draft a full script. The tool returns either the
+               resulting goal(s), `PROOF FINISHED` if the prefix closes the goal
+               (then emit those tactics verbatim as your final proof), or the
+               failing tactic + Rocq error if a step fails. Each `TryTactic` call
+               re-applies from scratch — there is no shared state between
+               invocations, so include any prerequisite tactics (e.g.
+               `intros n.`) in every preview. Examples:
+
+               - `TryTactic(tactics="intros n.\ninduction n.")` — see what the
+                 base / step cases look like before drafting.
+               - `TryTactic(tactics="intros b.\ndestruct b.")` — see whether the
+                 two cases simplify to something tractable.
+               - `TryTactic(tactics="intros n u H0 Hrec.\ninduction n as [|n IH].")`
+                 — preview a structural opener with named hypotheses.
+
+               `TryTactic` is for **structural exploration** only. It is **not**
+               for pre-verifying single-tactic automation: do not preview
+               `intros. lia.` / `intros. nra.` / `intros. lra.` /
+               `intros. ring.` / `intros. auto.` / `intros. trivial.` and the
+               like. Just *propose* those — a failed proposal returns the same
+               error message as a failed preview, and a successful proposal
+               closes the proof while a successful preview still costs you the
+               request you need to commit it.
 
             ## Available skills
 
@@ -466,10 +623,13 @@
             _.` is not. If you make a syntax mistake, you'll see Rocq's error in
             the tool result and can correct it on your next turn.
 
-            ## How to use your three actions effectively
+            ## How to use your four actions effectively
 
             The system prompt above does **not** contain skill content; it only
-            lists names you can request. The default workflow is:
+            lists names you can request. The default workflow has **proposing as
+            the centre of gravity** — every exploration step needs a concrete
+            trigger, and `TryTactic` in particular is held in reserve as an
+            escalation, not a warm-up.
 
             1. **Read one skill before your first proposal.** Pick the skill
                whose description fits the problem best. Suggested first picks:
@@ -510,11 +670,49 @@
                wastes turns when the bottleneck is tactic structure.
 
                On those structural failures (the anti-triggers above), the right
-               escalation is to read `compiler-guided-repair` instead. Its
-               error-type table maps each pattern to a concrete fix (`change A
-               with B`, `unfold` / `simpl` before `rewrite`, adjust bullet
-               structure, etc.) — it complements `SearchRocq`, which only
-               addresses unknown-identifier failures.
+               escalation is `TryTactic` (probe a different opener and see the
+               actual goal state) or `compiler-guided-repair` (read the error-
+               type table for a concrete fix recipe). They complement
+               `SearchRocq`, which only addresses unknown-identifier failures.
+
+            4. **`TryTactic` is available as an escalation, not a routine
+               step.** Invoke it at most once per problem, and only in one of
+               these specific situations:
+               - You have already had two proposals fail at the *same* deep
+                 point (failing tactic index ≥ 2) and need to see the
+                 intermediate goal to localize the wrong step, or
+               - You are about to commit to a non-obvious structural maneuver
+                 (an `induction` / `destruct` whose case shapes you cannot
+                 predict, or an algebraic restructure like
+                 `apply ... with ...; ring_simplify; replace ... by ring` whose
+                 intermediate goal you genuinely cannot foresee).
+
+               Do **not** preview proposals you would otherwise just submit —
+               most algebraic goals close in one tactic, and a failed proposal
+               carries the same diagnostic as a failed preview while a
+               successful proposal *closes* the goal. The default is to
+               propose, not to preview.
+
+            5. **Same-error escape hatch.** If two consecutive proposals fail
+               with the same Rocq error class (e.g. both report
+               `No applicable tactic`, both report `Cannot find witness`, both
+               cite the same unknown identifier), the next action **must not**
+               be a near-duplicate proposal. Pick exactly one of:
+               - a `ReadSkill` you have not yet loaded (e.g.
+                 `compiler-guided-repair` for structural failures,
+                 `coq-stdlib-guide` for missing-lemma chains),
+               - a `SearchRocq` for the unknown identifier or for a lemma in
+                 the family that's failing,
+               - a `TryTactic` previewing a structurally *different* opener
+                 (different tactic family — switch from `nra`-style automation
+                 to `Rplus_le_reg_l` + restructure, or from blind `lia` to
+                 `destruct` over the discriminating variable), or
+               - a proposal that swaps in a different tactic family
+                 (automation → restructure, restructure → induction, induction
+                 → case analysis), not a parameter tweak of the failing tactic.
+
+               Re-emitting essentially the same proposal twice in a row burns
+               the request budget without changing the verifier's diagnosis.
 
             ## Syntax notes for `SearchRocq` patterns
 
@@ -530,12 +728,32 @@
 
             ## Budget discipline
 
-            Every tool call costs one request. At most two exploration steps
-            per problem total (across both tools), unless a verifier failure
-            specifically warrants another `SearchRocq`. After three failed
-            proposals on the same problem, prefer to refactor your proof
-            structure (read `proof-templates`, change tactic family) rather
-            than searching again.
+            Every tool call costs one request. The headline rule: **the default
+            action on every turn is to propose**, not to explore. Exploration
+            calls are escalations, not warm-ups.
+
+            Hard caps:
+
+            - At most **one `ReadSkill`** before the first proposal (mandatory)
+              and **one additional `ReadSkill`** across the rest of the run
+              (only if a failure points at a skill you haven't read yet).
+            - `SearchRocq` fires on demand, but only when the verifier says
+              an identifier was not found. One call per unknown identifier.
+            - `TryTactic` is the *most expensive* explorer per pass-rate
+              return on this benchmark family: a routine TryTactic costs a
+              request that would otherwise be a proposal, and a successful
+              preview still needs a separate commit turn. Use it only under
+              the action-4 escalation rules above. **At most one `TryTactic`
+              per problem.**
+            - Across the whole run, total exploration calls (every
+              `ReadSkill` / `SearchRocq` / `TryTactic`) should sit at
+              **1–2 for an easy problem** and **2–3 for a hard one**. Above
+              that, you are exploring instead of proving.
+
+            After three failed proposals on the same problem, refactor your
+            proof structure (different tactic family, a `proof-templates`
+            skill if not yet read) rather than continuing to chip at the
+            current draft.
         - role: user
           content: |-
             Prove the following theorem in Rocq.
@@ -748,12 +966,51 @@
               - command
             title: SearchRocq
             type: object
+        - name: TryTactic
+          description: |-
+            Preview the effect of applying a tactic (or short tactic prefix) to
+            the theorem's *initial* proof state, WITHOUT committing. Use this
+            when you're uncertain whether a structural choice (`induction n.`,
+            `destruct b.`, `case_eq ...`) will produce tractable subgoals, or
+            when a prior proposal died several tactics deep and you want to
+            confirm which step actually went wrong before redrafting.
+
+            Pass `tactics` as a Rocq proof body — one or more tactics, each
+            terminated with `.`, optionally fenced or newline-separated. The
+            tool replays them in order from the theorem's initial state and
+            returns:
+
+              - the resulting goal(s) if every tactic succeeded;
+              - "PROOF FINISHED" plus the closing tactics if the prefix
+                actually closes the goal (then emit them verbatim as your
+                final proof);
+              - the failing tactic + Rocq error if any step fails, along with
+                the prefix that did succeed.
+
+            The pytanque session is fresh per call, so there is NO shared
+            state between TryTactic invocations: every preview re-applies from
+            scratch. To preview after `intros a b.`, include `intros a b.` in
+            your `tactics` argument. Each call costs one request; prefer a few
+            informed previews over many speculative ones.
+
+            Examples:
+              tactics="intros a b.\ninduction a."
+              tactics="intros n.\ndestruct n as [|n']."
+              tactics="intros.\nlia."
+          schema:
+            properties:
+              tactics:
+                title: Tactics
+                type: string
+            required:
+              - tactics
+            title: TryTactic
+            type: object
     iter: 1
   output:
     outputs:
       - content: |-
           ```rocq
-          native_compute.
           reflexivity.
           ```
         tool_calls: []
@@ -761,16 +1018,16 @@
       values:
         num_requests: 1
         num_completions: 1
-        input_tokens: 3222
-        output_tokens: 15
-        cached_input_tokens: 2176
-        price: 0.0017294999999999997
+        input_tokens: 4754
+        output_tokens: 12
+        cached_input_tokens: 3712
+        price: 0.0018864999999999997
     log_items: []
     model_name: gpt-5.4-2026-03-05
     usage_info:
-      completion_tokens: 15
-      prompt_tokens: 3222
-      total_tokens: 3237
+      completion_tokens: 12
+      prompt_tokens: 4754
+      total_tokens: 4766
       completion_tokens_details:
         accepted_prediction_tokens: 0
         audio_tokens: 0
@@ -778,7 +1035,7 @@
         rejected_prediction_tokens: 0
       prompt_tokens_details:
         audio_tokens: 0
-        cached_tokens: 2176
+        cached_tokens: 3712
 - input:
     request:
       chat:
@@ -787,7 +1044,6 @@
             fun: split_into_tactics
             args:
               script: |
-                native_compute.
                 reflexivity.
       options:
         model: __compute__
@@ -795,7 +1051,6 @@
   output:
     outputs:
       - content: |
-          - native_compute.
           - reflexivity.
 - input:
     request:
@@ -807,7 +1062,6 @@
               file: miniF2F/valid/mathd/numbertheory/mathd_numbertheory_102.v
               theorem_name: mathd_numbertheory_102
               tactics:
-                - native_compute.
                 - reflexivity.
       options:
         model: __compute__
@@ -821,6 +1075,5 @@
           error_message: null
           remaining_goals: []
           proof_so_far:
-            - native_compute.
             - reflexivity.
           finished: true

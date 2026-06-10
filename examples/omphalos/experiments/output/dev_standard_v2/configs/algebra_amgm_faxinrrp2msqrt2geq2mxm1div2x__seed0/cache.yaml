@@ -1,0 +1,1319 @@
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+
+            A **partial proof body is a legitimate move**: if every tactic you
+            submit applies cleanly but goals remain, the feedback reports your
+            verified prefix together with the exact remaining goals — and if the
+            script happens to close the goal, you win immediately. When you are
+            unsure how an opener (`induction ...`, `destruct ...`) reshapes the
+            goal, submitting just that prefix is the cheapest way to see the
+            resulting subgoals before drafting the rest.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Reals.
+            Open Scope R_scope.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem algebra_amgm_faxinrrp2msqrt2geq2mxm1div2x :
+              forall x : R, x > 0 -> 2 - sqrt 2 >= 2 - x - 1 / (2 * x).
+            ```
+
+            ## Informal statement
+
+            Let $x$ be a positive real number. Show that $2 - \sqrt{2} \geq 2 - x -
+               \frac{1}{2x}$.
+
+            ## Informal proof sketch
+
+            The statement is equivalent to showing $x+\frac{1}{2x} \geq \sqrt{2}$. By AM-GM, $x +
+               \frac{1}{2x} \geq 2\sqrt{\frac{x}{2x}} = \sqrt{2}.$
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          intros x hx.
+          assert (hxx : 2 * x <> 0).
+          { nra. }
+          apply Rplus_ge_reg_r with (r := x + / (2 * x) - 2).
+          field_simplify.
+          2: exact hxx.
+          replace ((2 - sqrt 2 + (x + / (2 * x) - 2)) * (2 * x))
+            with (2 * x ^ 2 - 2 * sqrt 2 * x + 1) by ring.
+          replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1)
+            with ((sqrt 2 * x - 1) ^ 2) by (rewrite pow2_sqrt2; ring).
+          apply Rle_0_sqr.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 1393
+        output_tokens: 172
+        cached_input_tokens: 0
+        price: 0.0034612499999999995
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 172
+      prompt_tokens: 1393
+      total_tokens: 1565
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 0
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros x hx.
+                assert (hxx : 2 * x <> 0).
+                { nra. }
+                apply Rplus_ge_reg_r with (r := x + / (2 * x) - 2).
+                field_simplify.
+                2: exact hxx.
+                replace ((2 - sqrt 2 + (x + / (2 * x) - 2)) * (2 * x))
+                  with (2 * x ^ 2 - 2 * sqrt 2 * x + 1) by ring.
+                replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1)
+                  with ((sqrt 2 * x - 1) ^ 2) by (rewrite pow2_sqrt2; ring).
+                apply Rle_0_sqr.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros x hx.
+          - 'assert (hxx : 2 * x <> 0).'
+          - apply Rplus_ge_reg_r with (r := x + / (2 * x) - 2).
+          - field_simplify.
+          - '2: exact hxx.'
+          - with (2 * x ^ 2 - 2 * sqrt 2 * x + 1) by ring.
+          - with ((sqrt 2 * x - 1) ^ 2) by (rewrite pow2_sqrt2; ring).
+          - apply Rle_0_sqr.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/algebra/algebra_amgm_faxinrrp2msqrt2geq2mxm1div2x.v
+              theorem_name: algebra_amgm_faxinrrp2msqrt2geq2mxm1div2x
+              tactics:
+                - intros x hx.
+                - 'assert (hxx : 2 * x <> 0).'
+                - apply Rplus_ge_reg_r with (r := x + / (2 * x) - 2).
+                - field_simplify.
+                - '2: exact hxx.'
+                - with (2 * x ^ 2 - 2 * sqrt 2 * x + 1) by ring.
+                - with ((sqrt 2 * x - 1) ^ 2) by (rewrite pow2_sqrt2; ring).
+                - apply Rle_0_sqr.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 2
+          failing_tactic: apply Rplus_ge_reg_r with (r := x + / (2 * x) - 2).
+          error_message: '(-32003, ''Coq: In environment\nx : R\nhx : x > 0\nUnable to unify "?M1824 > ?M1825 \\/
+            ?M1824 = ?M1825" with\n "2 * x = 0 -> False".'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 5], ''name'': None}, hyps=[GoalHyp(names=[''x''], ty=''R'', def_=None),
+              GoalHyp(names=[''hx''], ty=''x > 0'', def_=None)], ty=''2 * x <> 0'', pp=''x  : R\nhx  : x > 0\n|-2
+              * x <> 0'')'
+            - 'Goal(info={''evar'': [''Ser_Evar'', 6], ''name'': None}, hyps=[GoalHyp(names=[''x''], ty=''R'', def_=None),
+              GoalHyp(names=[''hx''], ty=''x > 0'', def_=None), GoalHyp(names=[''hxx''], ty=''2 * x <> 0'', def_=None)],
+              ty=''2 - sqrt 2 >= 2 - x - 1 / (2 * x)'', pp=''x  : R\nhx  : x > 0\nhxx  : 2 * x <> 0\n|-2 - sqrt
+              2 >= 2 - x - 1 / (2 * x)'')'
+          proof_so_far:
+            - intros x hx.
+            - 'assert (hxx : 2 * x <> 0).'
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+
+            A **partial proof body is a legitimate move**: if every tactic you
+            submit applies cleanly but goals remain, the feedback reports your
+            verified prefix together with the exact remaining goals — and if the
+            script happens to close the goal, you win immediately. When you are
+            unsure how an opener (`induction ...`, `destruct ...`) reshapes the
+            goal, submitting just that prefix is the cheapest way to see the
+            resulting subgoals before drafting the rest.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Reals.
+            Open Scope R_scope.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem algebra_amgm_faxinrrp2msqrt2geq2mxm1div2x :
+              forall x : R, x > 0 -> 2 - sqrt 2 >= 2 - x - 1 / (2 * x).
+            ```
+
+            ## Informal statement
+
+            Let $x$ be a positive real number. Show that $2 - \sqrt{2} \geq 2 - x -
+               \frac{1}{2x}$.
+
+            ## Informal proof sketch
+
+            The statement is equivalent to showing $x+\frac{1}{2x} \geq \sqrt{2}$. By AM-GM, $x +
+               \frac{1}{2x} \geq 2\sqrt{\frac{x}{2x}} = \sqrt{2}.$
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros x hx.
+              assert (hxx : 2 * x <> 0).
+              { nra. }
+              apply Rplus_ge_reg_r with (r := x + / (2 * x) - 2).
+              field_simplify.
+              2: exact hxx.
+              replace ((2 - sqrt 2 + (x + / (2 * x) - 2)) * (2 * x))
+                with (2 * x ^ 2 - 2 * sqrt 2 * x + 1) by ring.
+              replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1)
+                with ((sqrt 2 * x - 1) ^ 2) by (rewrite pow2_sqrt2; ring).
+              apply Rle_0_sqr.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 2 in your script): `apply Rplus_ge_reg_r with (r := x + / (2 * x) - 2).`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: In environment\nx : R\nhx : x > 0\nUnable to unify "?M1824 > ?M1825 \\/ ?M1824 = ?M1825" with\n "2 * x = 0 -> False".')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros x hx.`  2. `assert (hxx : 2 * x <> 0).`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 5], 'name': None}, hyps=[GoalHyp(names=['x'], ty='R', def_=None), GoalHyp(names=['hx'], ty='x > 0', def_=None)], ty='2 * x <> 0', pp='x  : R\nhx  : x > 0\n|-2 * x <> 0')
+              ```
+              ```
+              Goal(info={'evar': ['Ser_Evar', 6], 'name': None}, hyps=[GoalHyp(names=['x'], ty='R', def_=None), GoalHyp(names=['hx'], ty='x > 0', def_=None), GoalHyp(names=['hxx'], ty='2 * x <> 0', def_=None)], ty='2 - sqrt 2 >= 2 - x - 1 / (2 * x)', pp='x  : R\nhx  : x > 0\nhxx  : 2 * x <> 0\n|-2 - sqrt 2 >= 2 - x - 1 / (2 * x)')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          intros x hx.
+          assert (hs : 0 <= (sqrt 2 * x - 1) ^ 2).
+          { apply Rle_0_sqr. }
+          assert (h2 : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1).
+          { replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1) with ((sqrt 2 * x - 1) ^ 2) by (rewrite sqrt_def; try lra; ring).
+            exact hs. }
+          nra.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 2000
+        output_tokens: 129
+        cached_input_tokens: 1408
+        price: 0.0022059999999999996
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 129
+      prompt_tokens: 2000
+      total_tokens: 2129
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 1408
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros x hx.
+                assert (hs : 0 <= (sqrt 2 * x - 1) ^ 2).
+                { apply Rle_0_sqr. }
+                assert (h2 : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1).
+                { replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1) with ((sqrt 2 * x - 1) ^ 2) by (rewrite sqrt_def; try lra; ring).
+                  exact hs. }
+                nra.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros x hx.
+          - 'assert (hs : 0 <= (sqrt 2 * x - 1) ^ 2).'
+          - 'assert (h2 : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1).'
+          - '{ replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1) with ((sqrt 2 * x - 1) ^ 2) by (rewrite sqrt_def; try lra;
+            ring).'
+          - nra.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/algebra/algebra_amgm_faxinrrp2msqrt2geq2mxm1div2x.v
+              theorem_name: algebra_amgm_faxinrrp2msqrt2geq2mxm1div2x
+              tactics:
+                - intros x hx.
+                - 'assert (hs : 0 <= (sqrt 2 * x - 1) ^ 2).'
+                - 'assert (h2 : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1).'
+                - '{ replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1) with ((sqrt 2 * x - 1) ^ 2) by (rewrite sqrt_def; try
+                  lra; ring).'
+                - nra.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 3
+          failing_tactic: '{ replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1) with ((sqrt 2 * x - 1) ^ 2) by (rewrite sqrt_def;
+            try lra; ring).'
+          error_message: '(-32003, ''Coq: Found no subterm matching "sqrt ?M1829 * sqrt ?M1829" in the current goal.'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 6], ''name'': None}, hyps=[GoalHyp(names=[''x''], ty=''R'', def_=None),
+              GoalHyp(names=[''hx''], ty=''x > 0'', def_=None)], ty=''0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1'', pp=''x  :
+              R\nhx  : x > 0\n|-0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1'')'
+            - 'Goal(info={''evar'': [''Ser_Evar'', 7], ''name'': None}, hyps=[GoalHyp(names=[''x''], ty=''R'', def_=None),
+              GoalHyp(names=[''hx''], ty=''x > 0'', def_=None), GoalHyp(names=[''h2''], ty=''0 <= 2 * x ^ 2 - 2
+              * sqrt 2 * x + 1'', def_=None)], ty=''0 <= (sqrt 2 * x - 1) ^ 2'', pp=''x  : R\nhx  : x > 0\nh2  :
+              0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1\n|-0 <= (sqrt 2 * x - 1) ^ 2'')'
+            - 'Goal(info={''evar'': [''Ser_Evar'', 5], ''name'': None}, hyps=[GoalHyp(names=[''x''], ty=''R'', def_=None),
+              GoalHyp(names=[''hx''], ty=''x > 0'', def_=None), GoalHyp(names=[''hs''], ty=''0 <= (sqrt 2 * x -
+              1) ^ 2'', def_=None)], ty=''2 - sqrt 2 >= 2 - x - 1 / (2 * x)'', pp=''x  : R\nhx  : x > 0\nhs  : 0
+              <= (sqrt 2 * x - 1) ^ 2\n|-2 - sqrt 2 >= 2 - x - 1 / (2 * x)'')'
+          proof_so_far:
+            - intros x hx.
+            - 'assert (hs : 0 <= (sqrt 2 * x - 1) ^ 2).'
+            - 'assert (h2 : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1).'
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+
+            A **partial proof body is a legitimate move**: if every tactic you
+            submit applies cleanly but goals remain, the feedback reports your
+            verified prefix together with the exact remaining goals — and if the
+            script happens to close the goal, you win immediately. When you are
+            unsure how an opener (`induction ...`, `destruct ...`) reshapes the
+            goal, submitting just that prefix is the cheapest way to see the
+            resulting subgoals before drafting the rest.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Reals.
+            Open Scope R_scope.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem algebra_amgm_faxinrrp2msqrt2geq2mxm1div2x :
+              forall x : R, x > 0 -> 2 - sqrt 2 >= 2 - x - 1 / (2 * x).
+            ```
+
+            ## Informal statement
+
+            Let $x$ be a positive real number. Show that $2 - \sqrt{2} \geq 2 - x -
+               \frac{1}{2x}$.
+
+            ## Informal proof sketch
+
+            The statement is equivalent to showing $x+\frac{1}{2x} \geq \sqrt{2}$. By AM-GM, $x +
+               \frac{1}{2x} \geq 2\sqrt{\frac{x}{2x}} = \sqrt{2}.$
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros x hx.
+              assert (hxx : 2 * x <> 0).
+              { nra. }
+              apply Rplus_ge_reg_r with (r := x + / (2 * x) - 2).
+              field_simplify.
+              2: exact hxx.
+              replace ((2 - sqrt 2 + (x + / (2 * x) - 2)) * (2 * x))
+                with (2 * x ^ 2 - 2 * sqrt 2 * x + 1) by ring.
+              replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1)
+                with ((sqrt 2 * x - 1) ^ 2) by (rewrite pow2_sqrt2; ring).
+              apply Rle_0_sqr.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 2 in your script): `apply Rplus_ge_reg_r with (r := x + / (2 * x) - 2).`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: In environment\nx : R\nhx : x > 0\nUnable to unify "?M1824 > ?M1825 \\/ ?M1824 = ?M1825" with\n "2 * x = 0 -> False".')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros x hx.`  2. `assert (hxx : 2 * x <> 0).`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 5], 'name': None}, hyps=[GoalHyp(names=['x'], ty='R', def_=None), GoalHyp(names=['hx'], ty='x > 0', def_=None)], ty='2 * x <> 0', pp='x  : R\nhx  : x > 0\n|-2 * x <> 0')
+              ```
+              ```
+              Goal(info={'evar': ['Ser_Evar', 6], 'name': None}, hyps=[GoalHyp(names=['x'], ty='R', def_=None), GoalHyp(names=['hx'], ty='x > 0', def_=None), GoalHyp(names=['hxx'], ty='2 * x <> 0', def_=None)], ty='2 - sqrt 2 >= 2 - x - 1 / (2 * x)', pp='x  : R\nhx  : x > 0\nhxx  : 2 * x <> 0\n|-2 - sqrt 2 >= 2 - x - 1 / (2 * x)')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros x hx.
+              assert (hs : 0 <= (sqrt 2 * x - 1) ^ 2).
+              { apply Rle_0_sqr. }
+              assert (h2 : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1).
+              { replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1) with ((sqrt 2 * x - 1) ^ 2) by (rewrite sqrt_def; try lra; ring).
+                exact hs. }
+              nra.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 3 in your script): `{ replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1) with ((sqrt 2 * x - 1) ^ 2) by (rewrite sqrt_def; try lra; ring).`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: Found no subterm matching "sqrt ?M1829 * sqrt ?M1829" in the current goal.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros x hx.`  2. `assert (hs : 0 <= (sqrt 2 * x - 1) ^ 2).`  3. `assert (h2 : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1).`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 6], 'name': None}, hyps=[GoalHyp(names=['x'], ty='R', def_=None), GoalHyp(names=['hx'], ty='x > 0', def_=None)], ty='0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1', pp='x  : R\nhx  : x > 0\n|-0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1')
+              ```
+              ```
+              Goal(info={'evar': ['Ser_Evar', 7], 'name': None}, hyps=[GoalHyp(names=['x'], ty='R', def_=None), GoalHyp(names=['hx'], ty='x > 0', def_=None), GoalHyp(names=['h2'], ty='0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1', def_=None)], ty='0 <= (sqrt 2 * x - 1) ^ 2', pp='x  : R\nhx  : x > 0\nh2  : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1\n|-0 <= (sqrt 2 * x - 1) ^ 2')
+              ```
+              ```
+              Goal(info={'evar': ['Ser_Evar', 5], 'name': None}, hyps=[GoalHyp(names=['x'], ty='R', def_=None), GoalHyp(names=['hx'], ty='x > 0', def_=None), GoalHyp(names=['hs'], ty='0 <= (sqrt 2 * x - 1) ^ 2', def_=None)], ty='2 - sqrt 2 >= 2 - x - 1 / (2 * x)', pp='x  : R\nhx  : x > 0\nhs  : 0 <= (sqrt 2 * x - 1) ^ 2\n|-2 - sqrt 2 >= 2 - x - 1 / (2 * x)')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          intros x hx.
+          assert (h1 : x + / (2 * x) >= sqrt 2).
+          {
+            apply (Rmult_ge_reg_r (2 * x)).
+            nra.
+            replace ((x + / (2 * x)) * (2 * x)) with (2 * x ^ 2 + 1) by (field; nra).
+            replace (sqrt 2 * (2 * x)) with (2 * sqrt 2 * x) by ring.
+            assert (h2 : 0 <= (sqrt 2 * x - 1) ^ 2).
+            { apply Rle_0_sqr. }
+            assert (h3 : (sqrt 2 * x - 1) ^ 2 = 2 * x ^ 2 - 2 * sqrt 2 * x + 1).
+            { rewrite sqrt_sqrt; try ring; lra. }
+            nra.
+          }
+          nra.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 2820
+        output_tokens: 206
+        cached_input_tokens: 1920
+        price: 0.0034249999999999997
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 206
+      prompt_tokens: 2820
+      total_tokens: 3026
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 1920
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros x hx.
+                assert (h1 : x + / (2 * x) >= sqrt 2).
+                {
+                  apply (Rmult_ge_reg_r (2 * x)).
+                  nra.
+                  replace ((x + / (2 * x)) * (2 * x)) with (2 * x ^ 2 + 1) by (field; nra).
+                  replace (sqrt 2 * (2 * x)) with (2 * sqrt 2 * x) by ring.
+                  assert (h2 : 0 <= (sqrt 2 * x - 1) ^ 2).
+                  { apply Rle_0_sqr. }
+                  assert (h3 : (sqrt 2 * x - 1) ^ 2 = 2 * x ^ 2 - 2 * sqrt 2 * x + 1).
+                  { rewrite sqrt_sqrt; try ring; lra. }
+                  nra.
+                }
+                nra.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros x hx.
+          - 'assert (h1 : x + / (2 * x) >= sqrt 2).'
+          - apply (Rmult_ge_reg_r (2 * x)).
+          - nra.
+          - replace ((x + / (2 * x)) * (2 * x)) with (2 * x ^ 2 + 1) by (field; nra).
+          - replace (sqrt 2 * (2 * x)) with (2 * sqrt 2 * x) by ring.
+          - 'assert (h2 : 0 <= (sqrt 2 * x - 1) ^ 2).'
+          - 'assert (h3 : (sqrt 2 * x - 1) ^ 2 = 2 * x ^ 2 - 2 * sqrt 2 * x + 1).'
+          - nra.
+          - nra.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/algebra/algebra_amgm_faxinrrp2msqrt2geq2mxm1div2x.v
+              theorem_name: algebra_amgm_faxinrrp2msqrt2geq2mxm1div2x
+              tactics:
+                - intros x hx.
+                - 'assert (h1 : x + / (2 * x) >= sqrt 2).'
+                - apply (Rmult_ge_reg_r (2 * x)).
+                - nra.
+                - replace ((x + / (2 * x)) * (2 * x)) with (2 * x ^ 2 + 1) by (field; nra).
+                - replace (sqrt 2 * (2 * x)) with (2 * sqrt 2 * x) by ring.
+                - 'assert (h2 : 0 <= (sqrt 2 * x - 1) ^ 2).'
+                - 'assert (h3 : (sqrt 2 * x - 1) ^ 2 = 2 * x ^ 2 - 2 * sqrt 2 * x + 1).'
+                - nra.
+                - nra.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 2
+          failing_tactic: apply (Rmult_ge_reg_r (2 * x)).
+          error_message: '(-32003, ''Coq: The variable Rmult_ge_reg_r was not found in the current environment.'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 4], ''name'': None}, hyps=[GoalHyp(names=[''x''], ty=''R'', def_=None),
+              GoalHyp(names=[''hx''], ty=''x > 0'', def_=None)], ty=''x + / (2 * x) >= sqrt 2'', pp=''x  : R\nhx  :
+              x > 0\n|-x + / (2 * x) >= sqrt 2'')'
+            - 'Goal(info={''evar'': [''Ser_Evar'', 5], ''name'': None}, hyps=[GoalHyp(names=[''x''], ty=''R'', def_=None),
+              GoalHyp(names=[''hx''], ty=''x > 0'', def_=None), GoalHyp(names=[''h1''], ty=''x + / (2 * x) >= sqrt
+              2'', def_=None)], ty=''2 - sqrt 2 >= 2 - x - 1 / (2 * x)'', pp=''x  : R\nhx  : x > 0\nh1  : x + /
+              (2 * x) >= sqrt 2\n|-2 - sqrt 2 >= 2 - x - 1 / (2 * x)'')'
+          proof_so_far:
+            - intros x hx.
+            - 'assert (h1 : x + / (2 * x) >= sqrt 2).'
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+
+            A **partial proof body is a legitimate move**: if every tactic you
+            submit applies cleanly but goals remain, the feedback reports your
+            verified prefix together with the exact remaining goals — and if the
+            script happens to close the goal, you win immediately. When you are
+            unsure how an opener (`induction ...`, `destruct ...`) reshapes the
+            goal, submitting just that prefix is the cheapest way to see the
+            resulting subgoals before drafting the rest.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Reals.
+            Open Scope R_scope.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem algebra_amgm_faxinrrp2msqrt2geq2mxm1div2x :
+              forall x : R, x > 0 -> 2 - sqrt 2 >= 2 - x - 1 / (2 * x).
+            ```
+
+            ## Informal statement
+
+            Let $x$ be a positive real number. Show that $2 - \sqrt{2} \geq 2 - x -
+               \frac{1}{2x}$.
+
+            ## Informal proof sketch
+
+            The statement is equivalent to showing $x+\frac{1}{2x} \geq \sqrt{2}$. By AM-GM, $x +
+               \frac{1}{2x} \geq 2\sqrt{\frac{x}{2x}} = \sqrt{2}.$
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros x hx.
+              assert (hxx : 2 * x <> 0).
+              { nra. }
+              apply Rplus_ge_reg_r with (r := x + / (2 * x) - 2).
+              field_simplify.
+              2: exact hxx.
+              replace ((2 - sqrt 2 + (x + / (2 * x) - 2)) * (2 * x))
+                with (2 * x ^ 2 - 2 * sqrt 2 * x + 1) by ring.
+              replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1)
+                with ((sqrt 2 * x - 1) ^ 2) by (rewrite pow2_sqrt2; ring).
+              apply Rle_0_sqr.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 2 in your script): `apply Rplus_ge_reg_r with (r := x + / (2 * x) - 2).`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: In environment\nx : R\nhx : x > 0\nUnable to unify "?M1824 > ?M1825 \\/ ?M1824 = ?M1825" with\n "2 * x = 0 -> False".')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros x hx.`  2. `assert (hxx : 2 * x <> 0).`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 5], 'name': None}, hyps=[GoalHyp(names=['x'], ty='R', def_=None), GoalHyp(names=['hx'], ty='x > 0', def_=None)], ty='2 * x <> 0', pp='x  : R\nhx  : x > 0\n|-2 * x <> 0')
+              ```
+              ```
+              Goal(info={'evar': ['Ser_Evar', 6], 'name': None}, hyps=[GoalHyp(names=['x'], ty='R', def_=None), GoalHyp(names=['hx'], ty='x > 0', def_=None), GoalHyp(names=['hxx'], ty='2 * x <> 0', def_=None)], ty='2 - sqrt 2 >= 2 - x - 1 / (2 * x)', pp='x  : R\nhx  : x > 0\nhxx  : 2 * x <> 0\n|-2 - sqrt 2 >= 2 - x - 1 / (2 * x)')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros x hx.
+              assert (hs : 0 <= (sqrt 2 * x - 1) ^ 2).
+              { apply Rle_0_sqr. }
+              assert (h2 : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1).
+              { replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1) with ((sqrt 2 * x - 1) ^ 2) by (rewrite sqrt_def; try lra; ring).
+                exact hs. }
+              nra.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 3 in your script): `{ replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1) with ((sqrt 2 * x - 1) ^ 2) by (rewrite sqrt_def; try lra; ring).`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: Found no subterm matching "sqrt ?M1829 * sqrt ?M1829" in the current goal.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros x hx.`  2. `assert (hs : 0 <= (sqrt 2 * x - 1) ^ 2).`  3. `assert (h2 : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1).`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 6], 'name': None}, hyps=[GoalHyp(names=['x'], ty='R', def_=None), GoalHyp(names=['hx'], ty='x > 0', def_=None)], ty='0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1', pp='x  : R\nhx  : x > 0\n|-0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1')
+              ```
+              ```
+              Goal(info={'evar': ['Ser_Evar', 7], 'name': None}, hyps=[GoalHyp(names=['x'], ty='R', def_=None), GoalHyp(names=['hx'], ty='x > 0', def_=None), GoalHyp(names=['h2'], ty='0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1', def_=None)], ty='0 <= (sqrt 2 * x - 1) ^ 2', pp='x  : R\nhx  : x > 0\nh2  : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1\n|-0 <= (sqrt 2 * x - 1) ^ 2')
+              ```
+              ```
+              Goal(info={'evar': ['Ser_Evar', 5], 'name': None}, hyps=[GoalHyp(names=['x'], ty='R', def_=None), GoalHyp(names=['hx'], ty='x > 0', def_=None), GoalHyp(names=['hs'], ty='0 <= (sqrt 2 * x - 1) ^ 2', def_=None)], ty='2 - sqrt 2 >= 2 - x - 1 / (2 * x)', pp='x  : R\nhx  : x > 0\nhs  : 0 <= (sqrt 2 * x - 1) ^ 2\n|-2 - sqrt 2 >= 2 - x - 1 / (2 * x)')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros x hx.
+              assert (h1 : x + / (2 * x) >= sqrt 2).
+              {
+                apply (Rmult_ge_reg_r (2 * x)).
+                nra.
+                replace ((x + / (2 * x)) * (2 * x)) with (2 * x ^ 2 + 1) by (field; nra).
+                replace (sqrt 2 * (2 * x)) with (2 * sqrt 2 * x) by ring.
+                assert (h2 : 0 <= (sqrt 2 * x - 1) ^ 2).
+                { apply Rle_0_sqr. }
+                assert (h3 : (sqrt 2 * x - 1) ^ 2 = 2 * x ^ 2 - 2 * sqrt 2 * x + 1).
+                { rewrite sqrt_sqrt; try ring; lra. }
+                nra.
+              }
+              nra.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 2 in your script): `apply (Rmult_ge_reg_r (2 * x)).`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: The variable Rmult_ge_reg_r was not found in the current environment.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros x hx.`  2. `assert (h1 : x + / (2 * x) >= sqrt 2).`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 4], 'name': None}, hyps=[GoalHyp(names=['x'], ty='R', def_=None), GoalHyp(names=['hx'], ty='x > 0', def_=None)], ty='x + / (2 * x) >= sqrt 2', pp='x  : R\nhx  : x > 0\n|-x + / (2 * x) >= sqrt 2')
+              ```
+              ```
+              Goal(info={'evar': ['Ser_Evar', 5], 'name': None}, hyps=[GoalHyp(names=['x'], ty='R', def_=None), GoalHyp(names=['hx'], ty='x > 0', def_=None), GoalHyp(names=['h1'], ty='x + / (2 * x) >= sqrt 2', def_=None)], ty='2 - sqrt 2 >= 2 - x - 1 / (2 * x)', pp='x  : R\nhx  : x > 0\nh1  : x + / (2 * x) >= sqrt 2\n|-2 - sqrt 2 >= 2 - x - 1 / (2 * x)')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          intros x hx.
+          assert (h2 : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1).
+          {
+            replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1) with ((sqrt 2 * x - 1) * (sqrt 2 * x - 1)).
+            2:{
+              assert (hsq : sqrt 2 * sqrt 2 = 2).
+              { rewrite <- sqrt_mult; try lra; simpl; rewrite sqrt_def; lra. }
+              rewrite Rmult_minus_distr_r, Rmult_minus_distr_l.
+              rewrite hsq.
+              ring.
+            }
+            apply Rmult_le_pos.
+            lra.
+            lra.
+          }
+          assert (h1 : x + / (2 * x) >= sqrt 2).
+          {
+            assert (hx2 : 0 < 2 * x) by lra.
+            assert (hneq : 2 * x <> 0) by lra.
+            assert (hcalc : (x + / (2 * x) - sqrt 2) * (2 * x) = 2 * x ^ 2 - 2 * sqrt 2 * x + 1).
+            {
+              field_simplify.
+              ring.
+              exact hneq.
+            }
+            have : 0 <= (x + / (2 * x) - sqrt 2) * (2 * x).
+            { rewrite hcalc. exact h2. }
+            nra.
+          }
+          nra.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 3443
+        output_tokens: 335
+        cached_input_tokens: 2816
+        price: 0.00448575
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 335
+      prompt_tokens: 3443
+      total_tokens: 3778
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 2816
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros x hx.
+                assert (h2 : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1).
+                {
+                  replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1) with ((sqrt 2 * x - 1) * (sqrt 2 * x - 1)).
+                  2:{
+                    assert (hsq : sqrt 2 * sqrt 2 = 2).
+                    { rewrite <- sqrt_mult; try lra; simpl; rewrite sqrt_def; lra. }
+                    rewrite Rmult_minus_distr_r, Rmult_minus_distr_l.
+                    rewrite hsq.
+                    ring.
+                  }
+                  apply Rmult_le_pos.
+                  lra.
+                  lra.
+                }
+                assert (h1 : x + / (2 * x) >= sqrt 2).
+                {
+                  assert (hx2 : 0 < 2 * x) by lra.
+                  assert (hneq : 2 * x <> 0) by lra.
+                  assert (hcalc : (x + / (2 * x) - sqrt 2) * (2 * x) = 2 * x ^ 2 - 2 * sqrt 2 * x + 1).
+                  {
+                    field_simplify.
+                    ring.
+                    exact hneq.
+                  }
+                  have : 0 <= (x + / (2 * x) - sqrt 2) * (2 * x).
+                  { rewrite hcalc. exact h2. }
+                  nra.
+                }
+                nra.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros x hx.
+          - 'assert (h2 : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1).'
+          - replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1) with ((sqrt 2 * x - 1) * (sqrt 2 * x - 1)).
+          - 'assert (hsq : sqrt 2 * sqrt 2 = 2).'
+          - rewrite Rmult_minus_distr_r, Rmult_minus_distr_l.
+          - rewrite hsq.
+          - ring.
+          - apply Rmult_le_pos.
+          - lra.
+          - lra.
+          - 'assert (h1 : x + / (2 * x) >= sqrt 2).'
+          - 'assert (hx2 : 0 < 2 * x) by lra.'
+          - 'assert (hneq : 2 * x <> 0) by lra.'
+          - 'assert (hcalc : (x + / (2 * x) - sqrt 2) * (2 * x) = 2 * x ^ 2 - 2 * sqrt 2 * x + 1).'
+          - field_simplify.
+          - ring.
+          - exact hneq.
+          - 'have : 0 <= (x + / (2 * x) - sqrt 2) * (2 * x).'
+          - nra.
+          - nra.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/algebra/algebra_amgm_faxinrrp2msqrt2geq2mxm1div2x.v
+              theorem_name: algebra_amgm_faxinrrp2msqrt2geq2mxm1div2x
+              tactics:
+                - intros x hx.
+                - 'assert (h2 : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1).'
+                - replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1) with ((sqrt 2 * x - 1) * (sqrt 2 * x - 1)).
+                - 'assert (hsq : sqrt 2 * sqrt 2 = 2).'
+                - rewrite Rmult_minus_distr_r, Rmult_minus_distr_l.
+                - rewrite hsq.
+                - ring.
+                - apply Rmult_le_pos.
+                - lra.
+                - lra.
+                - 'assert (h1 : x + / (2 * x) >= sqrt 2).'
+                - 'assert (hx2 : 0 < 2 * x) by lra.'
+                - 'assert (hneq : 2 * x <> 0) by lra.'
+                - 'assert (hcalc : (x + / (2 * x) - sqrt 2) * (2 * x) = 2 * x ^ 2 - 2 * sqrt 2 * x + 1).'
+                - field_simplify.
+                - ring.
+                - exact hneq.
+                - 'have : 0 <= (x + / (2 * x) - sqrt 2) * (2 * x).'
+                - nra.
+                - nra.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 4
+          failing_tactic: rewrite Rmult_minus_distr_r, Rmult_minus_distr_l.
+          error_message: '(-32003, ''Coq: Found no subterm matching "(?M1834 - ?M1835) * ?M1833" in the current
+            goal.'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 12], ''name'': None}, hyps=[GoalHyp(names=[''x''], ty=''R'',
+              def_=None), GoalHyp(names=[''hx''], ty=''x > 0'', def_=None)], ty=''sqrt 2 * sqrt 2 = 2'', pp=''x  :
+              R\nhx  : x > 0\n|-sqrt 2 * sqrt 2 = 2'')'
+            - 'Goal(info={''evar'': [''Ser_Evar'', 13], ''name'': None}, hyps=[GoalHyp(names=[''x''], ty=''R'',
+              def_=None), GoalHyp(names=[''hx''], ty=''x > 0'', def_=None), GoalHyp(names=[''hsq''], ty=''sqrt 2
+              * sqrt 2 = 2'', def_=None)], ty=''0 <= (sqrt 2 * x - 1) * (sqrt 2 * x - 1)'', pp=''x  : R\nhx  : x
+              > 0\nhsq  : sqrt 2 * sqrt 2 = 2\n|-0 <= (sqrt 2 * x - 1) * (sqrt 2 * x - 1)'')'
+            - 'Goal(info={''evar'': [''Ser_Evar'', 6], ''name'': None}, hyps=[GoalHyp(names=[''x''], ty=''R'', def_=None),
+              GoalHyp(names=[''hx''], ty=''x > 0'', def_=None)], ty=''(sqrt 2 * x - 1) * (sqrt 2 * x - 1) = 2 *
+              x ^ 2 - 2 * sqrt 2 * x + 1'', pp=''x  : R\nhx  : x > 0\n|-(sqrt 2 * x - 1) * (sqrt 2 * x - 1) = 2
+              * x ^ 2 - 2 * sqrt 2 * x + 1'')'
+            - 'Goal(info={''evar'': [''Ser_Evar'', 5], ''name'': None}, hyps=[GoalHyp(names=[''x''], ty=''R'', def_=None),
+              GoalHyp(names=[''hx''], ty=''x > 0'', def_=None), GoalHyp(names=[''h2''], ty=''0 <= 2 * x ^ 2 - 2
+              * sqrt 2 * x + 1'', def_=None)], ty=''2 - sqrt 2 >= 2 - x - 1 / (2 * x)'', pp=''x  : R\nhx  : x >
+              0\nh2  : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1\n|-2 - sqrt 2 >= 2 - x - 1 / (2 * x)'')'
+          proof_so_far:
+            - intros x hx.
+            - 'assert (h2 : 0 <= 2 * x ^ 2 - 2 * sqrt 2 * x + 1).'
+            - replace (2 * x ^ 2 - 2 * sqrt 2 * x + 1) with ((sqrt 2 * x - 1) * (sqrt 2 * x - 1)).
+            - 'assert (hsq : sqrt 2 * sqrt 2 = 2).'
+          finished: false

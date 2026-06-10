@@ -1,3 +1,5 @@
+# pytanque ships no type stubs, so strict mode is unusable here.
+# pyright: basic
 from pytanque import Pytanque, PytanqueMode
 
 def main():

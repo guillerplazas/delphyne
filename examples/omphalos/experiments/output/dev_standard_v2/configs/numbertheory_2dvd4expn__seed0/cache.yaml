@@ -1,0 +1,234 @@
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+
+            A **partial proof body is a legitimate move**: if every tactic you
+            submit applies cleanly but goals remain, the feedback reports your
+            verified prefix together with the exact remaining goals — and if the
+            script happens to close the goal, you win immediately. When you are
+            unsure how an opener (`induction ...`, `destruct ...`) reshapes the
+            goal, submitting just that prefix is the cheapest way to see the
+            resulting subgoals before drafting the rest.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Nat.
+            Require Import Arith.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem numbertheory_2dvd4expn :
+              forall n : nat,
+              n <> 0 ->
+              Nat.divide 2 (4^n).
+            ```
+
+            ## Informal statement
+
+            Show that for any positive integer $n$, $2$ divides $4^n$.
+
+            ## Informal proof sketch
+
+            We have $4^n = (2^2)^n = 2^{2n}$. Since $n > 0$ we have that $2n > 0$, so $2$ divides
+               $4^n$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          intros n hn.
+          destruct n as [| n].
+          - contradiction.
+          - exists (2 * 4 ^ n).
+            simpl.
+            ring.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 1339
+        output_tokens: 40
+        cached_input_tokens: 0
+        price: 0.00207375
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 40
+      prompt_tokens: 1339
+      total_tokens: 1379
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 0
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros n hn.
+                destruct n as [| n].
+                - contradiction.
+                - exists (2 * 4 ^ n).
+                  simpl.
+                  ring.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros n hn.
+          - destruct n as [| n].
+          - '- contradiction.'
+          - '- exists (2 * 4 ^ n).'
+          - simpl.
+          - ring.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/numbertheory/numbertheory_2dvd4expn.v
+              theorem_name: numbertheory_2dvd4expn
+              tactics:
+                - intros n hn.
+                - destruct n as [| n].
+                - '- contradiction.'
+                - '- exists (2 * 4 ^ n).'
+                - simpl.
+                - ring.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: true
+          failing_index: null
+          failing_tactic: null
+          error_message: null
+          remaining_goals: []
+          proof_so_far:
+            - intros n hn.
+            - destruct n as [| n].
+            - '- contradiction.'
+            - '- exists (2 * 4 ^ n).'
+            - simpl.
+            - ring.
+          finished: true

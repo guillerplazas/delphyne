@@ -1,0 +1,1220 @@
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+
+            A **partial proof body is a legitimate move**: if every tactic you
+            submit applies cleanly but goals remain, the feedback reports your
+            verified prefix together with the exact remaining goals — and if the
+            script happens to close the goal, you win immediately. When you are
+            unsure how an opener (`induction ...`, `destruct ...`) reshapes the
+            goal, submitting just that prefix is the cheapest way to see the
+            resulting subgoals before drafting the rest.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Nat.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem induction_seq_mul2pnp1 :
+              forall n : nat,
+              forall u : nat -> nat,
+              (u 0 = 0) ->
+              (forall n, u (n + 1) = 2 * u n + (n + 1)) ->
+              (u n = 2 ^ (n + 1) - (n + 2)).
+            ```
+
+            ## Informal statement
+
+            Let $u_n$ a sequence defined by $u_0 = 0$ and $\forall n \geq 0, u_{n+1} = 2 u_n + (n
+               + 1)$. Show that $\forall n \geq 0, u(n) = 2^{n+1} - (n+2)$.
+
+            ## Informal proof sketch
+
+            The property is true for $n=0$, since $2^{0+1}-(0+2)=0$.
+               By induction, assuming the property holds for $n\geq 0$, we have
+               $u_{n+1}=2u_n+(n+1)=2(2^{n+1}-(n+2))+n+1=2^{n+1+1}-(n+1+2)$, which shows the property
+               at $n+1$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          intros n u H0 Hrec.
+          induction n as [| n IH].
+          - rewrite H0.
+            reflexivity.
+          - rewrite Hrec.
+            rewrite IH.
+            simpl.
+            lia.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 1496
+        output_tokens: 50
+        cached_input_tokens: 0
+        price: 0.0023699999999999997
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 50
+      prompt_tokens: 1496
+      total_tokens: 1546
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 0
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros n u H0 Hrec.
+                induction n as [| n IH].
+                - rewrite H0.
+                  reflexivity.
+                - rewrite Hrec.
+                  rewrite IH.
+                  simpl.
+                  lia.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros n u H0 Hrec.
+          - induction n as [| n IH].
+          - '- rewrite H0.'
+          - reflexivity.
+          - '- rewrite Hrec.'
+          - rewrite IH.
+          - simpl.
+          - lia.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/induction/induction_seq_mul2pnp1.v
+              theorem_name: induction_seq_mul2pnp1
+              tactics:
+                - intros n u H0 Hrec.
+                - induction n as [| n IH].
+                - '- rewrite H0.'
+                - reflexivity.
+                - '- rewrite Hrec.'
+                - rewrite IH.
+                - simpl.
+                - lia.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 4
+          failing_tactic: '- rewrite Hrec.'
+          error_message: '(-32003, ''Coq: Found no subterm matching "u (?M1835 + 1)" in the current goal.'')'
+          remaining_goals: []
+          proof_so_far:
+            - intros n u H0 Hrec.
+            - induction n as [| n IH].
+            - '- rewrite H0.'
+            - reflexivity.
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+
+            A **partial proof body is a legitimate move**: if every tactic you
+            submit applies cleanly but goals remain, the feedback reports your
+            verified prefix together with the exact remaining goals — and if the
+            script happens to close the goal, you win immediately. When you are
+            unsure how an opener (`induction ...`, `destruct ...`) reshapes the
+            goal, submitting just that prefix is the cheapest way to see the
+            resulting subgoals before drafting the rest.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Nat.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem induction_seq_mul2pnp1 :
+              forall n : nat,
+              forall u : nat -> nat,
+              (u 0 = 0) ->
+              (forall n, u (n + 1) = 2 * u n + (n + 1)) ->
+              (u n = 2 ^ (n + 1) - (n + 2)).
+            ```
+
+            ## Informal statement
+
+            Let $u_n$ a sequence defined by $u_0 = 0$ and $\forall n \geq 0, u_{n+1} = 2 u_n + (n
+               + 1)$. Show that $\forall n \geq 0, u(n) = 2^{n+1} - (n+2)$.
+
+            ## Informal proof sketch
+
+            The property is true for $n=0$, since $2^{0+1}-(0+2)=0$.
+               By induction, assuming the property holds for $n\geq 0$, we have
+               $u_{n+1}=2u_n+(n+1)=2(2^{n+1}-(n+2))+n+1=2^{n+1+1}-(n+1+2)$, which shows the property
+               at $n+1$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros n u H0 Hrec.
+              induction n as [| n IH].
+              - rewrite H0.
+                reflexivity.
+              - rewrite Hrec.
+                rewrite IH.
+                simpl.
+                lia.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 4 in your script): `- rewrite Hrec.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: Found no subterm matching "u (?M1835 + 1)" in the current goal.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros n u H0 Hrec.`  2. `induction n as [| n IH].`  3. `- rewrite H0.`  4. `reflexivity.`
+            - **Goals remaining at the point of failure**:
+              (none reported)
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          intros n u H0 Hrec.
+          induction n as [| n IH].
+          - rewrite H0.
+            reflexivity.
+          - replace (u (S n)) with (u (n + 1)) by reflexivity.
+            rewrite Hrec.
+            rewrite IH.
+            simpl.
+            lia.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 1721
+        output_tokens: 71
+        cached_input_tokens: 1408
+        price: 0.0012772499999999997
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 71
+      prompt_tokens: 1721
+      total_tokens: 1792
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 1408
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros n u H0 Hrec.
+                induction n as [| n IH].
+                - rewrite H0.
+                  reflexivity.
+                - replace (u (S n)) with (u (n + 1)) by reflexivity.
+                  rewrite Hrec.
+                  rewrite IH.
+                  simpl.
+                  lia.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros n u H0 Hrec.
+          - induction n as [| n IH].
+          - '- rewrite H0.'
+          - reflexivity.
+          - '- replace (u (S n)) with (u (n + 1)) by reflexivity.'
+          - rewrite Hrec.
+          - rewrite IH.
+          - simpl.
+          - lia.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/induction/induction_seq_mul2pnp1.v
+              theorem_name: induction_seq_mul2pnp1
+              tactics:
+                - intros n u H0 Hrec.
+                - induction n as [| n IH].
+                - '- rewrite H0.'
+                - reflexivity.
+                - '- replace (u (S n)) with (u (n + 1)) by reflexivity.'
+                - rewrite Hrec.
+                - rewrite IH.
+                - simpl.
+                - lia.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 4
+          failing_tactic: '- replace (u (S n)) with (u (n + 1)) by reflexivity.'
+          error_message: '(-32003, ''Coq: In environment\nn : nat\nu : nat -> nat\nH0 : u 0 = 0\nHrec : forall n
+            : nat, u (n + 1) = 2 * u n + (n + 1)\nIH : u n = 2 ^ (n + 1) - (n + 2)\nUnable to unify "u (S n)" with
+            "u (n + 1)".'')'
+          remaining_goals: []
+          proof_so_far:
+            - intros n u H0 Hrec.
+            - induction n as [| n IH].
+            - '- rewrite H0.'
+            - reflexivity.
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+
+            A **partial proof body is a legitimate move**: if every tactic you
+            submit applies cleanly but goals remain, the feedback reports your
+            verified prefix together with the exact remaining goals — and if the
+            script happens to close the goal, you win immediately. When you are
+            unsure how an opener (`induction ...`, `destruct ...`) reshapes the
+            goal, submitting just that prefix is the cheapest way to see the
+            resulting subgoals before drafting the rest.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Nat.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem induction_seq_mul2pnp1 :
+              forall n : nat,
+              forall u : nat -> nat,
+              (u 0 = 0) ->
+              (forall n, u (n + 1) = 2 * u n + (n + 1)) ->
+              (u n = 2 ^ (n + 1) - (n + 2)).
+            ```
+
+            ## Informal statement
+
+            Let $u_n$ a sequence defined by $u_0 = 0$ and $\forall n \geq 0, u_{n+1} = 2 u_n + (n
+               + 1)$. Show that $\forall n \geq 0, u(n) = 2^{n+1} - (n+2)$.
+
+            ## Informal proof sketch
+
+            The property is true for $n=0$, since $2^{0+1}-(0+2)=0$.
+               By induction, assuming the property holds for $n\geq 0$, we have
+               $u_{n+1}=2u_n+(n+1)=2(2^{n+1}-(n+2))+n+1=2^{n+1+1}-(n+1+2)$, which shows the property
+               at $n+1$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros n u H0 Hrec.
+              induction n as [| n IH].
+              - rewrite H0.
+                reflexivity.
+              - rewrite Hrec.
+                rewrite IH.
+                simpl.
+                lia.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 4 in your script): `- rewrite Hrec.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: Found no subterm matching "u (?M1835 + 1)" in the current goal.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros n u H0 Hrec.`  2. `induction n as [| n IH].`  3. `- rewrite H0.`  4. `reflexivity.`
+            - **Goals remaining at the point of failure**:
+              (none reported)
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros n u H0 Hrec.
+              induction n as [| n IH].
+              - rewrite H0.
+                reflexivity.
+              - replace (u (S n)) with (u (n + 1)) by reflexivity.
+                rewrite Hrec.
+                rewrite IH.
+                simpl.
+                lia.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 4 in your script): `- replace (u (S n)) with (u (n + 1)) by reflexivity.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: In environment\nn : nat\nu : nat -> nat\nH0 : u 0 = 0\nHrec : forall n : nat, u (n + 1) = 2 * u n + (n + 1)\nIH : u n = 2 ^ (n + 1) - (n + 2)\nUnable to unify "u (S n)" with "u (n + 1)".')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros n u H0 Hrec.`  2. `induction n as [| n IH].`  3. `- rewrite H0.`  4. `reflexivity.`
+            - **Goals remaining at the point of failure**:
+              (none reported)
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          intros n u H0 Hrec.
+          induction n as [| n IH].
+          - rewrite H0.
+            reflexivity.
+          - assert (Hstep : u (n + 1) = 2 * u n + (n + 1)) by apply Hrec.
+            rewrite <- Nat.add_1_r in Hstep.
+            rewrite Hstep.
+            rewrite IH.
+            simpl.
+            lia.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 2057
+        output_tokens: 93
+        cached_input_tokens: 0
+        price: 0.0035012499999999996
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 93
+      prompt_tokens: 2057
+      total_tokens: 2150
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 0
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros n u H0 Hrec.
+                induction n as [| n IH].
+                - rewrite H0.
+                  reflexivity.
+                - assert (Hstep : u (n + 1) = 2 * u n + (n + 1)) by apply Hrec.
+                  rewrite <- Nat.add_1_r in Hstep.
+                  rewrite Hstep.
+                  rewrite IH.
+                  simpl.
+                  lia.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros n u H0 Hrec.
+          - induction n as [| n IH].
+          - '- rewrite H0.'
+          - reflexivity.
+          - '- assert (Hstep : u (n + 1) = 2 * u n + (n + 1)) by apply Hrec.'
+          - rewrite <- Nat.add_1_r in Hstep.
+          - rewrite Hstep.
+          - rewrite IH.
+          - simpl.
+          - lia.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/induction/induction_seq_mul2pnp1.v
+              theorem_name: induction_seq_mul2pnp1
+              tactics:
+                - intros n u H0 Hrec.
+                - induction n as [| n IH].
+                - '- rewrite H0.'
+                - reflexivity.
+                - '- assert (Hstep : u (n + 1) = 2 * u n + (n + 1)) by apply Hrec.'
+                - rewrite <- Nat.add_1_r in Hstep.
+                - rewrite Hstep.
+                - rewrite IH.
+                - simpl.
+                - lia.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 5
+          failing_tactic: rewrite <- Nat.add_1_r in Hstep.
+          error_message: '(-32003, ''Coq: The reference Nat.add_1_r was not found in the current environment.'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 22], ''name'': None}, hyps=[GoalHyp(names=[''n''], ty=''nat'',
+              def_=None), GoalHyp(names=[''u''], ty=''nat -> nat'', def_=None), GoalHyp(names=[''H0''], ty=''u 0
+              = 0'', def_=None), GoalHyp(names=[''Hrec''], ty=''forall n0 : nat, u (n0 + 1) = 2 * u n0 + (n0 + 1)'',
+              def_=None), GoalHyp(names=[''IH''], ty=''u n = 2 ^ (n + 1) - (n + 2)'', def_=None), GoalHyp(names=[''Hstep''],
+              ty=''u (n + 1) = 2 * u n + (n + 1)'', def_=None)], ty=''u (S n) = 2 ^ (S n + 1) - (S n + 2)'', pp=''n  :
+              nat\nu  : nat -> nat\nH0  : u 0 = 0\nHrec  : forall n0 : nat, u (n0 + 1) = 2 * u n0 + (n0 + 1)\nIH  :
+              u n = 2 ^ (n + 1) - (n + 2)\nHstep  : u (n + 1) = 2 * u n + (n + 1)\n|-u (S n) = 2 ^ (S n + 1) - (S
+              n + 2)'')'
+          proof_so_far:
+            - intros n u H0 Hrec.
+            - induction n as [| n IH].
+            - '- rewrite H0.'
+            - reflexivity.
+            - '- assert (Hstep : u (n + 1) = 2 * u n + (n + 1)) by apply Hrec.'
+          finished: false
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            You are a Rocq proof engineer. Your job is to close `Admitted` proofs
+            in miniF2F problems formalized in Rocq.
+
+            ## Rocq tactic guidance
+
+            You are completing a Rocq proof. The theorem statement is fixed; do not
+            change it. The imports listed in the user message are already in scope —
+            you do not need to repeat `Require Import` lines.
+
+            ### Core principles
+
+            - **Try automation first.** Many miniF2F goals close with a single
+              automation tactic once the hypotheses are introduced.
+            - **Build incrementally.** Use `intros` to name hypotheses, then attempt
+              the highest-power automation that fits the goal's domain.
+            - **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+              fabricated lemmas. If you cannot close a goal, propose a partial
+              proof that compiles up to a smaller subgoal.
+
+            ### Automation cascade (try in roughly this order)
+
+            `reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+            `nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+            `congruence` → `discriminate`
+
+            Domain hints:
+
+            - Natural-number arithmetic (`nat`) → `lia`, `nia`.
+            - Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+            - Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+              (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+              integer subgoals.
+            - Equational reasoning → `ring`, `field`, `congruence`.
+            - Pure propositional logic → `tauto`, `intuition`.
+            - Goals about constants only → `compute` or `vm_compute` followed by
+              `reflexivity`.
+
+            ### Common preludes for miniF2F problems
+
+            - Reals are already imported via `Require Import Reals.` plus
+              `Open Scope R_scope.` — you can use real-number literals directly.
+            - For divisibility / modular arithmetic you may need `Lia` (already
+              available globally in modern stdlib) and `Znumtheory`.
+            - For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+              `sqrt_lt_R0` are usable lemmas.
+
+            ### Math → Rocq phrasebook (selected)
+
+            | Math                  | Rocq (`R` scope)         |
+            |-----------------------|---------------------------|
+            | `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+            | `a / b`               | `a / b` (in `R_scope`)    |
+            | `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+            | `|a|`                 | `Rabs a`                  |
+            | `√a`                  | `sqrt a`                  |
+            | `a^n`                 | `a^n` or `pow a n`        |
+            | `∀ x, P x`            | `forall x, P x`           |
+            | `∃ x, P x`            | `exists x, P x`           |
+            | `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+            ### Tactical patterns
+
+            - Always start with `intros` to name universally quantified variables
+              and hypotheses before invoking automation.
+            - For inequalities of the form `a * b ≤ c²` or polynomial squared
+              inequalities, `nra` is usually the right hammer.
+            - For "prove an equality by rearranging" → `field` (if division) or
+              `ring` (otherwise) after introductions.
+            - Use `subst.` to eliminate equalities of the form `x = e` before
+              closing with automation.
+            - `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+              do not invent lemma names you are not certain of.
+            ## Output format
+
+            Reason briefly, then end your message with **one fenced code block**
+            containing only the body tactics of the proof — no `Theorem ...`, no
+            `Proof.`, no `Qed.`, no surrounding prose inside the fence. Each tactic
+            must terminate with a `.`. Example:
+
+            ```rocq
+            intros a b.
+            nra.
+            ```
+
+            If a previous attempt failed, the user message will include:
+            - the failing tactic and its position in your previous script,
+            - the Rocq error message,
+            - the goal state right before the failure,
+            - the prefix of tactics that succeeded.
+
+            Use that feedback to revise your **entire** proof body and emit it again
+            in a single fenced code block, in the same format.
+
+            A **partial proof body is a legitimate move**: if every tactic you
+            submit applies cleanly but goals remain, the feedback reports your
+            verified prefix together with the exact remaining goals — and if the
+            script happens to close the goal, you win immediately. When you are
+            unsure how an opener (`induction ...`, `destruct ...`) reshapes the
+            goal, submitting just that prefix is the cheapest way to see the
+            resulting subgoals before drafting the rest.
+        - role: user
+          content: |-
+            Prove the following theorem in Rocq.
+
+            ## Imports already in scope
+
+            ```rocq
+            Require Import Nat.
+            ```
+
+            ## Theorem
+
+            ```rocq
+            Theorem induction_seq_mul2pnp1 :
+              forall n : nat,
+              forall u : nat -> nat,
+              (u 0 = 0) ->
+              (forall n, u (n + 1) = 2 * u n + (n + 1)) ->
+              (u n = 2 ^ (n + 1) - (n + 2)).
+            ```
+
+            ## Informal statement
+
+            Let $u_n$ a sequence defined by $u_0 = 0$ and $\forall n \geq 0, u_{n+1} = 2 u_n + (n
+               + 1)$. Show that $\forall n \geq 0, u(n) = 2^{n+1} - (n+2)$.
+
+            ## Informal proof sketch
+
+            The property is true for $n=0$, since $2^{0+1}-(0+2)=0$.
+               By induction, assuming the property holds for $n\geq 0$, we have
+               $u_{n+1}=2u_n+(n+1)=2(2^{n+1}-(n+2))+n+1=2^{n+1+1}-(n+1+2)$, which shows the property
+               at $n+1$.
+
+            Reply with a fenced code block containing only the body of the proof
+            (no `Proof.`, no `Qed.`).
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros n u H0 Hrec.
+              induction n as [| n IH].
+              - rewrite H0.
+                reflexivity.
+              - rewrite Hrec.
+                rewrite IH.
+                simpl.
+                lia.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 4 in your script): `- rewrite Hrec.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: Found no subterm matching "u (?M1835 + 1)" in the current goal.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros n u H0 Hrec.`  2. `induction n as [| n IH].`  3. `- rewrite H0.`  4. `reflexivity.`
+            - **Goals remaining at the point of failure**:
+              (none reported)
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros n u H0 Hrec.
+              induction n as [| n IH].
+              - rewrite H0.
+                reflexivity.
+              - replace (u (S n)) with (u (n + 1)) by reflexivity.
+                rewrite Hrec.
+                rewrite IH.
+                simpl.
+                lia.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 4 in your script): `- replace (u (S n)) with (u (n + 1)) by reflexivity.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: In environment\nn : nat\nu : nat -> nat\nH0 : u 0 = 0\nHrec : forall n : nat, u (n + 1) = 2 * u n + (n + 1)\nIH : u n = 2 ^ (n + 1) - (n + 2)\nUnable to unify "u (S n)" with "u (n + 1)".')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros n u H0 Hrec.`  2. `induction n as [| n IH].`  3. `- rewrite H0.`  4. `reflexivity.`
+            - **Goals remaining at the point of failure**:
+              (none reported)
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+        - role: assistant
+          answer:
+            mode: null
+            content: |-
+              ```rocq
+              intros n u H0 Hrec.
+              induction n as [| n IH].
+              - rewrite H0.
+                reflexivity.
+              - assert (Hstep : u (n + 1) = 2 * u n + (n + 1)) by apply Hrec.
+                rewrite <- Nat.add_1_r in Hstep.
+                rewrite Hstep.
+                rewrite IH.
+                simpl.
+                lia.
+              ```
+        - role: user
+          content: |
+            Your previous proof did not close the goal.
+
+            - **Failing tactic** (index 5 in your script): `rewrite <- Nat.add_1_r in Hstep.`
+            - **Rocq error**:
+
+              """
+              (-32003, 'Coq: The reference Nat.add_1_r was not found in the current environment.')
+              """
+
+            - **Tactics that succeeded before the failure**:
+              1. `intros n u H0 Hrec.`  2. `induction n as [| n IH].`  3. `- rewrite H0.`  4. `reflexivity.`  5. `- assert (Hstep : u (n + 1) = 2 * u n + (n + 1)) by apply Hrec.`
+            - **Goals remaining at the point of failure**:
+              ```
+              Goal(info={'evar': ['Ser_Evar', 22], 'name': None}, hyps=[GoalHyp(names=['n'], ty='nat', def_=None), GoalHyp(names=['u'], ty='nat -> nat', def_=None), GoalHyp(names=['H0'], ty='u 0 = 0', def_=None), GoalHyp(names=['Hrec'], ty='forall n0 : nat, u (n0 + 1) = 2 * u n0 + (n0 + 1)', def_=None), GoalHyp(names=['IH'], ty='u n = 2 ^ (n + 1) - (n + 2)', def_=None), GoalHyp(names=['Hstep'], ty='u (n + 1) = 2 * u n + (n + 1)', def_=None)], ty='u (S n) = 2 ^ (S n + 1) - (S n + 2)', pp='n  : nat\nu  : nat -> nat\nH0  : u 0 = 0\nHrec  : forall n0 : nat, u (n0 + 1) = 2 * u n0 + (n0 + 1)\nIH  : u n = 2 ^ (n + 1) - (n + 2)\nHstep  : u (n + 1) = 2 * u n + (n + 1)\n|-u (S n) = 2 ^ (S n + 1) - (S n + 2)')
+              ```
+
+            Revise the whole proof body and reply with one fenced code block in the
+            same format as before.
+      options:
+        model: gpt-5.4-2026-03-05
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```rocq
+          intros n u H0 Hrec.
+          induction n as [| n IH].
+          - rewrite H0.
+            reflexivity.
+          - replace (u (S n)) with (2 * u n + (n + 1)).
+            + rewrite IH.
+              simpl.
+              lia.
+            + rewrite <- Hrec.
+              f_equal.
+              lia.
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 2699
+        output_tokens: 81
+        cached_input_tokens: 2048
+        price: 0.00187975
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 81
+      prompt_tokens: 2699
+      total_tokens: 2780
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 0
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 2048
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: split_into_tactics
+            args:
+              script: |
+                intros n u H0 Hrec.
+                induction n as [| n IH].
+                - rewrite H0.
+                  reflexivity.
+                - replace (u (S n)) with (2 * u n + (n + 1)).
+                  + rewrite IH.
+                    simpl.
+                    lia.
+                  + rewrite <- Hrec.
+                    f_equal.
+                    lia.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          - intros n u H0 Hrec.
+          - induction n as [| n IH].
+          - '- rewrite H0.'
+          - reflexivity.
+          - '- replace (u (S n)) with (2 * u n + (n + 1)).'
+          - + rewrite IH.
+          - simpl.
+          - lia.
+          - + rewrite <- Hrec.
+          - f_equal.
+          - lia.
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              file: miniF2F/valid/induction/induction_seq_mul2pnp1.v
+              theorem_name: induction_seq_mul2pnp1
+              tactics:
+                - intros n u H0 Hrec.
+                - induction n as [| n IH].
+                - '- rewrite H0.'
+                - reflexivity.
+                - '- replace (u (S n)) with (2 * u n + (n + 1)).'
+                - + rewrite IH.
+                - simpl.
+                - lia.
+                - + rewrite <- Hrec.
+                - f_equal.
+                - lia.
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          success: false
+          failing_index: 7
+          failing_tactic: lia.
+          error_message: '(-32003, ''Coq: Tactic failure:  Cannot find witness.'')'
+          remaining_goals:
+            - 'Goal(info={''evar'': [''Ser_Evar'', 26], ''name'': None}, hyps=[GoalHyp(names=[''n''], ty=''nat'',
+              def_=None), GoalHyp(names=[''u''], ty=''nat -> nat'', def_=None), GoalHyp(names=[''H0''], ty=''u 0
+              = 0'', def_=None), GoalHyp(names=[''Hrec''], ty=''forall n0 : nat, u (n0 + 1) = 2 * u n0 + (n0 + 1)'',
+              def_=None), GoalHyp(names=[''IH''], ty=''u n = 2 ^ (n + 1) - (n + 2)'', def_=None)], ty=''2 ^ (n +
+              1) - (n + 2) + (2 ^ (n + 1) - (n + 2) + 0) + (n + 1) =\n2 ^ (n + 1) + (2 ^ (n + 1) + 0) - S (n + 2)'',
+              pp=''n  : nat\nu  : nat -> nat\nH0  : u 0 = 0\nHrec  : forall n0 : nat, u (n0 + 1) = 2 * u n0 + (n0
+              + 1)\nIH  : u n = 2 ^ (n + 1) - (n + 2)\n|-2 ^ (n + 1) - (n + 2) + (2 ^ (n + 1) - (n + 2) + 0) + (n
+              + 1) =\n2 ^ (n + 1) + (2 ^ (n + 1) + 0) - S (n + 2)'')'
+          proof_so_far:
+            - intros n u H0 Hrec.
+            - induction n as [| n IH].
+            - '- rewrite H0.'
+            - reflexivity.
+            - '- replace (u (S n)) with (2 * u n + (n + 1)).'
+            - + rewrite IH.
+            - simpl.
+          finished: false

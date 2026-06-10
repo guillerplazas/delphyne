@@ -68,6 +68,12 @@ def check_proof(
     feedback = yield from dp.compute(pt.check)(problem_file, theorem_name, tactics)
     if feedback.success:
         return script
+    # `pt.check` appends a synthetic `Qed.`: a script whose tactics all
+    # applied but left goals open fails exactly there. Surface that as
+    # "incomplete" so the feedback template can show the verified
+    # prefix + remaining goals instead of framing it as an error.
+    if feedback.failing_tactic == "Qed." and feedback.remaining_goals:
+        return dp.Error(label="incomplete", meta=feedback)
     return dp.Error(label="feedback", meta=feedback)
 
 
