@@ -24,13 +24,13 @@ configs = [
         bench_name=name,
         model_name=model,
         temperature=None,
-        toolset="lean",  # dev-sweep winner: same pass rate as "full", 34% cheaper
+        toolset="rich",  # canonical: ties "lean" at 8/20, marginally cheaper
         num_requests=20,
         loop=False,
         seed=seed,
         max_dollar_budget=0.7,
     )
-    for name in mf.PROBLEMS  # extend once `mf.PROBLEMS` covers the full split
+    for name in mf.SET1_PROBLEMS  # extend to the full valid split later
     for model in MODELS
     for seed in SEEDS
 ]
@@ -42,5 +42,7 @@ if __name__ == "__main__":
         context=dp.workspace_execution_context(__file__),
         configs=configs,
         output_dir=f"experiments/output/{dp.path_stem(__file__)}",
-        config_naming=lambda cfg, _uid: f"{cfg.bench_name}__{cfg.model_name}__seed{cfg.seed}",
+        config_naming=lambda cfg, _uid: (
+            f"{cfg.bench_name}__{cfg.model_name}__seed{cfg.seed}"
+        ),
     ).run_cli()

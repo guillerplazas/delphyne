@@ -1,21 +1,22 @@
 """
 Rocq skill-pack index and loader for the agentic baseline.
 
-The skill pack at `rocq_skills_data/` was designed as a Claude Code
-plugin, but only a subset of its references is relevant to a per-proof
-LLM running through pytanque. This module curates that subset and
-exposes two pure-Python entry points used by `prove_agentic.py`:
+`rocq_skills_data/` is a vendored copy of a standalone external Rocq
+skill-pack repository and is kept untouched. This module only *reads*
+the curated markdown references inside it (the pack's plugin/MCP
+runtime scaffolding is not used — we work with plain tool calls
+through pytanque, not MCP). Two pure-Python entry points are exposed
+to `prove_agentic.py`:
 
 - `list_skills()` — name → one-line description, for the system prompt.
 - `read_skill(name)` — full markdown content, returned through the
   `ReadSkill` tool when the LLM requests it.
 
-The MCP / cycle-engine / subagent-workflows references are *not*
-exposed: they describe a Claude-Code-plugin runtime that we are not
-using, and would only add noise to the agent's context. The
-admitted-filling / proof-golfing-patterns / axiom-elimination
-references are excluded too: they are about transforming *existing*
-proofs, which never comes up when proving a miniF2F goal from scratch.
+Only the references in `SKILL_WHITELIST` are exposed: the others
+(admitted-filling, proof-golfing, axiom-elimination, MCP/agent
+workflow notes) are about transforming *existing* proofs or about the
+pack's own tooling, which never comes up when proving a miniF2F goal
+from scratch.
 
 Pure Python — no Delphyne imports — so callers can wrap these in
 `dp.compute(...)` cleanly.
@@ -26,15 +27,15 @@ from __future__ import annotations
 from pathlib import Path
 
 
-_SKILLS_ROOT = (
+_REFERENCES_DIR = (
     Path(__file__).resolve().parent
     / "rocq_skills_data"
     / "plugins"
     / "rocq"
     / "skills"
     / "rocq"
+    / "references"
 )
-_REFERENCES_DIR = _SKILLS_ROOT / "references"
 
 
 SKILL_WHITELIST: tuple[str, ...] = (
@@ -71,8 +72,7 @@ def read_skill(name: str) -> str:
     if name not in SKILL_WHITELIST:
         available = ", ".join(SKILL_WHITELIST)
         return (
-            f"Skill {name!r} is not available. "
-            f"Available skills: {available}."
+            f"Skill {name!r} is not available. Available skills: {available}."
         )
     path = _REFERENCES_DIR / f"{name}.md"
     if not path.is_file():

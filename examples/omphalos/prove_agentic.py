@@ -11,20 +11,27 @@ but the LLM has *exploration* tools available alongside proposing:
     (`Search ...`, `Check ...`, `Print ...`, `About ...`,
     `SearchPattern ...`) against the problem's initial proof state via
     pytanque, and returns the formatted feedback.
-  - `TryTactic(tactics=...)` previews the effect of a tactic prefix on
-    the theorem's initial proof state, returning the resulting goals or
-    the failing tactic + Rocq error. Pytanque's `client.run` is
-    functional — the original state stays valid — so this is a true
-    preview, not a commit.
+  - `InspectAt(tactics=..., command=...)` replays a tactic prefix
+    (without committing) and runs an introspection command *at the
+    resulting state* — so `Search` sees the hypotheses (including
+    induction hypotheses) of the actual stuck subgoal. With an empty
+    `command` it just reports the goals after the prefix; with empty
+    `tactics` it inspects the initial state (subsuming `SearchRocq`).
+  - `TryAutomation(tactics=...)` replays a prefix, then tries a battery
+    of cheap closing tactics (`lia`, `nra`, `ring`, ...) on *each*
+    remaining subgoal and reports which subgoal closes with what. One
+    request buys dozens of Rocq attempts.
 
 Two toolsets are exposed behind the `toolset` strategy argument:
 
-  - `"full"` — all three tools.
-  - `"lean"` — `ReadSkill` + `SearchRocq` only. Structural exploration
-    happens through *partial proposals* instead: `check_proof` reports
-    the verified prefix and the remaining goals whenever a script
-    applies cleanly without closing the goal, so a proposal doubles as
-    a preview (and wins outright if it happens to close the goal).
+  - `"lean"` — `ReadSkill` + `SearchRocq`. Structural exploration
+    happens through *partial proposals*: `check_proof` reports the
+    verified prefix and the remaining goals whenever a script applies
+    cleanly without closing the goal, so a proposal doubles as a
+    preview (and wins outright if it happens to close the goal).
+  - `"rich"` — `ReadSkill` + `InspectAt` + `TryAutomation`
+    (`InspectAt` with an empty prefix subsumes `SearchRocq`, so the
+    latter is not advertised separately).
 
 Budgeting: every assistant turn (tool round or proposal) costs one LLM
 request. The policy deliberately leaves search depth unbounded by
@@ -34,27 +41,34 @@ proposals draw from one pool, and exploring does not eat a separate,
 scarcer "feedback cycle" allowance. `turn_budget` mirrors that request
 budget into the system prompt so the model knows what it is spending.
 
-Reuses `ProofScript` and `check_proof` verbatim from `prove_standard`.
+Verification on the agentic side is *automation-assisted*
+(`check_proof_assisted`): when a proposal fails or leaves goals open,
+the verifier probes each remaining goal with `pt.AUTOMATION_BATTERY`
+and reports the closers in the feedback — and if every remaining goal
+closes, it finishes the proof itself. The standard baseline keeps the
+plain `check_proof`.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 import delphyne as dp
 from delphyne import Branch, Compute, Strategy, dfs, strategy
 
 import pytanque_utils as pt
 import skills as sk
-from prove_standard import ProofScript, check_proof
+from prove_standard import ProofScript
 
 # fmt: off
 
 
-type Toolset = Literal["full", "lean"]
+type Toolset = Literal["lean", "rich"]
 """
-Which exploration tools the LLM is offered: `"full"` advertises
-`ReadSkill`, `SearchRocq` and `TryTactic`; `"lean"` drops `TryTactic`
-(partial proposals cover structural exploration instead).
+Which exploration tools the LLM is offered: `"lean"` advertises
+`ReadSkill` + `SearchRocq`; `"rich"` advertises `ReadSkill` +
+`InspectAt` + `TryAutomation` (state-level introspection and
+automation probing).
 """
 
 
@@ -103,31 +117,54 @@ class SearchRocq(dp.AbstractTool[str]):
 
 
 @dataclass
-class TryTactic(dp.AbstractTool[str]):
+class InspectAt(dp.AbstractTool[str]):
     """
-    Preview the effect of applying a tactic (or short tactic prefix) to
-    the theorem's *initial* proof state, WITHOUT committing. Useful for
-    comparing several structural openers (`induction n.` vs
-    `destruct n.`) before drafting a full script.
+    Replay a tactic prefix from the theorem's initial proof state
+    (WITHOUT committing — every call starts from scratch), then run an
+    optional Rocq introspection command at the resulting state.
 
-    Pass `tactics` as a Rocq proof body — one or more tactics, each
-    terminated with `.`. The tool replays them in order from the
-    theorem's initial state and returns:
+    This is the precise way to work on a stuck subgoal: after
+    `intros ... induction ...`, the hypotheses of that subgoal
+    (including the induction hypothesis) are in scope, so
+    `Search (...)` matches lemmas relevant to where you actually are,
+    not to the pristine initial goal.
 
-      - the resulting goal(s) if every tactic succeeded;
-      - "PROOF FINISHED" plus the closing tactics if the prefix
-        actually closes the goal (then emit them verbatim as your
-        final proof);
-      - the failing tactic + Rocq error if any step fails, along with
-        the prefix that did succeed.
+    Arguments:
+    - `tactics`: tactic prefix to replay, each tactic ending with `.`.
+      Empty string = inspect the initial state.
+    - `command`: introspection command (`Search ...`, `Check ...`,
+      `Print ...`, `About ...`, `SearchPattern ...`) to run at the
+      resulting state. Empty string = just report the goals there.
 
-    The pytanque session is fresh per call — there is NO shared state
-    between invocations, so include any prerequisite tactics (e.g.
-    `intros n.`) in every preview. Note that *proposing* a partial
-    script returns the same information through the verifier, and a
-    proposal that closes the goal finishes the job on the spot — so
-    prefer a proposal unless you specifically want to compare
-    alternatives before committing to one.
+    Returns the command output plus the goals at that state, or
+    `PROOF FINISHED` if the prefix closes the goal (then submit it!),
+    or the failing tactic + Rocq error if the prefix breaks.
+    """
+    tactics: str
+    command: str = ""
+
+
+@dataclass
+class TryAutomation(dp.AbstractTool[str]):
+    """
+    Replay a tactic prefix from the theorem's initial proof state
+    (WITHOUT committing), then try a battery of cheap closing tactics
+    (`assumption`, `reflexivity`, `easy`, `lia`, `nia`, `lra`, `nra`,
+    `ring`, `field`, `congruence`, `auto with arith/zarith`, and
+    `simpl`/`intuition` combinations) on EACH remaining subgoal
+    separately. The same battery is what the verifier uses to finish
+    your proposals, so a goal reported as closing here will also close
+    when you submit the prefix.
+
+    Returns, per subgoal, either `CLOSED by <tactic>` or the subgoal
+    that no battery tactic closes. If everything closes, the report
+    includes a ready-to-submit script. One call costs one request but
+    buys dozens of Rocq attempts — ideal right after choosing a
+    structural opener (`induction ...`, `destruct ...`, asserts) to
+    learn which cases are routine and which need real work.
+
+    Pass `tactics` as the prefix to replay (each tactic ending with
+    `.`); an empty string probes the initial goal directly.
     """
     tactics: str
 
@@ -135,6 +172,32 @@ class TryTactic(dp.AbstractTool[str]):
 #####
 ##### Strategy
 #####
+
+
+@strategy
+def check_proof_assisted(
+    problem_file: str,
+    theorem_name: str,
+    script: ProofScript,
+) -> Strategy[Compute, object, ProofScript | dp.Error]:
+    """
+    Automation-assisted variant of `prove_standard.check_proof`: when
+    the script fails or leaves goals open, the verifier probes each
+    remaining goal with `pt.AUTOMATION_BATTERY` (probe results are
+    rendered into the feedback), and if every goal closes it finishes
+    the proof itself and succeeds with the assembled script.
+    """
+    tactics = yield from dp.compute(pt.split_into_tactics)(script)
+    feedback = yield from dp.compute(pt.check_assisted)(
+        problem_file, theorem_name, tactics
+    )
+    if feedback.success:
+        if feedback.auto_finished:
+            return "\n".join(feedback.proof_so_far)
+        return script
+    if feedback.failing_tactic == "Qed." and feedback.remaining_goals:
+        return dp.Error(label="incomplete", meta=feedback)
+    return dp.Error(label="feedback", meta=feedback)
 
 
 @strategy
@@ -154,11 +217,24 @@ def _search_rocq_handler(
 
 
 @strategy
-def _try_tactic_handler(
+def _inspect_at_handler(
+    problem_file: str, theorem_name: str, tactics: str, command: str,
+) -> Strategy[Compute, object, str]:
+    """Wraps pt.inspect_at so the InspectAt handler returns a StrategyInstance."""
+    text = yield from dp.compute(pt.inspect_at)(
+        problem_file, theorem_name, tactics, command
+    )
+    return text
+
+
+@strategy
+def _try_automation_handler(
     problem_file: str, theorem_name: str, tactics: str,
 ) -> Strategy[Compute, object, str]:
-    """Wraps pt.try_tactic so the TryTactic handler returns a StrategyInstance."""
-    text = yield from dp.compute(pt.try_tactic)(problem_file, theorem_name, tactics)
+    """Wraps pt.try_automation so the TryAutomation handler returns a StrategyInstance."""
+    text = yield from dp.compute(pt.try_automation)(
+        problem_file, theorem_name, tactics
+    )
     return text
 
 
@@ -166,7 +242,7 @@ def _try_tactic_handler(
 def prove_theorem_agentic(
     problem_file: str,
     theorem_name: str,
-    toolset: Toolset = "lean",
+    toolset: Toolset = "rich",
     turn_budget: int = 16,
 ) -> Strategy[Branch, dp.PromptingPolicy, ProofScript]:
     spec = pt.parse_problem(problem_file)
@@ -177,19 +253,25 @@ def prove_theorem_agentic(
                 spec, available, toolset, turn_budget, prefix
             ).using(dp.ambient_pp),
         process=lambda s, _:
-            check_proof(problem_file, theorem_name, s).using(dp.just_compute),
+            check_proof_assisted(problem_file, theorem_name, s)
+              .using(dp.just_compute),
+        # Only the tools advertised by the query's `parser` (which
+        # depends on `toolset`) can ever be called; the rest of this
+        # mapping is dead weight for the non-matching toolset.
         tools={
             ReadSkill: lambda call:
                 _read_skill_handler(call.skill_name).using(dp.just_compute),
             SearchRocq: lambda call:
                 _search_rocq_handler(problem_file, theorem_name, call.command)
                   .using(dp.just_compute),
-            # Never advertised under the "lean" toolset (see the
-            # query's `parser` method), so the handler is just unused
-            # dead weight there.
-            TryTactic: lambda call:
-                _try_tactic_handler(problem_file, theorem_name, call.tactics)
-                  .using(dp.just_compute),
+            InspectAt: lambda call:
+                _inspect_at_handler(
+                    problem_file, theorem_name, call.tactics, call.command
+                ).using(dp.just_compute),
+            TryAutomation: lambda call:
+                _try_automation_handler(
+                    problem_file, theorem_name, call.tactics
+                ).using(dp.just_compute),
         },
     )
     return script
@@ -197,24 +279,44 @@ def prove_theorem_agentic(
 
 @dataclass
 class ProposeProofScriptAgentic(
-    dp.Query[dp.Response[ProofScript, ReadSkill | SearchRocq | TryTactic]]
+    dp.Query[
+        dp.Response[
+            ProofScript | dp.WrappedParseError,
+            ReadSkill | SearchRocq | InspectAt | TryAutomation,
+        ]
+    ]
 ):
     spec: pt.ProblemSpec
     available_skills: dict[str, str]
     toolset: Toolset
     turn_budget: int
-    prefix: dp.AnswerPrefix
+    prefix: dp.AnswerPrefix = ()
 
     def parser(self) -> dp.Parser[
-        dp.Response[ProofScript, ReadSkill | SearchRocq | TryTactic]
+        dp.Response[
+            ProofScript | dp.WrappedParseError,
+            ReadSkill | SearchRocq | InspectAt | TryAutomation,
+        ]
     ]:
         # The advertised toolset depends on the query instance, hence
         # a `parser` method instead of a `__parser__` class attribute.
+        # `wrap_errors` is essential: without it, a single malformed
+        # reply (no code block) raises instead of becoming feedback,
+        # killing the whole run on the spot.
+        parser = dp.last_code_block.wrap_errors
         if self.toolset == "lean":
-            return dp.last_code_block.response_with(ReadSkill | SearchRocq)
-        return dp.last_code_block.response_with(
-            ReadSkill | SearchRocq | TryTactic
-        )
+            return parser.response_with(ReadSkill | SearchRocq)
+        return parser.response_with(ReadSkill | InspectAt | TryAutomation)
+
+    def advertised_tools(self) -> Sequence[type[dp.AbstractTool[Any]]]:
+        """
+        Tool classes advertised to the LLM, derived from the parser so
+        there is a single source of truth. The system prompt template
+        iterates over this to render one section per available tool
+        (from its docstring), adapting automatically to the toolset.
+        """
+        tools = self.parser().settings.tools
+        return tools.tool_types if tools is not None else []
 
 
 #####
@@ -222,12 +324,13 @@ class ProposeProofScriptAgentic(
 #####
 
 
+@dp.ensure_compatible(prove_theorem_agentic)
 def prove_theorem_agentic_policy(
     model_name: str,
     temperature: float | None = None,
     max_turns: int | None = None,
     loop: bool = False,
-):
+) -> dp.Policy[Branch, dp.PromptingPolicy]:
     """
     Policy for the agentic baseline.
 

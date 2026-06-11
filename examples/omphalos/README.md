@@ -105,19 +105,38 @@ both single-stage Hilbert-style loops driven by `dp.interact`:
      the most common failure mode of the standard baseline: the LLM
      guessing a lemma name that doesn't exist. With `SearchRocq` the
      agent can *ask Rocq* before committing to a tactic.
-   - **`TryTactic(tactics=...)`** non-destructively previews the
-     effect of a tactic prefix on the theorem's initial proof state.
-     Rocq proof state is functional, so `client.run(state, tac)`
-     returns a fresh state and leaves the original valid.
+   - **`InspectAt(tactics=..., command=...)`** replays a tactic prefix
+     (non-destructively — Rocq proof state is functional) and runs an
+     introspection command *at the resulting state*, so `Search` sees
+     the hypotheses of the actual stuck subgoal, including induction
+     hypotheses. An empty `command` just reports the goals after the
+     prefix; an empty prefix inspects the initial state (subsuming
+     `SearchRocq`).
+   - **`TryAutomation(tactics=...)`** replays a prefix, then tries a
+     battery of cheap closing tactics (`lia`, `nra`, `ring`, `easy`,
+     ... — see `pytanque_utils.AUTOMATION_BATTERY`) on *each*
+     remaining subgoal, with a per-probe timeout, and reports which
+     subgoal closes with what. One LLM request buys dozens of Rocq
+     attempts.
 
    The tool repertoire is selected by the `toolset` strategy argument:
-   `"full"` advertises all three tools; `"lean"` (the default and
-   canonical configuration) drops `TryTactic` and relies on
-   **partial proposals** instead — `check_proof` reports the
-   verified prefix and the exact remaining goals whenever a script
-   applies cleanly without closing the goal, so a proposal doubles as
-   a preview (and wins outright if it happens to close the goal).
-   The dev experiment runs both toolsets side by side.
+   `"lean"` advertises `ReadSkill` + `SearchRocq` and relies on
+   **partial proposals** for structural exploration — `check_proof`
+   reports the verified prefix and the exact remaining goals whenever
+   a script applies cleanly without closing the goal, so a proposal
+   doubles as a preview (and wins outright if it happens to close the
+   goal). `"rich"` (canonical) advertises `ReadSkill` + `InspectAt` +
+   `TryAutomation` for state-level introspection and automation
+   probing on top of the same partial-proposal loop. The `"lean"`
+   toolset is kept as an ablation lever (its archived command lives
+   in `commands/previous/`).
+
+   **Assisted verification.** The agentic verifier
+   (`check_proof_assisted`) probes every remaining goal of a failed /
+   incomplete proposal with `pytanque_utils.AUTOMATION_BATTERY`,
+   reports per-goal closers in the feedback, and finishes the proof
+   itself when every remaining goal is routine. The standard baseline
+   keeps the plain verifier.
 
    **Budget semantics.** Every assistant turn — tool round or
    proposal — costs one LLM request, and all turns draw from a single
@@ -127,9 +146,6 @@ both single-stage Hilbert-style loops driven by `dp.interact`:
    system prompt, and the model allocates it across exploration and
    proposals at its own discretion.
 
-The two systems run on the same `dev_subset.txt`; comparing pass rates
-problem-by-problem is the headline ablation this iteration produces.
-
 Prerequisites:
 
 - `rocq` available on your opam switch.
@@ -137,206 +153,112 @@ Prerequisites:
 - An API key for the configured model (default: `gpt-5.4-2026-03-05`,
   overridable via `policy_args.model_name`).
 
-### Standard baseline
+### Running the baselines
 
 ```sh
-make test-standard          # single problem, sanity check
-make test-subset-standard   # 8-problem curated sweep (via dp.Experiment)
-make replay-subset-standard # re-derive summary from cache (no LLM calls)
-make summary-standard       # regenerate the aggregate results_summary.csv
+make test                 # both single-problem smoke tests (cached)
+make test-standard        # single problem, standard baseline
+make test-agentic         # single problem, agentic "rich" baseline
+make regen-command-caches # refresh the smoke caches (real LLM calls)
+
+make test-set1            # 20-problem sweep, both baselines (real API)
+make test-set2            # same on the first holdout
+make test-set3            # same on the second holdout
+make summary-set1         # regenerate results_summary.csv from cache
 ```
 
-Per-config outputs land under `experiments/output/dev_standard_v2/`
-(`dev_standard/` is the archived pre-partial-proposal-feedback run).
-The strategy and policy live in `prove_standard.py`; LLM prompts in
-`prompts/ProposeProofScript.*.jinja`. Note that `check_proof` reports
-an incomplete-but-valid script (all tactics applied, goals remain) as
-"incomplete" feedback with the verified prefix and remaining goals, so
-even the standard baseline can use partial proposals as previews.
+Code map: strategies, queries and policies in `prove_standard.py` /
+`prove_agentic.py` (the `ReadSkill` / `SearchRocq` / `InspectAt` /
+`TryAutomation` tools live there too); the pytanque bridge in
+`pytanque_utils.py`; skill loading in `skills.py`; prompts in
+`prompts/*.jinja`; experiment configs in
+`experiments/miniF2F_bench.py`. `check_proof` reports an
+incomplete-but-valid script (all tactics applied, goals remain) as
+"incomplete" feedback with the verified prefix and remaining goals,
+so both baselines can use partial proposals as previews.
 
-### Agentic baseline
-
-```sh
-make test-agentic           # single problem, "full" toolset
-make test-agentic-lean      # single problem, "lean" toolset
-make test-trytactic         # single problem exercising TryTactic
-make test-subset-agentic    # 40-config sweep (20 problems x 2 toolsets)
-make replay-subset-agentic
-make summary-agentic
-make regen-command-caches   # refresh all single-problem caches (real LLM calls)
-```
-
-Per-config outputs land under `experiments/output/dev_agentic_toolsets/`
-(the `toolset` column in `results_summary.csv` is the comparison axis).
-The strategy, policy, and the `ReadSkill` / `SearchRocq` / `TryTactic`
-tools all live in `prove_agentic.py`; the pytanque bridges
-(`query`, `try_tactic`) live in `pytanque_utils.py`. Prompts in
-`prompts/ProposeProofScriptAgentic.*.jinja`.
-
-The model still sees both the informal statement *and* the informal
-proof sketch from each `.v` header — both baselines are therefore
+The model sees both the informal statement *and* the informal proof
+sketch from each `.v` header — both baselines are therefore
 *with-hints*. Further ablations (two-stage informal/formal Hilbert
-split, MathComp retrieval, multi-seed runs, full miniF2F sweep) are
-on the thesis roadmap (see `bachelor_arbeit_plan.md`).
+split, MathComp retrieval, multi-seed runs, full miniF2F sweep via
+`experiments/full_*_experiment.py`) are on the thesis roadmap (see
+`bachelor_arbeit_plan.md`).
 
-Both baselines have a scaffolded full-sweep entry point
-(`experiments/full_standard_experiment.py`, `full_agentic_experiment.py`),
-ready for scaling beyond the dev subset.
+## Benchmark sets & results
 
-## Checkpoint — dev subset (20 problems, 1 seed)
+Three pairwise-disjoint 20-problem sets drawn from `miniF2F/valid`
+live in `benchmarks/`:
 
-Snapshot of the current canonical state, after the agentic-baseline
-overhaul (decoupled turn budget, trust-the-model prompt, partial-
-proposal feedback, configurable toolset). Outputs: standard baseline in
-`experiments/output/dev_standard_v2/`, agentic toolset comparison in
-`experiments/output/dev_agentic_toolsets/`. All runs use seed 0 and
-model `gpt-5.4-2026-03-05`. The agentic side budgets `num_requests=16`
-per problem (tool calls and proposals draw from that one pool; search
-depth is unbounded); the standard side keeps `max_feedback_cycles=3`.
+- `set1.txt` — the curated development subset (baselines were
+  iterated against it);
+- `set2.txt` — first holdout (one round of infrastructure fixes was
+  mined from its failure traces);
+- `set3.txt` — second holdout (fully out-of-sample: never used for
+  any iteration).
 
-What changed relative to the previous checkpoint (archived in
-`experiments/output/dev_standard/` and `dev_agentic*/`):
+Both baselines run on every set with one seed, model
+`gpt-5.4-2026-03-05`, few-shot examples enabled (see Demonstrations
+below); the agentic side budgets `num_requests=32` per problem (one
+pool for tool calls and proposals, depth unbounded), the standard
+side keeps `max_feedback_cycles=3`. Verification is
+automation-assisted on the agentic side and plain on the standard
+side — a deliberate, documented design choice (the battery is part
+of the agentic *system*).
 
-1. **The depth cap is gone.** Previously `dfs(max_depth=7)` silently
-   capped *total* assistant turns — tool rounds and proposals
-   combined — so the nominal 16-request budget was unreachable and
-   every exploration call cannibalized a proposal attempt (archived
-   runs all die at exactly 7 requests). Now `num_requests` binds.
-2. **Trust-the-model prompt.** The mandatory first `ReadSkill`, the
-   per-tool hard caps, and the trigger/anti-trigger lists are gone;
-   the model is told its turn budget and decides freely.
-3. **Partial proposals are first-class.** `check_proof` distinguishes
-   "a tactic failed" from "all tactics applied, goals remain": the
-   latter now produces `incomplete` feedback showing the verified
-   prefix + remaining goals. A proposal therefore doubles as a state
-   probe. Both baselines share this.
-4. **Toolset is a config switch.** `"full"` = ReadSkill + SearchRocq +
-   TryTactic; `"lean"` = no TryTactic (partial proposals cover
-   structural exploration). Both ran on the full dev subset.
+| set | standard | **agentic "rich"** | gap | spend (std / agentic) |
+|---|---:|---:|---:|---|
+| set 1 (dev) | 9 / 20 | **18 / 20** | +9 | $0.15 / $0.80 |
+| set 2 (holdout) | 7 / 20 | **14 / 20** | +7 | $0.38 / $1.19 |
+| set 3 (holdout, fully unseen) | 7 / 20 | **13 / 20** | +6 | $0.23 / $1.54 |
 
-### Headline
+On every set the agentic baseline solves a **strict superset** of the
+standard baseline's wins. Set 1 numbers are partly in-sample (the
+baselines were iterated against it); set 3 is the cleanest
+out-of-sample evidence. One seed per config — run-to-run variance is
+roughly ±1–2 problems per cell.
 
-| | standard (v2) | **agentic "lean"** | agentic "full" |
-|---|---:|---:|---:|
-| pass rate | 6 / 20 (30%) | **8 / 20 (40%)** | 8 / 20 (40%) |
-| spend | $0.173 | **$0.450** | $0.678 |
+Outputs land under `experiments/output/set{1,2,3}_{standard,agentic}/`
+(gitignored; regenerate with the `experiments/set*_experiment.py`
+scripts). Earlier iterations are archived locally under
+`experiments/previous/` with per-run notes.
 
-Both toolsets beat the standard baseline by +2 problems (+33%
-relative). They tie on pass rate, and `"lean"` does it at two thirds
-of the cost — so **`"lean"` is the canonical agentic baseline** (the
-default `toolset` of `prove_theorem_agentic`). For context, archived
-single-seed checkpoints of the pre-overhaul agent scored 9/20 (3-tool)
-and 7/20 (4-tool); the ±1–2 spread between successive 20-problem runs
-is within seed noise, so treat all headline gaps of that size with
-caution until the multi-seed runs land.
+### Demonstrations & few-shot examples
 
-Per-category split:
+`demos/standard.demo.yaml` and `demos/agentic.demo.yaml` demonstrate
+the **same two problems** — `algebra_binomnegdiscrineq_10alt28asqp1`
+and `induction_sum_odd` — both chosen from **outside** all three
+benchmark sets (asserted at load time in
+`experiments/miniF2F_bench.py`), so demonstrations and evaluation
+problems never overlap. The only difference between the baselines'
+demos is the agentic elements (tool calls, feedback cycles, assisted
+verification). All strategy demos assert `run | success` and are
+fully materialized (`tools/materialize_demo.py`), so `delphyne check`
+is deterministic and reports zero errors and zero warnings.
 
-| category | n | std (v2) | agentic lean | agentic full |
-|---|---:|---:|---:|---:|
-| `algebra` | 6 | 1/6 | **4/6** | 3/6 |
-| `mathd/algebra` | 1 | 1/1 | 1/1 | 1/1 |
-| `numbertheory` | 3 | 1/3 | 2/3 | 2/3 |
-| `mathd/numbertheory` | 2 | 2/2 | 1/2 | 2/2 |
-| `induction` | 5 | 0/5 | 0/5 | 0/5 |
-| `imo` | 2 | 0/2 | 0/2 | 0/2 |
-| `amc` | 1 | 1/1 | 0/1 | 0/1 |
+Each demo file additionally provides one compact problem → verified
+proof pair per demo problem with `example: true`: these enter the
+few-shot example database and are injected into every benchmark
+prompt. The long materialized traces stay excluded
+(`example: false`) — they are regression tests, not prompt content.
 
-The agentic gain is concentrated where the previous checkpoint lost
-ground: `algebra` (1/6 standard → 4/6 lean). `induction` and `imo`
-remain uniformly unsolved — the bottleneck there is closing the
-post-induction goals, not budget or exploration. Notably the union of
-the two toolsets is 10/20: `full` uniquely wins
-`algebra_2varlineareq_xpeeq7_2xpeeq3_eeq11_xeqn4` and
-`mathd_numbertheory_102`, `lean` uniquely wins
-`algebra_sqineq_2at2pclta2c2p41pc` and
-`algebra_sqineq_36azm9asqle36zsq` — single-seed noise dominates the
-full-vs-lean comparison, while the cost gap is systematic.
+To refresh after a prompt/strategy change: `make
+regen-command-caches`, restore the `using:` sources in the demo
+files, then `python tools/materialize_demo.py <file> --drop-using`.
 
-### Tool usage (true call counts from the cached toolset sweep)
+### Development notes
 
-| tool | "full" runs | "lean" runs |
-|---|---|---|
-| `ReadSkill` | 1 call (1/20 problems) | 0 calls |
-| `SearchRocq` | 41 calls (10/20 problems) | 49 calls (8/20 problems) |
-| `TryTactic` | 60 calls (12/20 problems) | — (not advertised) |
-
-Two findings:
-
-- **The skill pack is dead weight for this model.** Under the old
-  prompt `ReadSkill` fired 20/20 times — because the prompt mandated
-  it. With the mandate removed, the model read a skill exactly once
-  across 40 runs. It strongly prefers asking Rocq itself
-  (`SearchRocq`) and probing goal states (`TryTactic` / partial
-  proposals) over reading curated prose. The whitelist was already
-  pruned to 7 entries; further investment in skill content is hard to
-  justify for this model class.
-- **TryTactic still does not pay for itself.** 60 preview calls
-  bought zero net wins over `"lean"` and +50% spend. With partial
-  proposals returning the same information *and* counting as real
-  attempts, a separate preview tool is structurally redundant —
-  which is exactly why `"lean"` is the canonical configuration.
-
-### How agentic is the agent now?
-
-The previous checkpoint's honest answer was "mostly agentic": the
-first action was prompt-forced, tool triggers were prompt-encoded, and
-hard caps bounded each tool. All of that is gone. The model receives
-its turn budget, one shared request pool, and per-tool "when it pays
-off" guidance — every action choice, including whether to touch the
-skill pack at all, is its own. The observed behaviour shift (ReadSkill
-20/20 → 1/40) is direct evidence the previous numbers measured prompt
-compliance rather than model preference.
-
-Remaining boundedness: a single `dp.interact` loop (no `Branch`
-fan-out across candidate proof prefixes). That is the next escalation:
-fan out over several openers, score the resulting goal states, and
-develop the most promising subtree under `bestfs` — the point where
-Delphyne's multi-success search machinery starts paying off beyond
-what a linear conversation can express.
-
-### What this checkpoint does and doesn't measure
-
-- **Does measure**: pass-rate gap under matched verification
-  semantics (both baselines share the new `check_proof`); the
-  full-vs-lean toolset ablation at matched budgets; true tool-call
-  frequencies under a non-coercive prompt.
-- **Does not measure**: variance (single seed; the dev-subset
-  granularity is 5pp per problem); generalization to the full miniF2F
-  valid split; the causal value of `SearchRocq` (it fires on the
-  harder problems by construction, so cohort win rates are
-  confounded).
-
-Next-step candidates on the roadmap:
-
-1. Multi-seed dev runs to put error bars on the 6 / 8 / 8 spread.
-2. `Branch` fan-out over candidate openers + `bestfs` policy.
-3. Full miniF2F valid sweep (244 problems) via
-   `experiments/full_agentic_experiment.py` (already wired for the
-   `"lean"` toolset).
-4. Budget-scaling curve (`num_requests` ∈ {8, 16, 32}) now that the
-   budget actually binds.
-
-### Demonstrations
-
-End-to-end behaviour is exercised by demo entries under
-`demos/agentic.demo.yaml` and `demos/standard.demo.yaml` (registered
-in `delphyne.yaml`). They replay cached single-problem command files
-(refreshed via `make regen-command-caches`):
-
-- `agentic_dev_smoke` — `"full"` toolset on
-  `algebra_sqineq_4bap1lt4bsqpap1sq`; solves it in 3 requests and
-  asserts `run | success`.
-- `agentic_lean_dev_smoke` — `"lean"` toolset on the same problem;
-  solves it in 6 requests and asserts `run | success`.
-- `agentic_trytactic_dev_smoke` — `"full"` toolset on the induction
-  problem `induction_seq_mul2pnp1`; documents a full 16-request
-  budget exhaustion (induction remains 0/5), shape only.
-- `standard_dev_smoke` — standard baseline on the same algebra
-  problem; exhausts its 4-request budget, shape only.
-
-Open the source `.exec.yaml` files to see the concrete tool-call /
-tool-result YAML shapes that the strategy produces at runtime.
+- Iteration history, checkpoint analyses and per-run insights live in
+  `PROGRESS.md` (gitignored, local) and `experiments/previous/*/NOTES.txt`.
+- **Pytanque connection**: the bridge uses STDIO mode (a fresh `pet`
+  subprocess per verification session). Socket mode (external
+  `pet-server`) was considered and deliberately deferred: per-session
+  cost is dominated by file compilation, which a persistent server
+  does not eliminate, and STDIO needs no server lifecycle management
+  under parallel experiment workers. Revisit when scaling to the full
+  miniF2F valid split.
+- Rocq's micromega tactic caches (`.lia.cache` etc.) accumulate in
+  `.rocq_cache/` (gitignored): the `pet` subprocess is spawned with
+  its cwd pinned there (`pytanque_utils._pytanque_session`).
 
 ## Provenance
 

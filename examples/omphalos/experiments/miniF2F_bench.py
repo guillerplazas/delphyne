@@ -5,8 +5,8 @@ Two configs live here:
 
 - `StandardConfig` — the standard baseline (single-stage Hilbert,
   no tool calls). Driven by `prove_standard.py`.
-- `AgenticConfig` — the agentic baseline (LLM may call `ReadSkill`
-  before / between proof attempts). Driven by `prove_agentic.py`.
+- `AgenticConfig` — the agentic baseline (exploration tools +
+  automation-assisted verification). Driven by `prove_agentic.py`.
 
 Mirrors `examples/find_invariants/experiments/code2inv_experiments.py`.
 """
@@ -20,10 +20,9 @@ from typing import Any
 
 import delphyne as dp
 
-# The experiment scripts live in `experiments/`; the dev subset and the
-# miniF2F tree live one directory up.
+# The experiment scripts live in `experiments/`; the subset files and
+# the miniF2F tree live one directory up.
 _OMPHALOS_DIR = Path(__file__).resolve().parent.parent
-_DEV_SUBSET_FILE = _OMPHALOS_DIR / "dev_subset.txt"
 
 
 def _parse_theorem_name(v_path: Path) -> str:
@@ -31,27 +30,66 @@ def _parse_theorem_name(v_path: Path) -> str:
     return v_path.stem
 
 
-def load_dev_subset() -> Mapping[str, tuple[str, str]]:
+def load_subset(filename: str) -> Mapping[str, tuple[str, str]]:
     """
     Return `{theorem_name: (problem_file_relpath, theorem_name)}` for
-    every line in `dev_subset.txt`. Paths are kept relative to the
+    every line in a subset file. Paths are kept relative to the
     omphalos workspace root so the experiment is reproducible from any
     cwd.
     """
     problems: dict[str, tuple[str, str]] = {}
-    for raw in _DEV_SUBSET_FILE.read_text().splitlines():
+    subset_file = _OMPHALOS_DIR / filename
+    for raw in subset_file.read_text().splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
         abs_path = _OMPHALOS_DIR / line
         if not abs_path.exists():
-            raise FileNotFoundError(f"dev_subset entry missing: {abs_path}")
+            raise FileNotFoundError(f"{filename} entry missing: {abs_path}")
         thm = _parse_theorem_name(abs_path)
         problems[thm] = (line, thm)
     return problems
 
 
-PROBLEMS: Mapping[str, tuple[str, str]] = load_dev_subset()
+SET1_PROBLEMS: Mapping[str, tuple[str, str]] = load_subset(
+    "benchmarks/set1.txt"
+)
+"""Set 1: the curated 20-problem development subset."""
+
+SET2_PROBLEMS: Mapping[str, tuple[str, str]] = load_subset(
+    "benchmarks/set2.txt"
+)
+"""Set 2: a disjoint 20-problem holdout for robustness checks."""
+
+SET3_PROBLEMS: Mapping[str, tuple[str, str]] = load_subset(
+    "benchmarks/set3.txt"
+)
+"""Set 3: a second disjoint holdout (fully out-of-sample)."""
+
+assert (
+    not set(SET1_PROBLEMS) & set(SET2_PROBLEMS)
+    and not set(SET1_PROBLEMS) & set(SET3_PROBLEMS)
+    and not set(SET2_PROBLEMS) & set(SET3_PROBLEMS)
+), "the benchmark sets must be pairwise disjoint"
+
+# Demonstration problems must never appear in any benchmark set
+# (otherwise the few-shot examples would leak solutions).
+_DEMO_PROBLEMS = (
+    "algebra_binomnegdiscrineq_10alt28asqp1",
+    "induction_sum_odd",
+)
+assert not any(
+    p in s
+    for p in _DEMO_PROBLEMS
+    for s in (SET1_PROBLEMS, SET2_PROBLEMS, SET3_PROBLEMS)
+), "demonstration problems must not overlap with any benchmark set"
+
+# All problems any config may reference, keyed by theorem name.
+ALL_PROBLEMS: Mapping[str, tuple[str, str]] = {
+    **SET1_PROBLEMS,
+    **SET2_PROBLEMS,
+    **SET3_PROBLEMS,
+}
 
 
 @dataclass
@@ -65,7 +103,7 @@ class StandardConfig:
     max_dollar_budget: float | None = 0.2
 
     def instantiate(self, context: object) -> dp.RunStrategyArgs:
-        problem_file, theorem_name = PROBLEMS[self.bench_name]
+        problem_file, theorem_name = ALL_PROBLEMS[self.bench_name]
         budget: dict[str, float] = {}
         if self.max_dollar_budget is not None:
             budget[dp.DOLLAR_PRICE] = self.max_dollar_budget
@@ -94,9 +132,9 @@ class AgenticConfig:
 
     Extra knobs compared to `StandardConfig`:
 
-    - `toolset`: `"full"` (ReadSkill + SearchRocq + TryTactic) or
-      `"lean"` (no TryTactic; partial proposals cover structural
-      exploration).
+    - `toolset`: `"rich"` (ReadSkill + InspectAt + TryAutomation;
+      canonical) or `"lean"` (ReadSkill + SearchRocq; partial
+      proposals cover structural exploration).
     - `num_requests`: the *total* request budget — LLM proposal
       attempts and tool calls draw from this one pool. It is the
       binding constraint and is also surfaced to the model as the
@@ -117,7 +155,7 @@ class AgenticConfig:
     max_dollar_budget: float | None = 0.5
 
     def instantiate(self, context: object) -> dp.RunStrategyArgs:
-        problem_file, theorem_name = PROBLEMS[self.bench_name]
+        problem_file, theorem_name = ALL_PROBLEMS[self.bench_name]
         budget: dict[str, float] = {dp.NUM_REQUESTS: float(self.num_requests)}
         if self.max_dollar_budget is not None:
             budget[dp.DOLLAR_PRICE] = self.max_dollar_budget

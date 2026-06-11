@@ -1,60 +1,62 @@
-.PHONY: test test-standard test-agentic test-agentic-lean test-trytactic
-.PHONY: test-subset test-subset-standard test-subset-agentic
-.PHONY: replay-subset-standard replay-subset-agentic
-.PHONY: summary-standard summary-agentic
+.PHONY: test test-standard test-agentic
+.PHONY: test-set1 test-set1-standard test-set1-agentic
+.PHONY: test-set2 test-set3 summary-set1 summary-set2 summary-set3
+.PHONY: replay-set1-standard replay-set1-agentic
 .PHONY: regen-command-caches
 .PHONY: clean clean-experiments
 
-# Default-aliases preserve muscle memory from the first iteration:
-# `make test` and `make test-subset` continue to run the standard baseline.
-test: test-standard
-test-subset: test-subset-standard
-
-# --- standard baseline (single-stage Hilbert, no tool calls) ---
+# Single-problem smoke tests (cached; regenerate with
+# `make regen-command-caches` after a prompt / strategy change).
+test: test-standard test-agentic
 
 test-standard:
 	delphyne run commands/prove_one_standard.exec.yaml --cache --no-header
 
-test-subset-standard:
-	python experiments/dev_standard_experiment.py run --max_workers=2
-
-replay-subset-standard:
-	python experiments/dev_standard_experiment.py replay
-
-summary-standard:
-	python experiments/dev_standard_experiment.py force-summary --add-timing
-
-# --- agentic baseline (exploration tools + shared request budget) ---
-
 test-agentic:
 	delphyne run commands/prove_one_agentic.exec.yaml --cache --no-header
 
-# Same problem with the "lean" toolset (no TryTactic; partial
-# proposals cover structural exploration).
-test-agentic-lean:
-	delphyne run commands/prove_one_agentic_lean.exec.yaml --cache --no-header
+# --- benchmark sweeps (real API calls) ---
 
-# Single-problem TryTactic smoke test (induction problem from dev_subset).
-test-trytactic:
-	delphyne run commands/prove_one_trytactic.exec.yaml --cache --no-header
+test-set1: test-set1-standard test-set1-agentic
 
-test-subset-agentic:
-	python experiments/dev_agentic_experiment.py run --max_workers=2
+test-set1-standard:
+	python experiments/set1_standard_experiment.py run --max_workers=4
 
-replay-subset-agentic:
-	python experiments/dev_agentic_experiment.py replay
+test-set1-agentic:
+	python experiments/set1_agentic_experiment.py run --max_workers=4
 
-summary-agentic:
-	python experiments/dev_agentic_experiment.py force-summary --add-timing
+test-set2:
+	python experiments/set2_standard_experiment.py run --max_workers=4
+	python experiments/set2_agentic_experiment.py run --max_workers=4
 
-# Regenerate every single-problem command cache after a prompt /
+test-set3:
+	python experiments/set3_standard_experiment.py run --max_workers=4
+	python experiments/set3_agentic_experiment.py run --max_workers=4
+
+replay-set1-standard:
+	python experiments/set1_standard_experiment.py replay
+
+replay-set1-agentic:
+	python experiments/set1_agentic_experiment.py replay
+
+summary-set1:
+	python experiments/set1_standard_experiment.py force-summary --add-timing
+	python experiments/set1_agentic_experiment.py force-summary --add-timing
+
+summary-set2:
+	python experiments/set2_standard_experiment.py force-summary --add-timing
+	python experiments/set2_agentic_experiment.py force-summary --add-timing
+
+summary-set3:
+	python experiments/set3_standard_experiment.py force-summary --add-timing
+	python experiments/set3_agentic_experiment.py force-summary --add-timing
+
+# Regenerate the single-problem command caches after a prompt /
 # strategy / feedback change (makes real LLM calls).
 regen-command-caches:
 	rm -rf commands/cache
 	delphyne run commands/prove_one_standard.exec.yaml --cache --update --no-header
 	delphyne run commands/prove_one_agentic.exec.yaml --cache --update --no-header
-	delphyne run commands/prove_one_agentic_lean.exec.yaml --cache --update --no-header
-	delphyne run commands/prove_one_trytactic.exec.yaml --cache --update --no-header
 
 # --- housekeeping ---
 

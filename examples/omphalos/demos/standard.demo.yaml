@@ -1,29 +1,211 @@
-# Demonstration of the standard baseline `prove_theorem_standard`.
+# Demonstrations of the standard baseline `prove_theorem_standard`.
 #
-# The standard baseline has ONE action: propose a complete proof body as
-# a fenced code block. Pytanque verifies it. If verification fails, the
-# error feedback (failing tactic, error message, remaining goals) is fed
-# back to the LLM and it revises. The loop terminates on success or when
-# the feedback budget is exhausted.
+# The standard baseline has ONE action: propose a complete proof body
+# as a fenced code block. Pytanque verifies it; on failure the error
+# feedback (failing tactic, error message, remaining goals) is fed
+# back and the LLM revises.
 #
-# The demo below sources its query answers from the trace recorded in
-# `commands/prove_one_standard.exec.yaml` (refreshed via
-# `make regen-command-caches`). That trace is for
-# `algebra_sqineq_4bap1lt4bsqpap1sq`, which the standard baseline does
-# NOT solve on this seed (it exhausts the 4-request budget). The demo
-# therefore uses `tests: - run` (without `| success`) — it documents
-# the verifier-loop shape, not the outcome.
+# The demonstrated problems (`algebra_binomnegdiscrineq_10alt28asqp1`
+# and `induction_sum_odd`) are deliberately chosen from OUTSIDE all
+# three benchmark sets (`benchmarks/set{1,2,3}.txt` — asserted in
+# `experiments/miniF2F_bench.py`), so demonstrations and evaluation
+# problems never overlap. The same two problems are demonstrated for
+# the agentic baseline in `demos/agentic.demo.yaml`, there with tool
+# calls and verifier feedback cycles.
 #
-# See `demos/agentic.demo.yaml` for parallel demos of the agentic
-# baseline (same problem, with tool calls, solved by both toolsets).
+# Both demos are fully materialized: every LLM answer and every
+# `__Computation__` result is pinned explicitly, so `delphyne check`
+# is deterministic, needs no cached command files or live Rocq
+# toolchain, and reports zero warnings. The proof scripts were
+# verified against Rocq via pytanque (`pt.check`, no automation
+# assistance) before being recorded here.
+#
+# Few-shot prompting: the proposal answer of each demo carries
+# `example: true`, so it enters the few-shot example database and is
+# injected into every `ProposeProofScript` prompt (one compact
+# problem -> correct-proof pair per demo). Computation entries stay
+# excluded.
+#
+# Regenerate the computation entries after changing `check_proof` or
+# the prompts:  python tools/materialize_demo.py demos/standard.demo.yaml
 
-- demonstration: standard_dev_smoke
+- demonstration: standard_algebra_binomnegdiscrineq
   strategy: prove_theorem_standard
   args:
-    problem_file: "miniF2F/valid/algebra/algebra_sqineq_4bap1lt4bsqpap1sq.v"
-    theorem_name: "algebra_sqineq_4bap1lt4bsqpap1sq"
+    problem_file: miniF2F/valid/algebra/algebra_binomnegdiscrineq_10alt28asqp1.v
+    theorem_name: algebra_binomnegdiscrineq_10alt28asqp1
   tests:
-    - run
-  using:
-    - command: commands/prove_one_standard.exec.yaml
-  queries: []
+    - run | success
+  queries:
+    - query: ProposeProofScript
+      args:
+        spec:
+          file: /home/guille/anaconda3/envs/guille/delphyne/examples/omphalos/miniF2F/valid/algebra/algebra_binomnegdiscrineq_10alt28asqp1.v
+          theorem_name: algebra_binomnegdiscrineq_10alt28asqp1
+          theorem_statement: |-
+            :
+              forall a : R, 10 * a <= 28 * a^2 + 1
+          informal_statement: For any real number a, show that $10a \leq 28a^2 + 1$.
+          informal_proof: |-
+            It suffices to show $0\leq 28a^2 - 10a + 1$.
+               First, consider completing the square for $28a^2 - 10a$ and observe that $(a -
+               \frac{5}{28})^2 = a^2 - \frac{10}{28}a + (5/28)^2$.
+               Since $0\leq (a - \frac{5}{28})^2$, we have $0\leq a^2 - \frac{10}{28}a + (5/28)^2$.
+               Multiplying by 28 and simplifying terms gives $0\leq 28*a^2 - 10*a + (25/28)$.
+               Since $25/28 < 1$, the result follows.
+          imports: |-
+            Require Import Reals.
+            Open Scope R_scope.
+        prefix: []
+      answers:
+        - answer: |-
+            ```rocq
+            intros a.
+            assert (Hsq : 0 <= (28 * a - 5) * (28 * a - 5)) by apply Rle_0_sqr.
+            replace (a ^ 2) with (a * a) by ring.
+            nra.
+            ```
+          example: true
+    - query: __Computation__
+      args:
+        fun: split_into_tactics
+        args:
+          script: |
+            intros a.
+            assert (Hsq : 0 <= (28 * a - 5) * (28 * a - 5)) by apply Rle_0_sqr.
+            replace (a ^ 2) with (a * a) by ring.
+            nra.
+      answers:
+        - answer: |
+            - intros a.
+            - 'assert (Hsq : 0 <= (28 * a - 5) * (28 * a - 5)) by apply Rle_0_sqr.'
+            - replace (a ^ 2) with (a * a) by ring.
+            - nra.
+          example: false
+    - query: __Computation__
+      args:
+        fun: check
+        args:
+          file: miniF2F/valid/algebra/algebra_binomnegdiscrineq_10alt28asqp1.v
+          theorem_name: algebra_binomnegdiscrineq_10alt28asqp1
+          tactics:
+            - intros a.
+            - 'assert (Hsq : 0 <= (28 * a - 5) * (28 * a - 5)) by apply Rle_0_sqr.'
+            - replace (a ^ 2) with (a * a) by ring.
+            - nra.
+      answers:
+        - answer: |
+            success: true
+            failing_index: null
+            failing_tactic: null
+            error_message: null
+            remaining_goals: []
+            proof_so_far:
+              - intros a.
+              - 'assert (Hsq : 0 <= (28 * a - 5) * (28 * a - 5)) by apply Rle_0_sqr.'
+              - replace (a ^ 2) with (a * a) by ring.
+              - nra.
+            finished: true
+            probe: null
+            auto_finished: false
+          example: false
+- demonstration: standard_induction_sum_odd
+  strategy: prove_theorem_standard
+  args:
+    problem_file: miniF2F/valid/induction/induction_sum_odd.v
+    theorem_name: induction_sum_odd
+  tests:
+    - run | success
+  queries:
+    - query: ProposeProofScript
+      args:
+        spec:
+          file: /home/guille/anaconda3/envs/guille/delphyne/examples/omphalos/miniF2F/valid/induction/induction_sum_odd.v
+          theorem_name: induction_sum_odd
+          theorem_statement: |-
+            : forall n : nat,
+              n > 0 ->
+              sum_n (fun k => 2 * k + 1) n = n * n
+          informal_statement: Show that for positive integer $n$, $\sum_{k=0}^{n-1} (2k + 1) = n^2$.
+          informal_proof: |-
+            We show the result by induction on $n$. The result is trivial for $n=1$. Let us
+               assume it is true for $n \geq 1$.
+               We have that $\sum_{k=0}^{(n+1)-1} (2k + 1) = \sum_{k=0}^{n-1} (2k + 1) + (2n + 1)$.
+               The induction hypothesis tells us that $\sum_{k=0}^{n-1} (2k + 1) = n^2$. So
+               $\sum_{k=0}^{(n+1)-1} (2k + 1) = n^2 + 2n +1 = (n+1)^2$ and the result is true for
+               $n+1$.
+               By induction, we conclude that the result is true for all positive integer $n$.
+          imports: Require Import Coq.Arith.Arith.
+        prefix: []
+      answers:
+        - answer: |-
+            ```rocq
+            intros n Hn.
+            induction n as [|n IH].
+            - lia.
+            - destruct n as [|m].
+              + simpl. lia.
+              + assert (H : S m > 0) by lia.
+                specialize (IH H).
+                simpl in *. nia.
+            ```
+          example: true
+    - query: __Computation__
+      args:
+        fun: split_into_tactics
+        args:
+          script: |
+            intros n Hn.
+            induction n as [|n IH].
+            - lia.
+            - destruct n as [|m].
+              + simpl. lia.
+              + assert (H : S m > 0) by lia.
+                specialize (IH H).
+                simpl in *. nia.
+      answers:
+        - answer: |
+            - intros n Hn.
+            - induction n as [|n IH].
+            - '- lia.'
+            - '- destruct n as [|m].'
+            - + simpl. lia.
+            - '+ assert (H : S m > 0) by lia.'
+            - specialize (IH H).
+            - simpl in *. nia.
+          example: false
+    - query: __Computation__
+      args:
+        fun: check
+        args:
+          file: miniF2F/valid/induction/induction_sum_odd.v
+          theorem_name: induction_sum_odd
+          tactics:
+            - intros n Hn.
+            - induction n as [|n IH].
+            - '- lia.'
+            - '- destruct n as [|m].'
+            - + simpl. lia.
+            - '+ assert (H : S m > 0) by lia.'
+            - specialize (IH H).
+            - simpl in *. nia.
+      answers:
+        - answer: |
+            success: true
+            failing_index: null
+            failing_tactic: null
+            error_message: null
+            remaining_goals: []
+            proof_so_far:
+              - intros n Hn.
+              - induction n as [|n IH].
+              - '- lia.'
+              - '- destruct n as [|m].'
+              - + simpl. lia.
+              - '+ assert (H : S m > 0) by lia.'
+              - specialize (IH H).
+              - simpl in *. nia.
+            finished: true
+            probe: null
+            auto_finished: false
+          example: false

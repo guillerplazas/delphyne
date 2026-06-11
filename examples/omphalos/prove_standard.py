@@ -8,8 +8,8 @@ feedback budget is exhausted. The LLM has *one* action available
 (propose a complete proof body); there are no tool calls. The agentic
 counterpart lives in `prove_agentic.py`.
 
-`ProofScript` and `check_proof` are also re-exported here for reuse by
-`prove_agentic.py` — they are not strategy-shape-specific.
+`ProofScript` is reused by `prove_agentic.py`; the agentic side has
+its own automation-assisted verifier (`check_proof_assisted`).
 """
 
 from dataclasses import dataclass
@@ -51,11 +51,15 @@ def prove_theorem_standard(
 
 
 @dataclass
-class ProposeProofScript(dp.Query[dp.Response[ProofScript, Never]]):
+class ProposeProofScript(
+    dp.Query[dp.Response[ProofScript | dp.WrappedParseError, Never]]
+):
     spec: pt.ProblemSpec
-    prefix: dp.AnswerPrefix
+    prefix: dp.AnswerPrefix = ()
 
-    __parser__ = dp.last_code_block.response
+    # `wrap_errors` turns a malformed reply (no code block) into
+    # feedback for the next turn instead of killing the run.
+    __parser__ = dp.last_code_block.wrap_errors.response
 
 
 @strategy
@@ -82,12 +86,13 @@ def check_proof(
 #####
 
 
+@dp.ensure_compatible(prove_theorem_standard)
 def prove_theorem_standard_policy(
     model_name: str,
     temperature: float | None = None,
     max_feedback_cycles: int = 3,
     loop: bool = False,
-):
+) -> dp.Policy[Branch, dp.PromptingPolicy]:
     model = dp.standard_model(model_name)
     sp = dfs(max_depth=max_feedback_cycles + 1)
     if loop:
