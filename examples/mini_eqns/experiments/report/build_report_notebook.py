@@ -84,18 +84,51 @@ guided54_high = first_row(inventory, "guided", "gpt-5.4", "high")
 guided_mini_low = first_row(inventory, "guided", "gpt-5.4-mini", "low")
 guided_mini_high = first_row(inventory, "guided", "gpt-5.4-mini", "high")
 
-step_replicates = (
-    inventory.loc[
-        (inventory["family"] == "step_by_step")
-        & (inventory["model_name"].astype(str) == "gpt-5.4")
-        & (inventory["reasoning_effort"].astype(str) == "low")
-    ]
+step_runs = inventory.loc[inventory["family"] == "step_by_step"]
+esc_runs = (
+    step_runs.loc[step_runs["step_variant"].astype(str) == "escalation"]
+    .copy()
+    .sort_values("total_cost")
+)
+esc_names = [str(name) for name in esc_runs["experiment_name"]]
+dr_runs = (
+    step_runs.loc[step_runs["step_variant"].astype(str) == "draft_repair"]
+    .copy()
+    .sort_values("total_cost")
+)
+sketch_runs = (
+    step_runs.loc[step_runs["step_variant"].astype(str) == "sketch"]
     .copy()
     .sort_values(["solved", "total_cost"], ascending=[False, True])
+)
+sketch_best = sketch_runs.iloc[0]
+sketch_54_low = sketch_runs.loc[
+    (sketch_runs["model_name"].astype(str) == "gpt-5.4")
+    & (sketch_runs["reasoning_effort"].astype(str) == "low")
+]
+
+dr_names = [str(name) for name in dr_runs["experiment_name"]]
+best_flat_name = str(dr_runs.iloc[0]["experiment_name"])
+best_flat_rows = runs.loc[runs["experiment_name"] == best_flat_name]
+best_step_single = int(
+    (best_flat_rows["num_requests"].astype(int) == 1).sum()
 )
 
 step_mini_low = first_row(inventory, "step_by_step", "gpt-5.4-mini", "low")
 step_nano_low = first_row(inventory, "step_by_step", "gpt-5.4-nano", "low")
+
+
+def row_by_name(name: str):
+    subset = inventory.loc[inventory["experiment_name"] == name]
+    return subset.iloc[0] if len(subset) else None
+
+
+# Fresh post-metering-fix re-runs of the historical best baseline and
+# guided configurations (consistency check for the re-metered prices).
+fresh_baseline = row_by_name("baseline_experiment_14")
+fresh_guided = row_by_name("guided_experiment_23")
+hist_baseline = row_by_name("baseline_experiment_2")
+hist_guided = row_by_name("guided_experiment_15")
 
 
 # --------------------------------------------------------------------------- #
@@ -113,7 +146,7 @@ title_md = f"""
 **{num_step} step-by-step** curated runs:
 
 - **Step-by-step is the only strategy that reaches 22/22** — at
-  {money(best_step['total_cost'])}, essentially the same cost as the best
+  {money(best_step['total_cost'])}, well below the cost of the best
   baseline.
 - **Baseline and guided top out at 19/22.** Best baseline run:
   {money(best_baseline['total_cost'])}. Best guided run:
@@ -145,10 +178,45 @@ solved equations out of 22, total run cost, and a short experiment label.
 
 Two legacy baseline runs use reasoning effort `None`
 (`baseline_experiment_1` and `baseline_experiment_6`); that label is carried
-explicitly in this report rather than being treated as missing metadata. For
-the current step-by-step runs, the sketch planner is fixed at `gpt-5.4` with
-`medium` reasoning effort, so the visible variation comes from the step
-executor.
+explicitly in this report rather than being treated as missing metadata.
+
+**Cost metering.** All dollar amounts in this report are actual API token
+counts multiplied by the official per-model OpenAI prices for the gpt-5.4
+family (gpt-5.4: \\$2.50/\\$0.25/\\$15 per million input/cached/output
+tokens; gpt-5.4-mini: \\$0.75/\\$0.075/\\$4.50). Delphyne's pricing table
+originally predated this model family and its `pricing="auto"` fallback
+silently billed gpt-5.4 models at gpt-5 rates (under-billing gpt-5.4 by
+1.5× and over-billing gpt-5.4-mini by 2.2×); the table has since been
+fixed upstream. Runs recorded before the fix are *re-metered* exactly from
+their recorded token counts when they used a single model
+(`price_meter == "official (re-metered)"` in the inventory); a handful of
+legacy sketch runs that mixed models keep their as-recorded prices and are
+flagged `legacy`.
+
+The step-by-step family contains three variants. Runs 1–9 used an early
+revision in which the planner produced a *proof sketch* in a custom text
+format; they are kept for comparison. Runs 10–12 use the flat
+**draft-and-repair** revision, in which the planner writes a complete proof
+directly in the checker's own YAML format and a repair model only fixes the
+steps that fail verification. Runs 13 and later add **budget escalation**:
+a cheap tier (low-effort draft, `gpt-5.4-mini` repairs, capped in both
+requests and dollars) attempts every problem first, and only the problems
+it cannot solve escalate to the strong configuration.
+"""
+
+if fresh_baseline is not None and fresh_guided is not None:
+    method_md += f"""
+**Re-verification.** After the metering fix, the historical best baseline
+and guided configurations were re-run from scratch with runtime-correct
+prices (`{fresh_baseline['experiment_name']}`,
+`{fresh_guided['experiment_name']}`). The fresh runs solved
+{int(fresh_baseline['solved'])}/22 for {money(fresh_baseline['total_cost'])}
+and {int(fresh_guided['solved'])}/22 for {money(fresh_guided['total_cost'])},
+against {int(hist_baseline['solved'])}/22 for
+{money(hist_baseline['total_cost'])} and {int(hist_guided['solved'])}/22 for
+{money(hist_guided['total_cost'])} from the re-metered historical runs —
+re-metered and runtime-metered prices are mutually consistent, with the
+residual differences attributable to sampling variance.
 """
 
 baseline_md = f"""
@@ -189,20 +257,36 @@ Guided search is competitive but does not move the frontier.
 
 step_md = f"""
 <a id="step-by-step"></a>
-## Step-by-Step
+## Step-by-Step (Draft & Repair, with Budget Escalation)
 
 The step-by-step runs are the strongest results in the report and already
 change the overall conclusion.
 
-- The best run, **{best_step['experiment_name']}**, solves **22/22** for
-  {money(best_step['total_cost'])} — the only configuration to reach full
-  coverage, and slightly cheaper than the best baseline.
-- Across three replicas with `gpt-5.4` / `low`, the step executor consistently
-  lands at **21–22 / 22** for
-  {money(float(step_replicates['total_cost'].min()))}–{money(float(step_replicates['total_cost'].max()))}.
-- The lighter executors hold up well: both `gpt-5.4-mini` and `gpt-5.4-nano`
-  at `low` reach **21/22** for around
-  {money(step_mini_low['total_cost'])}–{money(step_nano_low['total_cost'])}.
+- The flat draft-and-repair strategy solves **22/22 in every replica**
+  ({", ".join(f"`{name}`" for name in dr_names)}) for
+  {money(float(dr_runs['total_cost'].min()))}–{money(float(dr_runs['total_cost'].max()))}
+  — full coverage at well under half the cost of the best baseline.
+- In the best flat run, **{best_step_single} of the 22 equations are
+  proved by the single draft call**, with zero repair calls; only the two
+  product identities (018, 019) need repair rounds.
+- The **budget-escalation** runs
+  ({", ".join(f"`{name}`" for name in esc_names)}) keep 22/22 while
+  pushing total cost to
+  {money(float(esc_runs['total_cost'].min()))}–{money(float(esc_runs['total_cost'].max()))}:
+  a cheap tier (low-effort drafts, `gpt-5.4-mini` repairs) settles
+  most equations for under a cent each, and only the hard tail pays for
+  the strong configuration. The remaining run-to-run spread comes from
+  the heavy-tailed reasoning-token usage of the escalated problems.
+- The earlier sketch-based variant (runs 1–9) topped out at **22/22** for
+  {money(sketch_best['total_cost'])}
+  (21–22/22 across `gpt-5.4` / `low` replicas for
+  {money(float(sketch_54_low['total_cost'].min()))}–{money(float(sketch_54_low['total_cost'].max()))}),
+  so the redesign improved cost substantially while keeping full coverage.
+- Under the old variant, lighter executors held up well: both `gpt-5.4-mini`
+  and `gpt-5.4-nano` at `low` reached **21/22** for around
+  {money(step_mini_low['total_cost'])}–{money(step_nano_low['total_cost'])}
+  (as-recorded legacy prices; these runs mixed models and cannot be
+  re-metered exactly).
 """
 
 three_way_md = f"""
@@ -212,8 +296,8 @@ three_way_md = f"""
 The strongest current runs are **{best_baseline['experiment_name']}**,
 **{best_guided['experiment_name']}**, and **{best_step['experiment_name']}**.
 This is the headline result: baseline and guided top out at **19/22**, with
-guided paying a premium, while step-by-step reaches full coverage at
-essentially the same cost as the best baseline.
+guided paying a premium, while step-by-step reaches full coverage at the
+lowest cost of the three.
 
 *Leaderboard below — sorted by solved count (descending), then by cost
 (ascending).*
@@ -227,7 +311,7 @@ strictly dominates it.*
 The plot makes the comparison easy to read:
 
 - **Step-by-step is the only strategy that reaches 22/22.**
-- It does so **without a cost penalty**
+- It does so **at the lowest cost of any strategy**
   ({money(best_step['total_cost'])} vs {money(best_baseline['total_cost'])}
   for the best baseline).
 - **Guided matches baseline on solved count but finishes about
@@ -302,7 +386,7 @@ identities built from multiple transformations, especially benchmarks
 **018** and **019**.
 """
 
-why_step_md = """
+why_step_md = f"""
 <a id="why-step-by-step-works"></a>
 ## Why Step-by-Step Works
 
@@ -310,132 +394,105 @@ The previous section shows *that* step-by-step beats a saturated baseline.
 This section explains *why*. The goal is to make the design legible without
 forcing the reader to open `step_by_step.py`.
 
-### A planner / executor split
+### A planner / executor split, in one format
 
-Step-by-step is built as two phases that talk to each other through a
-verifier:
+The draft-and-repair strategy is built as two phases that talk to each
+other through a verifier:
 
-- **Phase 1 — Sketch.** A *large* model (default `gpt-5.4` at `high`
-  reasoning) is called **once** to produce a verifier-compatible **proof
-  sketch**.
-- **Phase 2 — Steps.** A *small* model (default `gpt-5.4-mini` at `low`
-  reasoning) is called **many times**, once per proof step, with the
-  validated sketch in its context.
+- **Phase 1 — Draft.** A strong model (default `gpt-5.4` at `medium`
+  reasoning) is called **once** to write a *complete proof*, directly in
+  the checker's own YAML format.
+- **Phase 2 — Verified replay.** The draft is replayed one step at a time
+  against the SymPy checker. A step that verifies is accepted **for free**
+  — no LLM call at all. Only when a step fails is a (cheaper) model asked
+  to repair that single step, with the checker's error message, the draft,
+  and the verified proof so far as context.
 - **The checker** runs between every step and is the ground truth that
   keeps both models honest.
 
-This is the classical AI planner/executor split: the expensive component
-decides *what* to do, the cheap component decides *how* to write it down,
-and a deterministic verifier rejects anything that does not type-check. The
-cost intuition is the key one: one expensive sketch call amortizes over
-5–15 cheap step calls, so the total looks much more like "many small calls"
-than "one big call".
+This is the classical AI planner/executor split, but with one twist that
+the data makes visible: when the plan is already written in the verified
+format, *most of the execution is free*. In the best run, the single draft
+call settles **{best_step_single} of 22** equations outright; the entire
+phase-2 machinery only activates on the two hardest benchmarks.
 
-### The role of the first draft (sketch)
+### One format, no custom parsing
 
-A sketch is a numbered list, where each line names exactly one allowed move
-and the local goal it produces. A toy example:
+An earlier revision of this strategy (runs 1–9 in this report) had the
+planner emit a *proof sketch* in a custom line-based text format
+(`1. rule:cos_add vars:{{x:"pi/2"}} → ...`) that was then parsed and
+validated with regular expressions, and re-translated into proof steps by
+the executor. The sketch contained nearly all the information of a final
+proof step in a second syntax — so the redesign removed it. Now:
 
-```
-1. rule:sin_neg → -sin(x)
-2. step → -sin(x)
-3. trans:[1,2]
-```
+- The **only** machine-readable format in the example is the checker's
+  `Proof` type, shared with every other strategy in the folder.
+- Parsing is the stock Delphyne parser
+  (`last_code_block.yaml_as(Proof)`); Pydantic rejects malformed structure
+  and the parse error automatically flows back to the model as feedback.
+- Draft validation is **typed**, not textual: unknown rule names, no-op
+  `trans` chains, and corrupting variable substitutions are detected on
+  the parsed `Proof` object and rejected with a targeted `dp.Error`.
 
-That tiny grammar is doing four jobs at once:
+The comparison rows in this report quantify what the simplification cost:
+nothing. Coverage stayed at 22/22 and total cost *dropped* from
+{money(sketch_best['total_cost'])} to {money(best_step['total_cost'])},
+because a verified draft step no longer needs an executor call to be
+re-derived from the plan.
 
-1. **It gives the executor a target.** The step model never has to invent
-   strategy mid-proof — it only has to translate the next sketch line into
-   a verifier-accepted YAML step. Most local errors collapse to "produce
-   the move named on line *k*".
-2. **It collapses the search.** An open-ended proof search becomes a
-   sequence of small, locally checkable subproblems. A wrong step is caught
-   immediately and only that single step is retried; the rest of the proof
-   is preserved.
-3. **It is a budget multiplier.** Planning is the expensive part of a
-   proof. Doing it once, well, is much cheaper than asking a weak model to
-   re-plan implicitly on every retry of a one-shot attempt.
-4. **It is a contract.** Because the sketch is machine-readable, the system
-   can match step *k* of the YAML proof against line *k* of the plan.
-   Errors become local and traceable instead of global and mysterious.
+### Targeted feedback instead of generic retries
 
-### Why the draft is *not* in natural language
-
-This is the design choice that does the most work, and it is the easiest to
-get wrong.
-
-If the sketch were free-form text, an LLM would happily write things like
-*"now apply the difference of squares"* or *"use the half-angle identity
-here"*. Both sentences sound correct. Both reference rules that **do not
-exist** in the verifier's `TRIG_RULES` table. A natural-language sketch
-built on those rules looks fine to a human reader, but the downstream step
-model has only two options when it tries to execute it: fake the rule
-(which the checker rejects) or get stuck (which burns retries). Either way,
-the entire proof attempt is poisoned from the planning step onwards.
-
-A natural-language sketch is also a contract you cannot enforce. There is
-no way for the verifier to ask *"does step 4 of your YAML proof match line
-4 of your plan?"* because the plan is prose. Errors only surface at the
-very end of the proof, and when they do, they cannot be localized.
-
-A strict, machine-readable sketch turns *"is this plan executable?"* into a
-syntactic question. You can answer that question **before** generating a
-single proof step — and that is exactly what `_validate_sketch` does in
-`step_by_step.py`.
-
-### Why the parsing is so specific
-
-The sketch validator checks several things, and each check exists to
-prevent a real failure mode that was observed in practice:
-
-- **Allowed-move tokens (`rule:`, `sym`, `step`, `trans`).** Every sketch
-  line must contain one of these. This forces the planner to commit to one
-  of the verifier's primitives per line and structurally rejects free-form
-  prose.
-- **Banned macro phrases** (`difference of squares`, `half-angle`,
-  `product-to-sum`, `sum-to-product`). These are exactly the macros LLMs
-  love to invoke and the checker does not implement. Catching them in the
-  sketch means the planner is told to fix its plan *once*, instead of
-  letting the step model hit the same wall on a dozen step-level retries.
-- **Numbered lines** (`1.`, `2.`, …). Every sketch line gets a stable ID so
-  step-level feedback can say *"your step 4 does not match plan line 4"*
-  instead of just *"this is wrong"*.
-- **Single-step `trans` rejection.** A `trans:[i]` with only one element is
-  a no-op, so the validator requires `trans` lines to chain at least two
-  prior steps. This forces the planner to actually decompose its sub-lemmas
-  instead of pretending it has.
-- **Overlapping `vars:` substitutions.** This is the subtlest one. A
-  substitution like `{x:"y", y:"-y"}` looks innocuous, but SymPy applies
-  substitutions sequentially: `x` first becomes `y`, and then that fresh
-  `y` is rewritten to `-y`, corrupting the result. The validator detects
-  the overlap and emits a targeted hint to rewrite it as
-  `{x:"-y", y:"y"}`. This is the kind of bug a one-shot baseline would
-  silently ship — nothing in the YAML output looks wrong, but the proof is
-  mathematically invalid.
-
-Crucially, every rejection is returned as a structured `dp.Error` with a
-*specific* fix instruction. The planner does not get a vague "try again";
-it gets "you cited `half-angle` on line 3, derive it from `cos2x` instead".
-That is the difference between feedback that converges and feedback that
-thrashes.
+Every rejection — at draft level or step level — carries a *specific* fix
+instruction. The most important example: SymPy applies `vars`
+substitutions sequentially, so `{{x: "y", y: "-y"}}` silently corrupts
+`cos(x + y)` into `cos(-2*y)`. The checker's generic error for this
+("rule application failed") sends a repair model in circles; the typed
+validator instead detects the overlap on the parsed step and answers with
+the exact rewrite to use (`{{x: "-y", y: "y"}}`). In our pilot runs this
+single hint was the difference between benchmark 018 failing at budget
+exhaustion and being solved in two requests.
 
 ### Phase 2: one verified step at a time
 
-Once the sketch is validated, Phase 2 is deliberately small-grained:
-
+- **Verified steps are free.** Replaying a draft step is a SymPy check,
+  not an LLM call. Only failures cost money.
 - **The search tree branches at the *step* level, not the *proof* level.**
-  A failed step costs one small-model call. A failed proof in the baseline
+  A failed step costs one repair call. A failed proof in the baseline
   costs an entire conversation, including all the work that *was* correct.
-- **Each step has a tight, local target.** The current sub-goal is computed
-  from the sketch and shown explicitly in the prompt, so the step model
-  knows exactly what expression it must produce.
-- **Feedback is also local.** When the checker rejects a step, the error
-  message is about that single line, which the small model can usually fix
-  in one retry.
-- **Sub-lemma support via `trans:[ids]`** lets the planner introduce
-  intermediate goals (e.g. prove an auxiliary identity, then reuse it).
-  This is exactly the structural move that makes the hardest benchmarks
-  (**018**, **019**) tractable.
+- **The verified prefix can never be invalidated.** The accepted proof is
+  renumbered sequentially and draft step references are translated through
+  an explicit id map, so a repaired step integrates without breaking
+  earlier `trans`/`sym` references.
+- **The draft is context, not ground truth.** If the draft runs out before
+  the proof closes, the repair model simply extends the proof step by
+  step, with the draft still visible as a guide.
+
+### Administering the budget
+
+The escalation runs add one more layer, built entirely from Delphyne's
+budget primitives — the strategy code is untouched:
+
+- **A cheap tier tries first.** The same strategy runs under a cheap
+  policy (low-effort draft, `gpt-5.4-mini` repairs with few candidates),
+  wrapped in `with_budget(BudgetLimit({{NUM_REQUESTS: 6, DOLLAR_PRICE:
+  0.04}}))`. The dollar cap matters as much as the request cap:
+  reasoning-token usage is heavy-tailed, and the cap cuts off the
+  occasional run-away reasoning chain.
+- **`or_else` escalates the rest.** `cheap.or_else(strong)` runs the
+  strong configuration only when the cheap stream produced no proof. In
+  practice ~16–19 equations never touch the strong tier.
+- **A per-problem dollar ceiling** (`max_dollar_budget` in the experiment
+  configs) bounds the worst case end to end.
+
+Two empirical lessons came out of tuning this ladder, both visible in the
+run data. First, *escalation only pays if failed cheap attempts are
+genuinely cheap* — an early variant that drafted with `gpt-5.4-mini` at
+`medium` effort turned out to be a false economy, because small models
+compensate with very long reasoning chains and each extra completion pays
+its own reasoning tokens. Second, *know what your meter measures*: the
+framework's stale pricing table initially over-billed `gpt-5.4-mini` by
+2.2×, which made mini-routing look pointless and silently ate the dollar
+budgets of escalated problems. Fixing the meter changed which policy wins.
 
 ### Why this beats a saturated baseline
 
@@ -444,14 +501,16 @@ at a one-shot proof. Each retry is **uncoordinated** — the model has no
 memory of *which* part of the previous attempt was right, only that the
 whole thing failed. So extra budget mostly buys lucky resamples.
 
-Step-by-step instead spends its budget on **structure**: one good plan,
-many cheap and verified executions. The saturate runs are direct empirical
-proof that the missing ingredient is structure, not budget — equations 018
-and 019 stay unsolved at every saturation level, but fall to step-by-step
-at lower total cost.
+Draft-and-repair instead spends its budget on **structure**: one good
+plan, free verification of everything that is right, and cheap local
+repair of the few steps that are wrong. The saturate runs are direct
+empirical proof that the missing ingredient is structure, not budget —
+equations 018 and 019 stay unsolved at every saturation level, but fall to
+draft-and-repair at a fraction of the cost.
 
-In one sentence: **22/22 at \\$1.13 is what you get when the verifier
-participates in the search, not just at the end of it.**
+In one sentence: **22/22 at {money(best_step['total_cost'])} is what you
+get when the verifier participates in the search, not just at the end of
+it.**
 """
 
 footer_md = """

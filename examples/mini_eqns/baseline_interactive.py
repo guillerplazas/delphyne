@@ -19,6 +19,7 @@ class ProveEqualityInteractive(dp.Query[dp.Response[ch.Proof, Never]]):
     Query for proving trigonometric equalities interactively.
     Returns a Response to enable feedback loops.
     """
+
     equality: ch.Eq
     prefix: dp.AnswerPrefix
 
@@ -50,7 +51,7 @@ def check_equality(
 
 @strategy
 def prove_equality_interactive(
-    equality: ch.Eq
+    equality: ch.Eq,
 ) -> Strategy[Branch, dp.PromptingPolicy, ch.Proof]:
     """
     Interactive strategy to prove a trigonometric equality.
@@ -59,10 +60,12 @@ def prove_equality_interactive(
     """
     # Use dp.interact to manage the LLM interaction with feedback loop
     result_proof = yield from dp.interact(
-        step=lambda prefix, _:
-            ProveEqualityInteractive(equality, prefix).using(dp.ambient_pp),
-        process=lambda proof, _:
-            check_equality(equality, proof).using(dp.just_compute)
+        step=lambda prefix, _: ProveEqualityInteractive(
+            equality, prefix
+        ).using(dp.ambient_pp),
+        process=lambda proof, _: check_equality(equality, proof).using(
+            dp.just_compute
+        ),
     )
 
     return result_proof
@@ -73,7 +76,7 @@ def prove_equality_interactive_policy(
     temperature: float | None = None,
     max_feedback_cycles: int = 3,
     loop: bool = False,
-    reasoning_effort: str | None = None,
+    reasoning_effort: dp.ReasoningEffort | None = None,
 ):
     """
     Policy for the interactive proof strategy.
@@ -85,13 +88,13 @@ def prove_equality_interactive_policy(
         loop: Whether to loop the search
         reasoning_effort: Optional reasoning effort level (e.g. "low", "medium", "high")
     """
-    options: dict[str, object] = {}
+    options: dp.RequestOptions = {}
     if reasoning_effort is not None:
         options["reasoning_effort"] = reasoning_effort
     model = dp.standard_model(model_name, options or None)
 
     # `interact` branches twice per feedback cycle
-    sp = dfs(max_depth=2*(max_feedback_cycles+1))
+    sp = dfs(max_depth=2 * (max_feedback_cycles + 1))
     if loop:
         sp = dp.loop() @ sp
     pp = dp.few_shot(model, temperature=temperature, max_requests=1)

@@ -16,7 +16,6 @@ BENCHMARKS_FOLDER = Path(__file__).parent.parent / "benchmark"
 EQUATIONS_FILE = BENCHMARKS_FOLDER / "htps.txt"
 
 
-
 def load_all_equations() -> dict[str, tuple[str, str]]:
     """
     Load all equations from the benchmark file.
@@ -129,21 +128,27 @@ class GuidedConfig:
 
 
 @dataclass
-class StepByStepConfig:
-    """Configuration for split-model sketch-guided proof experiments."""
+class StepByStepEscalationConfig:
+    """Configuration for budget-escalation draft-and-repair experiments."""
 
     bench_name: str
-    sketch_model_name: str
-    step_model_name: str
-    sketch_reasoning_effort: str | None
-    step_reasoning_effort: str | None
+    draft_model_name: str
+    cheap_draft_model_name: str
+    cheap_draft_effort: str
+    cheap_repair_model_name: str
+    cheap_repair_effort: str
+    cheap_num_completions: int
+    cheap_request_limit: int
+    cheap_dollar_limit: float
+    strong_draft_effort: str
+    strong_repair_model_name: str
     num_completions: int
-    max_feedback_cycles_per_step: int
-    max_steps: int
+    max_repair_cycles_per_step: int
+    max_total_steps: int
     seed: int
-    loop: bool = False
+    loop: bool = True
     max_dollar_budget: float | None = 0.25
-    max_sketch_feedback_cycles: int = 1
+    max_draft_feedback_cycles: int = 2
 
     def instantiate(self, context: object) -> dp.RunStrategyArgs:
         budget: dict[str, float] = {}
@@ -154,17 +159,73 @@ class StepByStepConfig:
 
         return dp.RunStrategyArgs(
             strategy="prove_step_by_step",
-            args={"equality": [lhs, rhs], "max_steps": self.max_steps},
+            args={
+                "equality": [lhs, rhs],
+                "max_total_steps": self.max_total_steps,
+            },
+            policy="prove_step_by_step_escalation_policy",
+            policy_args={
+                "draft_model_name": self.draft_model_name,
+                "cheap_draft_model_name": self.cheap_draft_model_name,
+                "cheap_draft_effort": self.cheap_draft_effort,
+                "cheap_repair_model_name": self.cheap_repair_model_name,
+                "cheap_repair_effort": self.cheap_repair_effort,
+                "cheap_num_completions": self.cheap_num_completions,
+                "cheap_request_limit": self.cheap_request_limit,
+                "cheap_dollar_limit": self.cheap_dollar_limit,
+                "strong_draft_effort": self.strong_draft_effort,
+                "strong_repair_model_name": self.strong_repair_model_name,
+                "num_completions": self.num_completions,
+                "max_repair_cycles_per_step": self.max_repair_cycles_per_step,
+                "max_total_steps": self.max_total_steps,
+                "max_draft_feedback_cycles": self.max_draft_feedback_cycles,
+                "loop": self.loop,
+            },
+            num_generated=1,
+            budget=budget,
+        )
+
+
+@dataclass
+class StepByStepConfig:
+    """Configuration for split-model draft-and-repair proof experiments."""
+
+    bench_name: str
+    draft_model_name: str
+    repair_model_name: str
+    draft_reasoning_effort: str | None
+    repair_reasoning_effort: str | None
+    num_completions: int
+    max_repair_cycles_per_step: int
+    max_total_steps: int
+    seed: int
+    loop: bool = False
+    max_dollar_budget: float | None = 0.25
+    max_draft_feedback_cycles: int = 1
+
+    def instantiate(self, context: object) -> dp.RunStrategyArgs:
+        budget: dict[str, float] = {}
+        if self.max_dollar_budget is not None:
+            budget[dp.DOLLAR_PRICE] = self.max_dollar_budget
+
+        lhs, rhs = BENCHS[self.bench_name]
+
+        return dp.RunStrategyArgs(
+            strategy="prove_step_by_step",
+            args={
+                "equality": [lhs, rhs],
+                "max_total_steps": self.max_total_steps,
+            },
             policy="prove_step_by_step_policy",
             policy_args={
-                "sketch_model_name": self.sketch_model_name,
-                "step_model_name": self.step_model_name,
-                "sketch_reasoning_effort": self.sketch_reasoning_effort,
-                "step_reasoning_effort": self.step_reasoning_effort,
+                "draft_model_name": self.draft_model_name,
+                "repair_model_name": self.repair_model_name,
+                "draft_reasoning_effort": self.draft_reasoning_effort,
+                "repair_reasoning_effort": self.repair_reasoning_effort,
                 "num_completions": self.num_completions,
-                "max_feedback_cycles_per_step": self.max_feedback_cycles_per_step,
-                "max_steps": self.max_steps,
-                "max_sketch_feedback_cycles": self.max_sketch_feedback_cycles,
+                "max_repair_cycles_per_step": self.max_repair_cycles_per_step,
+                "max_total_steps": self.max_total_steps,
+                "max_draft_feedback_cycles": self.max_draft_feedback_cycles,
                 "loop": self.loop,
             },
             num_generated=1,

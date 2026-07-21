@@ -1,0 +1,41 @@
+{% set feedback_text = feedback.meta if feedback.meta else feedback.description %}
+Your step was rejected.
+
+```
+{{ feedback_text }}
+```
+
+Fix the same step number and try again.
+Write exactly one YAML step.
+
+{% if "Rule '" in feedback_text and "not found" in feedback_text %}
+- You invented a rule name. Use only the listed rules.
+{% endif %}
+{% if "Step " in feedback_text and "not found" in feedback_text %}
+- You referenced a step that does not exist. Only use earlier verified step ids.
+{% endif %}
+{% if "is not a past step" in feedback_text %}
+- You referenced a future step. All `step`, `sym`, and `trans` references must point backward.
+{% endif %}
+{% if "Application of symmetry failed" in feedback_text %}
+- `{sym: k}` must exactly reverse step `k`.
+{% endif %}
+{% if "Transitivity requires at least 2 steps" in feedback_text %}
+- `trans` must be a flat list with at least two previous step ids.
+{% endif %}
+{% if "Unequal terms" in feedback_text or "Rule application failed" in feedback_text %}
+- Your step is too large or the variables are wrong. Back up and propose a smaller local rewrite.
+- Consider using `{step: K}` to substitute a previously proved equality into a sub-expression of the LHS, instead of a large `trans` or `rule` jump.
+{% endif %}
+{% if "Unequal terms" in feedback_text %}
+- For `{step: K}`: the LHS must contain the exact LHS of step K as a single-atom sub-expression. Use only single-atom patterns like `sin(x)**2` or `cos(0)` — sum patterns like `cos(x)**2 + sin(x)**2` do not work because SymPy simplifies them away before substitution.
+{% endif %}
+{% if "Invalid term syntax" in feedback_text %}
+- Use Python-style expressions only: `sin(x)`, `cos(x)`, and `**`.
+{% endif %}
+{% if "Expected exactly 1 step" in feedback_text %}
+- Output only one YAML step, not a full proof.
+{% endif %}
+{% if "does not end with the equation" in feedback_text %}
+- The current step is valid locally, but it is not yet the final step. Keep building smaller verified steps until a final `sym` or `trans` closes the proof.
+{% endif %}

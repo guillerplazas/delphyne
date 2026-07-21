@@ -123,6 +123,32 @@ def _first_config_params(experiment_dir: Path) -> dict[str, Any]:
     return dict(first_config.get("params", {}))
 
 
+# Official OpenAI prices in dollars per million tokens (input, cached
+# input, output), mirroring the gpt-5.4 entries of
+# `delphyne.stdlib.standard_models.PRICING`. Runs recorded before those
+# entries were added had fallen back to gpt-5 rates; their prices are
+# recomputed from token counts below whenever the run used a single
+# model (exact correction). Mixed-model legacy runs keep their recorded
+# price and are flagged with `price_meter == "legacy"`.
+OFFICIAL_PRICING: dict[str, tuple[float, float, float]] = {
+    "gpt-5.4": (2.50, 0.25, 15.00),
+    "gpt-5.4-mini": (0.75, 0.075, 4.50),
+    "gpt-5.4-nano": (0.20, 0.02, 1.25),
+}
+
+
+def _remeter_official(rows: pd.DataFrame, model_name: str) -> pd.Series:
+    inp, cached_inp, out = OFFICIAL_PRICING[model_name]
+    input_tokens = pd.to_numeric(rows["input_tokens"])
+    cached_tokens = pd.to_numeric(rows["cached_input_tokens"])
+    output_tokens = pd.to_numeric(rows["output_tokens"])
+    return (
+        (input_tokens - cached_tokens) * inp
+        + cached_tokens * cached_inp
+        + output_tokens * out
+    ) / 1e6
+
+
 def load_experiment_rows(experiment_dir: Path) -> pd.DataFrame:
     params = _first_config_params(experiment_dir)
     family = infer_family(experiment_dir.name)
@@ -135,28 +161,76 @@ def load_experiment_rows(experiment_dir: Path) -> pd.DataFrame:
     rows["family"] = family
 
     if family == "step_by_step":
-        rows["model_name"] = params.get("step_model_name", "unknown")
+        # Three step_by_step parameter vocabularies coexist: the legacy
+        # sketch runs, the flat draft-and-repair runs, and the current
+        # budget-escalation runs (cheap tier + strong fallback tier).
+        if "cheap_draft_model_name" in params:
+            rows["step_variant"] = "escalation"
+            planner_model = params.get("draft_model_name", "unknown")
+            planner_effort = params.get("strong_draft_effort")
+            executor_model = params.get(
+                "strong_repair_model_name", "unknown"
+            )
+            executor_effort = "low"
+        elif "draft_model_name" in params:
+            rows["step_variant"] = "draft_repair"
+            planner_model = params.get("draft_model_name", "unknown")
+            planner_effort = params.get("draft_reasoning_effort")
+            executor_model = params.get("repair_model_name", "unknown")
+            executor_effort = params.get("repair_reasoning_effort")
+        else:
+            rows["step_variant"] = "sketch"
+            planner_model = params.get("sketch_model_name", "unknown")
+            planner_effort = params.get("sketch_reasoning_effort")
+            executor_model = params.get("step_model_name", "unknown")
+            executor_effort = params.get("step_reasoning_effort")
+        rows["model_name"] = executor_model
         rows["reasoning_effort"] = normalize_reasoning_effort(
-            params.get("step_reasoning_effort"),
+            executor_effort,
             experiment_dir.name,
         )
-        rows["sketch_model_name"] = params.get("sketch_model_name", "unknown")
+        rows["sketch_model_name"] = planner_model
         rows["sketch_reasoning_effort"] = normalize_reasoning_effort(
-            params.get("sketch_reasoning_effort"),
+            planner_effort,
             experiment_dir.name,
         )
-        rows["step_model_name"] = params.get("step_model_name", "unknown")
+        rows["step_model_name"] = executor_model
         rows["step_reasoning_effort"] = normalize_reasoning_effort(
-            params.get("step_reasoning_effort"),
+            executor_effort,
             experiment_dir.name,
         )
         rows["configured_num_completions"] = params.get("num_completions", 1)
-        rows["configured_max_feedback_cycles"] = params.get("max_feedback_cycles_per_step")
-        rows["configured_max_steps"] = params.get("max_steps")
-        rows["configured_max_sketch_feedback_cycles"] = params.get("max_sketch_feedback_cycles")
+        rows["configured_max_feedback_cycles"] = params.get(
+            "max_repair_cycles_per_step",
+            params.get("max_feedback_cycles_per_step"),
+        )
+        rows["cheap_tier_model_name"] = params.get("cheap_draft_model_name")
+        rows["cheap_tier_effort"] = params.get("cheap_draft_effort")
+        rows["configured_max_steps"] = params.get(
+            "max_total_steps", params.get("max_steps")
+        )
+        rows["configured_max_sketch_feedback_cycles"] = params.get(
+            "max_draft_feedback_cycles",
+            params.get("max_sketch_feedback_cycles"),
+        )
         rows["configured_budget"] = params.get("max_dollar_budget")
         rows["configured_loop"] = params.get("loop")
+        if rows["step_variant"].iloc[0] == "escalation":
+            # Escalation runs postdate the metering fix: their recorded
+            # prices already use official per-model rates.
+            rows["price_meter"] = "official"
+        elif (
+            planner_model == executor_model
+            and planner_model in OFFICIAL_PRICING
+        ):
+            rows["price"] = _remeter_official(rows, str(planner_model))
+            rows["price_meter"] = "official (re-metered)"
+        else:
+            rows["price_meter"] = "legacy"
     else:
+        rows["step_variant"] = None
+        rows["cheap_tier_model_name"] = None
+        rows["cheap_tier_effort"] = None
         rows["model_name"] = params.get(
             "model_name",
             rows.get("model_name", pd.Series(["unknown"])).iloc[0],
@@ -178,6 +252,12 @@ def load_experiment_rows(experiment_dir: Path) -> pd.DataFrame:
         rows["configured_max_sketch_feedback_cycles"] = None
         rows["configured_budget"] = params.get("max_dollar_budget")
         rows["configured_loop"] = params.get("loop")
+        single_model = str(rows["model_name"].iloc[0])
+        if single_model in OFFICIAL_PRICING:
+            rows["price"] = _remeter_official(rows, single_model)
+            rows["price_meter"] = "official (re-metered)"
+        else:
+            rows["price_meter"] = "legacy"
     return rows
 
 
@@ -196,6 +276,8 @@ def build_experiment_inventory(runs: pd.DataFrame) -> pd.DataFrame:
         runs.groupby("experiment_name", dropna=False)
         .agg(
             family=("family", "first"),
+            step_variant=("step_variant", "first"),
+            price_meter=("price_meter", "first"),
             model_name=("model_name", "first"),
             reasoning_effort=("reasoning_effort", "first"),
             sketch_model_name=("sketch_model_name", "first"),
@@ -244,7 +326,13 @@ def build_experiment_inventory(runs: pd.DataFrame) -> pd.DataFrame:
 
 
 def select_best_configs(inventory: pd.DataFrame) -> pd.DataFrame:
-    ranked = inventory.sort_values(
+    # The saturate runs deliberately overspend to probe the baseline's
+    # ceiling; they are analyzed in their own report section and excluded
+    # from the per-family "best configuration" comparison.
+    candidates = inventory.loc[
+        ~inventory["experiment_name"].str.contains("saturate")
+    ]
+    ranked = candidates.sort_values(
         ["family", "solved", "total_cost", "avg_cost_per_success"],
         ascending=[True, False, True, True],
     )

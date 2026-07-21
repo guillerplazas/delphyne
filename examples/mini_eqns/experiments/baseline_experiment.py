@@ -32,10 +32,10 @@ configs = [
     meq.BaselineConfig(
         bench_name=bench_name,
         model_name=model_name,
-        temperature=None,
-        max_feedback_cycles=20,
+        temperature=1.0,
+        max_feedback_cycles=10,
         loop=True,
-        max_dollar_budget=0.75,
+        max_dollar_budget=0.5,
         seed=seed,
         reasoning_effort=reasoning_effort,
     )
@@ -50,5 +50,5 @@ if __name__ == "__main__":
         config_class=meq.BaselineConfig,
         context=dp.workspace_execution_context(__file__),
         configs=configs,
-        output_dir=f"experiments/report/{dp.path_stem(__file__)}_saturate_3",
+        output_dir=f"experiments/report/{dp.path_stem(__file__)}_14",
     ).run_cli()

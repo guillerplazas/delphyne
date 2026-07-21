@@ -24,12 +24,14 @@ class ProveEqualityAtOnce(dp.Query[ch.Proof]):
         # 3.14 introduces `TypeExpr`. See `yaml_as` docstring.
         parser: dp.Parser[ch.Proof] = dp.last_code_block.yaml_as(ch.Proof)
         return parser.validate(
-            lambda proof: dp.ParseError(description=str(ret))
-            if isinstance(
-                ret := ch.check(self.equality, proof, ch.TRIG_RULES),
-                ch.ProofError,
+            lambda proof: (
+                dp.ParseError(description=str(ret))
+                if isinstance(
+                    ret := ch.check(self.equality, proof, ch.TRIG_RULES),
+                    ch.ProofError,
+                )
+                else None
             )
-            else None
         )
 
     @override

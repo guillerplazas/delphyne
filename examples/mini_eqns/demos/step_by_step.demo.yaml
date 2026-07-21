@@ -1,6 +1,37 @@
-# Demonstrations for the sketch-guided step-by-step strategy
+# Demonstrations for the draft-and-repair strategy
 # NOTE: demo problems must NOT appear in the benchmark (htps.txt).
+#
+# The three demonstrations cover the three code paths of the strategy:
+# 1. The draft verifies outright (zero repair calls).
+# 2. A draft step fails verification and is repaired.
+# 3. The draft is exhausted before the proof is complete (extension).
 
+# Demo 1: the draft verifies outright. The only LLM call is the draft.
+- strategy: prove_step_by_step
+  args:
+    equality: ["sin(x)*cos(y) + cos(x)*sin(y)", "sin(x + y)"]
+  tests:
+    - run | success
+
+  queries:
+    - query: GenerateProofDraft
+      args:
+        equality: ["sin(x)*cos(y) + cos(x)*sin(y)", "sin(x + y)"]
+        prefix: []
+      answers:
+        - answer: |
+            ```yaml
+            1:
+              - ["sin(x + y)", "sin(x)*cos(y) + cos(x)*sin(y)"]
+              - {rule: sin_add, vars: {x: "x", y: "y"}}
+            2:
+              - ["sin(x)*cos(y) + cos(x)*sin(y)", "sin(x + y)"]
+              - {sym: 1}
+            ```
+
+# Demo 2: draft step 2 cites the wrong rule (sin_halfpi instead of
+# cos_halfpi). Steps 1, 3 and 4 replay for free; only step 2 needs one
+# repair call.
 - strategy: prove_step_by_step
   args:
     equality: ["cos(pi/2 + x)", "-sin(x)"]
@@ -8,30 +39,9 @@
     - run | success
 
   queries:
-    # Phase 1: Sketch generation
-    - query: GenerateProofSketch
+    - query: GenerateProofDraft
       args:
         equality: ["cos(pi/2 + x)", "-sin(x)"]
-      answers:
-        - answer: |
-            ```
-            1. rule:cos_add vars:{x:"pi/2", y:"x"} → cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
-            2. rule:cos_halfpi → -sin(pi/2)*sin(x)
-            3. rule:sin_halfpi → -sin(x)
-            4. trans:[1,2,3] → cos(pi/2 + x) = -sin(x)
-            ```
-
-    # Phase 2: Step 1 (empty partial proof)
-    - query: ProposeNextStep
-      args:
-        equality: ["cos(pi/2 + x)", "-sin(x)"]
-        sketch: |
-          1. rule:cos_add vars:{x:"pi/2", y:"x"} → cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
-          2. rule:cos_halfpi → -sin(pi/2)*sin(x)
-          3. rule:sin_halfpi → -sin(x)
-          4. trans:[1,2,3] → cos(pi/2 + x) = -sin(x)
-        partial_proof: {}
-        current_sub_goal: null
         prefix: []
       answers:
         - answer: |
@@ -39,22 +49,42 @@
             1:
               - ["cos(pi/2 + x)", "cos(pi/2)*cos(x) - sin(pi/2)*sin(x)"]
               - {rule: cos_add, vars: {x: "pi/2", y: "x"}}
+            2:
+              - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
+              - {rule: sin_halfpi, vars: {}}
+            3:
+              - ["-sin(pi/2)*sin(x)", "-sin(x)"]
+              - {rule: sin_halfpi, vars: {}}
+            4:
+              - ["cos(pi/2 + x)", "-sin(x)"]
+              - {trans: [1, 2, 3]}
             ```
 
-    # Step 2
-    - query: ProposeNextStep
+    - query: RepairProofStep
       args:
         equality: ["cos(pi/2 + x)", "-sin(x)"]
-        sketch: |
-          1. rule:cos_add vars:{x:"pi/2", y:"x"} → cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
-          2. rule:cos_halfpi → -sin(pi/2)*sin(x)
-          3. rule:sin_halfpi → -sin(x)
-          4. trans:[1,2,3] → cos(pi/2 + x) = -sin(x)
-        partial_proof:
+        draft:
           1:
             - ["cos(pi/2 + x)", "cos(pi/2)*cos(x) - sin(pi/2)*sin(x)"]
             - {rule: cos_add, vars: {x: "pi/2", y: "x"}}
-        current_sub_goal: null
+          2:
+            - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
+            - {rule: sin_halfpi, vars: {}}
+          3:
+            - ["-sin(pi/2)*sin(x)", "-sin(x)"]
+            - {rule: sin_halfpi, vars: {}}
+          4:
+            - ["cos(pi/2 + x)", "-sin(x)"]
+            - {trans: [1, 2, 3]}
+        verified_proof:
+          1:
+            - ["cos(pi/2 + x)", "cos(pi/2)*cos(x) - sin(pi/2)*sin(x)"]
+            - {rule: cos_add, vars: {x: "pi/2", y: "x"}}
+        step_id: 2
+        failed_step:
+          - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
+          - {rule: sin_halfpi, vars: {}}
+        error: "Error at step 2: Rule application failed. Obtained: '-sin(x) + cos(pi/2)*cos(x)' instead of the expected right-hand side."
         prefix: []
       answers:
         - answer: |
@@ -64,42 +94,38 @@
               - {rule: cos_halfpi, vars: {}}
             ```
 
-    # Step 3
-    - query: ProposeNextStep
+# Demo 3: the draft is correct but stops before the closing trans step.
+# All three draft steps replay for free; the repair model is then asked
+# to extend the proof with the final step.
+- strategy: prove_step_by_step
+  args:
+    equality: ["cos(pi/2 + x)", "-sin(x)"]
+  tests:
+    - run | success
+
+  queries:
+    - query: GenerateProofDraft
       args:
         equality: ["cos(pi/2 + x)", "-sin(x)"]
-        sketch: |
-          1. rule:cos_add vars:{x:"pi/2", y:"x"} → cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
-          2. rule:cos_halfpi → -sin(pi/2)*sin(x)
-          3. rule:sin_halfpi → -sin(x)
-          4. trans:[1,2,3] → cos(pi/2 + x) = -sin(x)
-        partial_proof:
-          1:
-            - ["cos(pi/2 + x)", "cos(pi/2)*cos(x) - sin(pi/2)*sin(x)"]
-            - {rule: cos_add, vars: {x: "pi/2", y: "x"}}
-          2:
-            - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
-            - {rule: cos_halfpi, vars: {}}
-        current_sub_goal: null
         prefix: []
       answers:
         - answer: |
             ```yaml
+            1:
+              - ["cos(pi/2 + x)", "cos(pi/2)*cos(x) - sin(pi/2)*sin(x)"]
+              - {rule: cos_add, vars: {x: "pi/2", y: "x"}}
+            2:
+              - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
+              - {rule: cos_halfpi, vars: {}}
             3:
               - ["-sin(pi/2)*sin(x)", "-sin(x)"]
               - {rule: sin_halfpi, vars: {}}
             ```
 
-    # Step 4: trans completes the proof
-    - query: ProposeNextStep
+    - query: RepairProofStep
       args:
         equality: ["cos(pi/2 + x)", "-sin(x)"]
-        sketch: |
-          1. rule:cos_add vars:{x:"pi/2", y:"x"} → cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
-          2. rule:cos_halfpi → -sin(pi/2)*sin(x)
-          3. rule:sin_halfpi → -sin(x)
-          4. trans:[1,2,3] → cos(pi/2 + x) = -sin(x)
-        partial_proof:
+        draft:
           1:
             - ["cos(pi/2 + x)", "cos(pi/2)*cos(x) - sin(pi/2)*sin(x)"]
             - {rule: cos_add, vars: {x: "pi/2", y: "x"}}
@@ -109,7 +135,19 @@
           3:
             - ["-sin(pi/2)*sin(x)", "-sin(x)"]
             - {rule: sin_halfpi, vars: {}}
-        current_sub_goal: null
+        verified_proof:
+          1:
+            - ["cos(pi/2 + x)", "cos(pi/2)*cos(x) - sin(pi/2)*sin(x)"]
+            - {rule: cos_add, vars: {x: "pi/2", y: "x"}}
+          2:
+            - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
+            - {rule: cos_halfpi, vars: {}}
+          3:
+            - ["-sin(pi/2)*sin(x)", "-sin(x)"]
+            - {rule: sin_halfpi, vars: {}}
+        step_id: 4
+        failed_step: null
+        error: "The draft is exhausted but the proof does not end with the target equality yet."
         prefix: []
       answers:
         - answer: |
@@ -117,412 +155,4 @@
             4:
               - ["cos(pi/2 + x)", "-sin(x)"]
               - {trans: [1, 2, 3]}
-            ```
-
-
-- strategy: prove_step_by_step
-  args:
-    equality: ["sin(x)*cos(y) + cos(x)*sin(y)", "sin(x + y)"]
-  tests:
-    - run | success
-  queries:
-    - query: GenerateProofSketch
-      args:
-        equality: ["sin(x)*cos(y) + cos(x)*sin(y)", "sin(x + y)"]
-      answers:
-        - answer: |
-            ```
-            1. rule:sin_add vars:{x:"x", y:"y"} → sin(x)*cos(y) + cos(x)*sin(y)
-            2. sym:[1] → sin(x)*cos(y) + cos(x)*sin(y) = sin(x + y)
-            ```
-    - query: ProposeNextStep
-      args:
-        equality: ["sin(x)*cos(y) + cos(x)*sin(y)", "sin(x + y)"]
-        sketch: |
-          1. rule:sin_add vars:{x:"x", y:"y"} → sin(x)*cos(y) + cos(x)*sin(y)
-          2. sym:[1] → sin(x)*cos(y) + cos(x)*sin(y) = sin(x + y)
-        partial_proof: {}
-        current_sub_goal: null
-        prefix: []
-      answers:
-        - answer: |
-            ```yaml
-            1:
-              - ["sin(x + y)", "sin(x)*cos(y) + cos(x)*sin(y)"]
-              - {rule: sin_add, vars: {x: "x", y: "y"}}
-            ```
-    - query: ProposeNextStep
-      args:
-        equality: ["sin(x)*cos(y) + cos(x)*sin(y)", "sin(x + y)"]
-        sketch: |
-          1. rule:sin_add vars:{x:"x", y:"y"} → sin(x)*cos(y) + cos(x)*sin(y)
-          2. sym:[1] → sin(x)*cos(y) + cos(x)*sin(y) = sin(x + y)
-        partial_proof:
-          1:
-            - ["sin(x + y)", "sin(x)*cos(y) + cos(x)*sin(y)"]
-            - {rule: sin_add, vars: {x: "x", y: "y"}}
-        current_sub_goal: null
-        prefix: []
-      answers:
-        - answer: |
-            ```yaml
-            2:
-              - ["sin(x)*cos(y) + cos(x)*sin(y)", "sin(x + y)"]
-              - {sym: 1}
-            ```
-
-
-# Example with indirect sub-lemma technique (non-benchmark problem):
-# prove cos(0) = cos(x)**2 + sin(x)**2, derive sin(x)**2 = cos(0) - cos(x)**2,
-# then substitute the sin(x)**2 atom and finalize with cos_zero.
-- strategy: prove_step_by_step
-  args:
-    equality: ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - 1"]
-  tests:
-    - run | success
-
-  queries:
-    - query: GenerateProofSketch
-      args:
-        equality: ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - 1"]
-      answers:
-        - answer: |
-            ```
-            1. rule:cos_add vars:{x:"x", y:"-x"} → cos(x)*cos(-x) - sin(x)*sin(-x)
-            2. rule:cos_neg vars:{x:"x"} → cos(x)**2 - sin(x)*sin(-x)
-            3. rule:sin_neg vars:{x:"x"} → cos(x)**2 + sin(x)**2
-            4. trans:[1,2,3] → cos(0) = cos(x)**2 + sin(x)**2
-            5. step:[4] → cos(0) - cos(x)**2 = sin(x)**2
-            6. sym:[5] → sin(x)**2 = cos(0) - cos(x)**2
-            7. step:[6] → 2*cos(x)**2 - cos(0)
-            8. rule:cos_zero → 2*cos(x)**2 - 1
-            9. trans:[7,8] → cos(x)**2 - sin(x)**2 = 2*cos(x)**2 - 1
-            ```
-
-    - query: ProposeNextStep
-      args:
-        equality: ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - 1"]
-        sketch: |
-          1. rule:cos_add vars:{x:"x", y:"-x"} → cos(x)*cos(-x) - sin(x)*sin(-x)
-          2. rule:cos_neg vars:{x:"x"} → cos(x)**2 - sin(x)*sin(-x)
-          3. rule:sin_neg vars:{x:"x"} → cos(x)**2 + sin(x)**2
-          4. trans:[1,2,3] → cos(0) = cos(x)**2 + sin(x)**2
-          5. step:[4] → cos(0) - cos(x)**2 = sin(x)**2
-          6. sym:[5] → sin(x)**2 = cos(0) - cos(x)**2
-          7. step:[6] → 2*cos(x)**2 - cos(0)
-          8. rule:cos_zero → 2*cos(x)**2 - 1
-          9. trans:[7,8] → cos(x)**2 - sin(x)**2 = 2*cos(x)**2 - 1
-        partial_proof: {}
-        current_sub_goal: "cos(0) = cos(x)**2 + sin(x)**2"
-        prefix: []
-      answers:
-        - answer: |
-            ```yaml
-            1:
-              - ["cos(0)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
-              - {rule: cos_add, vars: {x: "x", y: "-x"}}
-            ```
-
-    - query: ProposeNextStep
-      args:
-        equality: ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - 1"]
-        sketch: |
-          1. rule:cos_add vars:{x:"x", y:"-x"} → cos(x)*cos(-x) - sin(x)*sin(-x)
-          2. rule:cos_neg vars:{x:"x"} → cos(x)**2 - sin(x)*sin(-x)
-          3. rule:sin_neg vars:{x:"x"} → cos(x)**2 + sin(x)**2
-          4. trans:[1,2,3] → cos(0) = cos(x)**2 + sin(x)**2
-          5. step:[4] → cos(0) - cos(x)**2 = sin(x)**2
-          6. sym:[5] → sin(x)**2 = cos(0) - cos(x)**2
-          7. step:[6] → 2*cos(x)**2 - cos(0)
-          8. rule:cos_zero → 2*cos(x)**2 - 1
-          9. trans:[7,8] → cos(x)**2 - sin(x)**2 = 2*cos(x)**2 - 1
-        partial_proof:
-          1:
-            - ["cos(0)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
-            - {rule: cos_add, vars: {x: "x", y: "-x"}}
-        current_sub_goal: "cos(0) = cos(x)**2 + sin(x)**2"
-        prefix: []
-      answers:
-        - answer: |
-            ```yaml
-            2:
-              - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)**2 - sin(x)*sin(-x)"]
-              - {rule: cos_neg, vars: {x: "x"}}
-            ```
-
-    - query: ProposeNextStep
-      args:
-        equality: ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - 1"]
-        sketch: |
-          1. rule:cos_add vars:{x:"x", y:"-x"} → cos(x)*cos(-x) - sin(x)*sin(-x)
-          2. rule:cos_neg vars:{x:"x"} → cos(x)**2 - sin(x)*sin(-x)
-          3. rule:sin_neg vars:{x:"x"} → cos(x)**2 + sin(x)**2
-          4. trans:[1,2,3] → cos(0) = cos(x)**2 + sin(x)**2
-          5. step:[4] → cos(0) - cos(x)**2 = sin(x)**2
-          6. sym:[5] → sin(x)**2 = cos(0) - cos(x)**2
-          7. step:[6] → 2*cos(x)**2 - cos(0)
-          8. rule:cos_zero → 2*cos(x)**2 - 1
-          9. trans:[7,8] → cos(x)**2 - sin(x)**2 = 2*cos(x)**2 - 1
-        partial_proof:
-          1:
-            - ["cos(0)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
-            - {rule: cos_add, vars: {x: "x", y: "-x"}}
-          2:
-            - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)**2 - sin(x)*sin(-x)"]
-            - {rule: cos_neg, vars: {x: "x"}}
-        current_sub_goal: "cos(0) = cos(x)**2 + sin(x)**2"
-        prefix: []
-      answers:
-        - answer: |
-            ```yaml
-            3:
-              - ["cos(x)**2 - sin(x)*sin(-x)", "cos(x)**2 + sin(x)**2"]
-              - {rule: sin_neg, vars: {x: "x"}}
-            ```
-
-    - query: ProposeNextStep
-      args:
-        equality: ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - 1"]
-        sketch: |
-          1. rule:cos_add vars:{x:"x", y:"-x"} → cos(x)*cos(-x) - sin(x)*sin(-x)
-          2. rule:cos_neg vars:{x:"x"} → cos(x)**2 - sin(x)*sin(-x)
-          3. rule:sin_neg vars:{x:"x"} → cos(x)**2 + sin(x)**2
-          4. trans:[1,2,3] → cos(0) = cos(x)**2 + sin(x)**2
-          5. step:[4] → cos(0) - cos(x)**2 = sin(x)**2
-          6. sym:[5] → sin(x)**2 = cos(0) - cos(x)**2
-          7. step:[6] → 2*cos(x)**2 - cos(0)
-          8. rule:cos_zero → 2*cos(x)**2 - 1
-          9. trans:[7,8] → cos(x)**2 - sin(x)**2 = 2*cos(x)**2 - 1
-        partial_proof:
-          1:
-            - ["cos(0)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
-            - {rule: cos_add, vars: {x: "x", y: "-x"}}
-          2:
-            - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)**2 - sin(x)*sin(-x)"]
-            - {rule: cos_neg, vars: {x: "x"}}
-          3:
-            - ["cos(x)**2 - sin(x)*sin(-x)", "cos(x)**2 + sin(x)**2"]
-            - {rule: sin_neg, vars: {x: "x"}}
-        current_sub_goal: "cos(0) = cos(x)**2 + sin(x)**2"
-        prefix: []
-      answers:
-        - answer: |
-            ```yaml
-            4:
-              - ["cos(0)", "cos(x)**2 + sin(x)**2"]
-              - {trans: [1, 2, 3]}
-            ```
-
-    # Step 5: apply step 4 (cos(0) = cos(x)**2+sin(x)**2) to "cos(0) - cos(x)**2":
-    # substitutes cos(0) atom → cos(x)**2+sin(x)**2, giving sin(x)**2.
-    - query: ProposeNextStep
-      args:
-        equality: ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - 1"]
-        sketch: |
-          1. rule:cos_add vars:{x:"x", y:"-x"} → cos(x)*cos(-x) - sin(x)*sin(-x)
-          2. rule:cos_neg vars:{x:"x"} → cos(x)**2 - sin(x)*sin(-x)
-          3. rule:sin_neg vars:{x:"x"} → cos(x)**2 + sin(x)**2
-          4. trans:[1,2,3] → cos(0) = cos(x)**2 + sin(x)**2
-          5. step:[4] → cos(0) - cos(x)**2 = sin(x)**2
-          6. sym:[5] → sin(x)**2 = cos(0) - cos(x)**2
-          7. step:[6] → 2*cos(x)**2 - cos(0)
-          8. rule:cos_zero → 2*cos(x)**2 - 1
-          9. trans:[7,8] → cos(x)**2 - sin(x)**2 = 2*cos(x)**2 - 1
-        partial_proof:
-          1:
-            - ["cos(0)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
-            - {rule: cos_add, vars: {x: "x", y: "-x"}}
-          2:
-            - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)**2 - sin(x)*sin(-x)"]
-            - {rule: cos_neg, vars: {x: "x"}}
-          3:
-            - ["cos(x)**2 - sin(x)*sin(-x)", "cos(x)**2 + sin(x)**2"]
-            - {rule: sin_neg, vars: {x: "x"}}
-          4:
-            - ["cos(0)", "cos(x)**2 + sin(x)**2"]
-            - {trans: [1, 2, 3]}
-        current_sub_goal: null
-        prefix: []
-      answers:
-        - answer: |
-            ```yaml
-            5:
-              - ["cos(0) - cos(x)**2", "sin(x)**2"]
-              - {step: 4}
-            ```
-
-    - query: ProposeNextStep
-      args:
-        equality: ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - 1"]
-        sketch: |
-          1. rule:cos_add vars:{x:"x", y:"-x"} → cos(x)*cos(-x) - sin(x)*sin(-x)
-          2. rule:cos_neg vars:{x:"x"} → cos(x)**2 - sin(x)*sin(-x)
-          3. rule:sin_neg vars:{x:"x"} → cos(x)**2 + sin(x)**2
-          4. trans:[1,2,3] → cos(0) = cos(x)**2 + sin(x)**2
-          5. step:[4] → cos(0) - cos(x)**2 = sin(x)**2
-          6. sym:[5] → sin(x)**2 = cos(0) - cos(x)**2
-          7. step:[6] → 2*cos(x)**2 - cos(0)
-          8. rule:cos_zero → 2*cos(x)**2 - 1
-          9. trans:[7,8] → cos(x)**2 - sin(x)**2 = 2*cos(x)**2 - 1
-        partial_proof:
-          1:
-            - ["cos(0)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
-            - {rule: cos_add, vars: {x: "x", y: "-x"}}
-          2:
-            - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)**2 - sin(x)*sin(-x)"]
-            - {rule: cos_neg, vars: {x: "x"}}
-          3:
-            - ["cos(x)**2 - sin(x)*sin(-x)", "cos(x)**2 + sin(x)**2"]
-            - {rule: sin_neg, vars: {x: "x"}}
-          4:
-            - ["cos(0)", "cos(x)**2 + sin(x)**2"]
-            - {trans: [1, 2, 3]}
-          5:
-            - ["cos(0) - cos(x)**2", "sin(x)**2"]
-            - {step: 4}
-        current_sub_goal: null
-        prefix: []
-      answers:
-        - answer: |
-            ```yaml
-            6:
-              - ["sin(x)**2", "cos(0) - cos(x)**2"]
-              - {sym: 5}
-            ```
-
-    # Step 7: apply {step: 6} to substitute sin(x)**2 → cos(0)-cos(x)**2
-    # in "cos(x)**2 - sin(x)**2", yielding "2*cos(x)**2 - cos(0)".
-    - query: ProposeNextStep
-      args:
-        equality: ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - 1"]
-        sketch: |
-          1. rule:cos_add vars:{x:"x", y:"-x"} → cos(x)*cos(-x) - sin(x)*sin(-x)
-          2. rule:cos_neg vars:{x:"x"} → cos(x)**2 - sin(x)*sin(-x)
-          3. rule:sin_neg vars:{x:"x"} → cos(x)**2 + sin(x)**2
-          4. trans:[1,2,3] → cos(0) = cos(x)**2 + sin(x)**2
-          5. step:[4] → cos(0) - cos(x)**2 = sin(x)**2
-          6. sym:[5] → sin(x)**2 = cos(0) - cos(x)**2
-          7. step:[6] → 2*cos(x)**2 - cos(0)
-          8. rule:cos_zero → 2*cos(x)**2 - 1
-          9. trans:[7,8] → cos(x)**2 - sin(x)**2 = 2*cos(x)**2 - 1
-        partial_proof:
-          1:
-            - ["cos(0)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
-            - {rule: cos_add, vars: {x: "x", y: "-x"}}
-          2:
-            - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)**2 - sin(x)*sin(-x)"]
-            - {rule: cos_neg, vars: {x: "x"}}
-          3:
-            - ["cos(x)**2 - sin(x)*sin(-x)", "cos(x)**2 + sin(x)**2"]
-            - {rule: sin_neg, vars: {x: "x"}}
-          4:
-            - ["cos(0)", "cos(x)**2 + sin(x)**2"]
-            - {trans: [1, 2, 3]}
-          5:
-            - ["cos(0) - cos(x)**2", "sin(x)**2"]
-            - {step: 4}
-          6:
-            - ["sin(x)**2", "cos(0) - cos(x)**2"]
-            - {sym: 5}
-        current_sub_goal: null
-        prefix: []
-      answers:
-        - answer: |
-            ```yaml
-            7:
-              - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
-              - {step: 6}
-            ```
-
-    - query: ProposeNextStep
-      args:
-        equality: ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - 1"]
-        sketch: |
-          1. rule:cos_add vars:{x:"x", y:"-x"} → cos(x)*cos(-x) - sin(x)*sin(-x)
-          2. rule:cos_neg vars:{x:"x"} → cos(x)**2 - sin(x)*sin(-x)
-          3. rule:sin_neg vars:{x:"x"} → cos(x)**2 + sin(x)**2
-          4. trans:[1,2,3] → cos(0) = cos(x)**2 + sin(x)**2
-          5. step:[4] → cos(0) - cos(x)**2 = sin(x)**2
-          6. sym:[5] → sin(x)**2 = cos(0) - cos(x)**2
-          7. step:[6] → 2*cos(x)**2 - cos(0)
-          8. rule:cos_zero → 2*cos(x)**2 - 1
-          9. trans:[7,8] → cos(x)**2 - sin(x)**2 = 2*cos(x)**2 - 1
-        partial_proof:
-          1:
-            - ["cos(0)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
-            - {rule: cos_add, vars: {x: "x", y: "-x"}}
-          2:
-            - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)**2 - sin(x)*sin(-x)"]
-            - {rule: cos_neg, vars: {x: "x"}}
-          3:
-            - ["cos(x)**2 - sin(x)*sin(-x)", "cos(x)**2 + sin(x)**2"]
-            - {rule: sin_neg, vars: {x: "x"}}
-          4:
-            - ["cos(0)", "cos(x)**2 + sin(x)**2"]
-            - {trans: [1, 2, 3]}
-          5:
-            - ["cos(0) - cos(x)**2", "sin(x)**2"]
-            - {step: 4}
-          6:
-            - ["sin(x)**2", "cos(0) - cos(x)**2"]
-            - {sym: 5}
-          7:
-            - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
-            - {step: 6}
-        current_sub_goal: null
-        prefix: []
-      answers:
-        - answer: |
-            ```yaml
-            8:
-              - ["2*cos(x)**2 - cos(0)", "2*cos(x)**2 - 1"]
-              - {rule: cos_zero}
-            ```
-
-    - query: ProposeNextStep
-      args:
-        equality: ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - 1"]
-        sketch: |
-          1. rule:cos_add vars:{x:"x", y:"-x"} → cos(x)*cos(-x) - sin(x)*sin(-x)
-          2. rule:cos_neg vars:{x:"x"} → cos(x)**2 - sin(x)*sin(-x)
-          3. rule:sin_neg vars:{x:"x"} → cos(x)**2 + sin(x)**2
-          4. trans:[1,2,3] → cos(0) = cos(x)**2 + sin(x)**2
-          5. step:[4] → cos(0) - cos(x)**2 = sin(x)**2
-          6. sym:[5] → sin(x)**2 = cos(0) - cos(x)**2
-          7. step:[6] → 2*cos(x)**2 - cos(0)
-          8. rule:cos_zero → 2*cos(x)**2 - 1
-          9. trans:[7,8] → cos(x)**2 - sin(x)**2 = 2*cos(x)**2 - 1
-        partial_proof:
-          1:
-            - ["cos(0)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
-            - {rule: cos_add, vars: {x: "x", y: "-x"}}
-          2:
-            - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)**2 - sin(x)*sin(-x)"]
-            - {rule: cos_neg, vars: {x: "x"}}
-          3:
-            - ["cos(x)**2 - sin(x)*sin(-x)", "cos(x)**2 + sin(x)**2"]
-            - {rule: sin_neg, vars: {x: "x"}}
-          4:
-            - ["cos(0)", "cos(x)**2 + sin(x)**2"]
-            - {trans: [1, 2, 3]}
-          5:
-            - ["cos(0) - cos(x)**2", "sin(x)**2"]
-            - {step: 4}
-          6:
-            - ["sin(x)**2", "cos(0) - cos(x)**2"]
-            - {sym: 5}
-          7:
-            - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
-            - {step: 6}
-          8:
-            - ["2*cos(x)**2 - cos(0)", "2*cos(x)**2 - 1"]
-            - {rule: cos_zero}
-        current_sub_goal: null
-        prefix: []
-      answers:
-        - answer: |
-            ```yaml
-            9:
-              - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - 1"]
-              - {trans: [7, 8]}
             ```

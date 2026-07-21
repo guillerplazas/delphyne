@@ -1,0 +1,4503 @@
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            ## Task
+
+            You are proving a trigonometric equality for a strict checker.
+            Write a COMPLETE machine-checkable proof as a YAML code block.
+
+            Your proof is a draft: every step will be verified individually, and
+            steps that fail verification will be repaired later. Still, aim for a
+            proof that is fully correct on the first attempt.
+
+            ## Proof format
+
+            A proof is a YAML mapping from step numbers (1, 2, ...) to steps.
+            Each step is a pair of an equality and a justification:
+
+            ```yaml
+            1:
+              - ["<lhs>", "<rhs>"]
+              - <justification>
+            2:
+              - ["<lhs>", "<rhs>"]
+              - <justification>
+            ```
+
+            Justifications can be:
+            - `{rule: <rule_name>, vars: {<var>: "<value>", ...}}`
+            - `{step: <prev_step_id>}`
+            - `{sym: <prev_step_id>}`
+            - `{trans: [<step_id_1>, ..., <step_id_n>]}`
+
+            The last step must state the target equality.
+
+            ## Hard constraints
+
+            - Use only the rule names listed below. Do not invent rule names.
+            - Do not put nested objects inside `trans`; it must be a flat list of
+              at least TWO previous step ids.
+            - Do not reference future or missing steps.
+            - Prefer small local rewrites over large jumps.
+            - Exponentiation is `**`.
+            - Variable substitution in `vars` is sequential (NOT simultaneous). Never use a rule
+              variable name (x or y) as a replacement value when that name is also being replaced.
+              If you write `vars:{x:"y", y:"-x"}`, the checker first replaces `x→y`, then `y→-x`,
+              turning `sin(x+y)` into `sin(-2*x)` — NOT `sin(-x+y)`. Put the negative sign on the
+              variable being replaced instead:
+              - For `sin(y - x)`: use `vars:{x:"-x", y:"y"}` (gives `sin(-x+y)` ✓)
+              - For `cos(x - y)`: use `vars:{x:"x", y:"-y"}` (gives `cos(x-y)` ✓)
+              - For `cos(0)` via `cos(y-y)`: use `vars:{x:"-y", y:"y"}` (gives `cos(0)` ✓)
+
+            ## Rule application replaces ALL occurrences
+
+            When you apply a rule like `sin_halfpi` (`sin(pi/2) = 1`), the checker substitutes ALL
+            occurrences of `sin(pi/2)` in the LHS simultaneously. For example:
+            - LHS: `sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)`
+            - After `sin_halfpi`: `cos(pi/2) + cos(pi/2)` = `2*cos(pi/2)` (NOT `cos(pi/2) + cos(pi/2)*sin(pi/2)`)
+
+            Always compute the RHS of each step by replacing ALL matching subexpressions.
+
+            ## Arithmetic note
+
+            The checker accepts ordinary arithmetic simplification of expressions.
+            For example, after a valid trig rewrite, terms like `sin(x)*cos(x) + cos(x)*sin(x)`
+            may match `2*sin(x)*cos(x)` without an extra algebra rule.
+            However, no extra trigonometric identities are allowed unless listed below.
+
+            ## Available rules
+
+            ```
+            - cos_zero: `cos(0) = 1`
+            - sin_zero: `sin(0) = 0`
+            - sin_halfpi: `sin(pi/2) = 1`
+            - cos_halfpi: `cos(pi/2) = 0`
+            - sin_neg: `sin(-x) = -sin(x)`
+            - cos_neg: `cos(-x) = cos(x)`
+            - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+            - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+            ```
+
+            ## Keep proofs SHORT
+
+            Budget is limited. Prefer shorter proofs. When the same sub-lemma pattern
+            (e.g., deriving cos(0) = cos(v)**2 + sin(v)**2) is needed for multiple variables,
+            derive it once with a generic variable then reference that result. Do NOT duplicate
+            the 4-step Pythagorean derivation for each variable separately.
+
+            ## How `{step: K}` works
+
+            `{step: K}` rewrites a sub-expression inside the current step's LHS using the equality
+            from step K. If step K proved `A = B`, then `{step: K}` substitutes `A → B` inside the
+            current LHS.
+
+            **Critical constraint**: `{step: K}` only works when K's LHS is a **single atom** (e.g.
+            `sin(x)**2`, `cos(0)`). Sum patterns like `cos(x)**2 + sin(x)**2` do NOT work — SymPy
+            simplifies them away before the substitution can match.
+
+            **NEVER use `{step: K}` when K's LHS is `1`** — the atom `1` appears everywhere and will
+            be replaced in ALL occurrences, corrupting the expression. Keep `cos(0)` as the
+            intermediate atom and only apply `cos_zero` at the very end.
+
+            **NEVER use `{step: K}` when K's RHS is a sum like `A + B` inside a larger target** if
+            SymPy may auto-simplify the sum away before substitution. Rearrange the proof so that
+            the substituted atom is a single term (like `sin(x)**2` or `cos(0)`).
+
+            ## Common proof patterns
+
+            - For `sin(a - b)` or `cos(a - b)`, rewrite subtraction as addition with a negative argument.
+            - To evaluate `cos(pi)`, `sin(pi)`, `cos(2*pi)`, `sin(2*pi)`: expand via `cos_add`/`sin_add`
+              with arguments summing to the target angle (e.g. `cos(pi) = cos(pi/2+pi/2)` via `cos_add`),
+              then simplify each factor using `cos_halfpi` and `sin_halfpi`. Derive these constant
+              values as sub-lemmas, then substitute them with `{step: K}` (see Example 3).
+            - For `sin(2*x)` or `cos(2*x)`, use `sin_add` or `cos_add` with both arguments equal to `x`.
+            - For `sin(2*x) = 2*sin(x)*cos(x)`: this is nearly a ONE-step proof. `sin_add` with
+              `vars:{x:"x", y:"x"}` gives `sin(x)*cos(x) + cos(x)*sin(x)`, and the checker's
+              arithmetic simplification recognizes this equals `2*sin(x)*cos(x)`. Do NOT try to
+              combine identical terms with `{step}` or `{trans}` — the checker handles it.
+            - For double-angle identities involving `cos(x)**2` or `sin(x)**2` (Pythagorean
+              rearrangements), use the indirect sub-lemma technique (see Example 2):
+              1. Derive `cos(0) = cos(x)**2 + sin(x)**2` (4 steps via cos_add+cos_neg+sin_neg+trans).
+              2. Apply `{step: K}` to the expression `cos(0) - cos(x)**2`: this substitutes the atom
+                 `cos(0)` with `cos(x)**2 + sin(x)**2`, giving `sin(x)**2`. This step proves
+                 `cos(0) - cos(x)**2 = sin(x)**2`.
+              3. Use `sym` to get `sin(x)**2 = cos(0) - cos(x)**2`.
+              4. Apply `{step}` on the result of `cos_add` to substitute the `sin(x)**2` atom,
+                 yielding an expression with `cos(0)` instead of `1`.
+              5. Apply `cos_zero` to convert `cos(0) → 1` in the final step.
+            - When direct rewriting is hard, prove both sides equal to a common intermediate form
+              and then use `sym` and `trans`.
+            - Use `trans` only when the chain is properly justified: each step's RHS must equal the
+              next step's LHS, the first LHS must match the target LHS, and the last RHS must match
+              the target RHS.
+
+            ## Worked examples
+
+            Example 1 (cos(pi/2 + x) = -sin(x)):
+
+            ```yaml
+            1:
+              - ["cos(pi/2 + x)", "cos(pi/2)*cos(x) - sin(pi/2)*sin(x)"]
+              - {rule: cos_add, vars: {x: "pi/2", y: "x"}}
+            2:
+              - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
+              - {rule: cos_halfpi, vars: {}}
+            3:
+              - ["-sin(pi/2)*sin(x)", "-sin(x)"]
+              - {rule: sin_halfpi, vars: {}}
+            4:
+              - ["cos(pi/2 + x)", "-sin(x)"]
+              - {trans: [1, 2, 3]}
+            ```
+
+            Example 2 (cos(x)**2 - sin(x)**2 = 2*cos(x)**2 - 1), showing the indirect sub-lemma
+            technique:
+
+            ```yaml
+            1:
+              - ["cos(0)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+              - {rule: cos_add, vars: {x: "x", y: "-x"}}
+            2:
+              - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)**2 - sin(x)*sin(-x)"]
+              - {rule: cos_neg, vars: {x: "x"}}
+            3:
+              - ["cos(x)**2 - sin(x)*sin(-x)", "cos(x)**2 + sin(x)**2"]
+              - {rule: sin_neg, vars: {x: "x"}}
+            4:
+              - ["cos(0)", "cos(x)**2 + sin(x)**2"]
+              - {trans: [1, 2, 3]}
+            5:
+              - ["cos(0) - cos(x)**2", "sin(x)**2"]
+              - {step: 4}
+            6:
+              - ["sin(x)**2", "cos(0) - cos(x)**2"]
+              - {sym: 5}
+            7:
+              - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+              - {step: 6}
+            8:
+              - ["2*cos(x)**2 - cos(0)", "2*cos(x)**2 - 1"]
+              - {rule: cos_zero, vars: {}}
+            9:
+              - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - 1"]
+              - {trans: [7, 8]}
+            ```
+
+            Key for step 5: LHS = `cos(0) - cos(x)**2`. Apply step 4 to substitute atom `cos(0)` →
+            `cos(x)**2 + sin(x)**2`, giving `sin(x)**2`. Keep `cos(0)` explicit — do NOT replace
+            with `1` yet (that happens in step 8 via cos_zero).
+            Key for step 7: step 6 proved `sin(x)**2 = cos(0) - cos(x)**2`. Apply `{step: 6}` to
+            `cos(x)**2 - sin(x)**2` to substitute the atom `sin(x)**2`, giving `2*cos(x)**2 - cos(0)`.
+
+            Example 3 (cos(pi - x) = -cos(x)), showing constant evaluation as sub-lemmas:
+
+            ```yaml
+            1:
+              - ["cos(pi)", "cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)"]
+              - {rule: cos_add, vars: {x: "pi/2", y: "pi/2"}}
+            2:
+              - ["cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)", "-sin(pi/2)*sin(pi/2)"]
+              - {rule: cos_halfpi, vars: {}}
+            3:
+              - ["-sin(pi/2)*sin(pi/2)", "-1"]
+              - {rule: sin_halfpi, vars: {}}
+            4:
+              - ["cos(pi)", "-1"]
+              - {trans: [1, 2, 3]}
+            5:
+              - ["sin(pi)", "sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)"]
+              - {rule: sin_add, vars: {x: "pi/2", y: "pi/2"}}
+            6:
+              - ["sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)", "2*cos(pi/2)"]
+              - {rule: sin_halfpi, vars: {}}
+            7:
+              - ["2*cos(pi/2)", "0"]
+              - {rule: cos_halfpi, vars: {}}
+            8:
+              - ["sin(pi)", "0"]
+              - {trans: [5, 6, 7]}
+            9:
+              - ["cos(pi - x)", "cos(pi)*cos(-x) - sin(pi)*sin(-x)"]
+              - {rule: cos_add, vars: {x: "pi", y: "-x"}}
+            10:
+              - ["cos(pi)*cos(-x) - sin(pi)*sin(-x)", "-cos(-x) - sin(pi)*sin(-x)"]
+              - {step: 4}
+            11:
+              - ["-cos(-x) - sin(pi)*sin(-x)", "-cos(-x)"]
+              - {step: 8}
+            12:
+              - ["-cos(-x)", "-cos(x)"]
+              - {rule: cos_neg, vars: {x: "x"}}
+            13:
+              - ["cos(pi - x)", "-cos(x)"]
+              - {trans: [9, 10, 11, 12]}
+            ```
+
+            Key: steps 1-4 derive `cos(pi) = -1` and steps 5-8 derive `sin(pi) = 0` as sub-lemmas.
+            Step 1's LHS is `cos(pi)` (i.e. `cos(pi/2+pi/2)`), NOT the main target `cos(pi - x)`.
+            Steps 10-11 use `{step: K}` to substitute these constant values into the expansion.
+
+            ## Output format
+
+            Return the complete proof as a single YAML code block. No prose inside the code block.
+        - role: user
+          content: |-
+            Write a complete machine-checkable proof of:
+
+            `sin(x)*cos(y) + cos(x)*sin(y) = sin(x + y)`
+
+            Return it as a single YAML code block.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["sin(x + y)", "sin(x)*cos(y) + cos(x)*sin(y)"]
+                - {rule: sin_add, vars: {x: "x", y: "y"}}
+              2:
+                - ["sin(x)*cos(y) + cos(x)*sin(y)", "sin(x + y)"]
+                - {sym: 1}
+              ```
+        - role: user
+          content: |-
+            Write a complete machine-checkable proof of:
+
+            `cos(pi/2 + x) = -sin(x)`
+
+            Return it as a single YAML code block.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["cos(pi/2 + x)", "cos(pi/2)*cos(x) - sin(pi/2)*sin(x)"]
+                - {rule: cos_add, vars: {x: "pi/2", y: "x"}}
+              2:
+                - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
+                - {rule: sin_halfpi, vars: {}}
+              3:
+                - ["-sin(pi/2)*sin(x)", "-sin(x)"]
+                - {rule: sin_halfpi, vars: {}}
+              4:
+                - ["cos(pi/2 + x)", "-sin(x)"]
+                - {trans: [1, 2, 3]}
+              ```
+        - role: user
+          content: |-
+            Write a complete machine-checkable proof of:
+
+            `cos(pi/2 + x) = -sin(x)`
+
+            Return it as a single YAML code block.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["cos(pi/2 + x)", "cos(pi/2)*cos(x) - sin(pi/2)*sin(x)"]
+                - {rule: cos_add, vars: {x: "pi/2", y: "x"}}
+              2:
+                - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
+                - {rule: cos_halfpi, vars: {}}
+              3:
+                - ["-sin(pi/2)*sin(x)", "-sin(x)"]
+                - {rule: sin_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |-
+            Write a complete machine-checkable proof of:
+
+            `cos(2*x) = 2*cos(x)**2 - 1`
+
+            Return it as a single YAML code block.
+      options:
+        model: gpt-5.4
+        reasoning_effort: low
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```yaml
+          1:
+            - ["cos(0)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+            - {rule: cos_add, vars: {x: "x", y: "-x"}}
+          2:
+            - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)**2 - sin(x)*sin(-x)"]
+            - {rule: cos_neg, vars: {x: "x"}}
+          3:
+            - ["cos(x)**2 - sin(x)*sin(-x)", "cos(x)**2 + sin(x)**2"]
+            - {rule: sin_neg, vars: {x: "x"}}
+          4:
+            - ["cos(0)", "cos(x)**2 + sin(x)**2"]
+            - {trans: [1, 2, 3]}
+          5:
+            - ["sin(x)**2", "cos(0) - cos(x)**2"]
+            - {sym: 4}
+          6:
+            - ["cos(2*x)", "cos(x)**2 - sin(x)**2"]
+            - {rule: cos_add, vars: {x: "x", y: "x"}}
+          7:
+            - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+            - {step: 5}
+          8:
+            - ["2*cos(x)**2 - cos(0)", "2*cos(x)**2 - 1"]
+            - {rule: cos_zero, vars: {}}
+          9:
+            - ["cos(2*x)", "2*cos(x)**2 - 1"]
+            - {trans: [6, 7, 8]}
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 3750
+        output_tokens: 381
+        cached_input_tokens: 3328
+        price: 0.007602000000000001
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 381
+      prompt_tokens: 3750
+      total_tokens: 4131
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 12
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 3328
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - sin(x)**2
+                    - cos(0) - cos(x)**2
+                  - sym: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - step: 5
+                8:
+                  - - 2*cos(x)**2 - cos(0)
+                    - 2*cos(x)**2 - 1
+                  - rule: cos_zero
+                    vars: {}
+                9:
+                  - - cos(2*x)
+                    - 2*cos(x)**2 - 1
+                  - trans:
+                      - 6
+                      - 7
+                      - 8
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: Application of symmetry failed.
+          step: 5
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - sin(x)**2
+                    - cos(0) - cos(x)**2
+                  - sym: 4
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: Application of symmetry failed.
+          step: 5
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            ## Task
+
+            You are proving a trigonometric equality one step at a time.
+            A draft proof was produced, and it is being replayed against a strict
+            checker. Verification has now stopped: either the current draft step
+            failed to verify, or the draft ran out before the proof was complete.
+
+            Write exactly ONE new step as a YAML code block. Do not repeat verified steps.
+            The last step of the complete proof must state the target equality.
+
+            ## Step format
+
+            ```yaml
+            <step_id>:
+              - ["<lhs>", "<rhs>"]
+              - <justification>
+            ```
+
+            Justifications can be:
+            - `{rule: <rule_name>, vars: {<var>: "<value>", ...}}`
+            - `{step: <prev_step_id>}`
+            - `{sym: <prev_step_id>}`
+            - `{trans: [<step_id_1>, ..., <step_id_n>]}`
+
+            ## Hard constraints
+
+            - Use only the rule names listed below.
+            - Do not invent rule names.
+            - Do not put nested objects inside `trans`; it must be a flat list of previous step ids.
+            - **Reference only step ids that appear in the VERIFIED proof.** The draft is context
+              only — its numbering may differ from the verified proof's numbering, and its
+              unverified steps cannot be referenced.
+            - Prefer a small local rewrite over a large jump.
+            - Exponentiation is `**`.
+            - Variable substitution in `vars` is sequential (NOT simultaneous). Never use a rule
+              variable name (x or y) as a replacement value when that name is also being replaced.
+              For example, `vars:{x:"y", y:"-x"}` is WRONG — use `vars:{x:"-x", y:"y"}` instead.
+
+            ## Rule application replaces ALL occurrences
+
+            When you apply a rule like `sin_halfpi` (`sin(pi/2) = 1`), the checker substitutes ALL
+            occurrences of `sin(pi/2)` in the LHS simultaneously. For example:
+            - LHS: `sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)`
+            - After `sin_halfpi`: `cos(pi/2) + cos(pi/2)` = `2*cos(pi/2)` (NOT `cos(pi/2) + cos(pi/2)*sin(pi/2)`)
+
+            Do NOT trust the draft blindly — its failing step may show a partial replacement.
+            Always compute the correct RHS by replacing ALL matching subexpressions.
+
+            ## Arithmetic note
+
+            The checker accepts ordinary arithmetic simplification of expressions.
+            For example, after a valid trig rewrite, terms like `sin(x)*cos(x) + cos(x)*sin(x)`
+            may match `2*sin(x)*cos(x)` without an extra algebra rule.
+            However, no extra trigonometric identities are allowed unless listed below.
+
+            ## Available rules
+
+            ```
+            - cos_zero: `cos(0) = 1`
+            - sin_zero: `sin(0) = 0`
+            - sin_halfpi: `sin(pi/2) = 1`
+            - cos_halfpi: `cos(pi/2) = 0`
+            - sin_neg: `sin(-x) = -sin(x)`
+            - cos_neg: `cos(-x) = cos(x)`
+            - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+            - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+            ```
+
+            ## Common proof patterns
+
+            - For `sin(a - b)` or `cos(a - b)`, rewrite subtraction as addition with a negative argument.
+            - To evaluate `cos(pi)`, `sin(pi)`, `cos(2*pi)`, `sin(2*pi)`: expand via `cos_add`/`sin_add`
+              with arguments summing to the target angle (e.g. `cos(pi) = cos(pi/2+pi/2)` via `cos_add`,
+              then simplify each factor using `cos_halfpi` and `sin_halfpi`).
+            - For `sin(2*x)` or `cos(2*x)`, use `sin_add` or `cos_add` with both arguments equal to `x`.
+            - For `cos(2*x) = 2*cos(x)**2 - 1` or `cos(2*x) = 1 - 2*sin(x)**2`: use the indirect
+              sub-lemma technique — derive `cos(0) = cos(x)**2 + sin(x)**2` (4 steps), then apply
+              `{step: K}` on `cos(0) - cos(x)**2` to get `sin(x)**2 = cos(0) - cos(x)**2`, substitute
+              the `sin(x)**2` atom, and finalize with `cos_zero`.
+            - For `sin(2*x) = 2*sin(x)*cos(x)`: use `sin_add` with `vars:{x:"x", y:"x"}` which gives
+              `sin(x)*cos(x) + cos(x)*sin(x)`. The checker's arithmetic simplification handles
+              `sin(x)*cos(x) + cos(x)*sin(x) = 2*sin(x)*cos(x)` automatically. This is a ONE-step proof.
+            - When direct rewriting is hard, prove both sides equal to a common intermediate form and then use `sym` and `trans`.
+            - Use `trans` only when the chain is already justified by earlier verified steps.
+
+            ## Sub-lemma awareness
+
+            Drafts often derive intermediate results (like `cos(pi) = -1` or `sin(pi) = 0`) before
+            the main argument. For such sub-lemma steps, the LHS of your step is the sub-lemma
+            expression (e.g., `cos(pi)`), **NOT** the main target expression (e.g., `cos(pi + x)`).
+
+            ## How `{step: K}` works
+
+            `{step: K}` rewrites a sub-expression inside the current step's LHS using the equality
+            from step K of the VERIFIED proof. If step K proved `A = B`, then `{step: K}`
+            substitutes `A → B` inside the current LHS.
+
+            Example: if verified step 3 proved `sin(pi) = 0`, then:
+            ```yaml
+            4:
+              - ["sin(x)*cos(pi) + cos(x)*sin(pi)", "sin(x)*cos(pi) + cos(x)*0"]
+              - {step: 3}
+            ```
+
+            **Critical constraint**: `{step: K}` only works when K's LHS is a **single atom** (e.g.
+            `sin(x)**2`, `cos(0)`). Sum patterns like `cos(x)**2 + sin(x)**2` do NOT work — SymPy
+            simplifies them away before the substitution can match.
+
+            **NEVER use `{step: K}` when K's LHS is `1`** — the atom `1` appears everywhere and will
+            be replaced in ALL occurrences, corrupting the expression. Keep `cos(0)` as the intermediate
+            atom and only apply `cos_zero` at the very end.
+
+            **Indirect sub-lemma pattern**: to substitute the Pythagorean identity, keep `cos(0)` as
+            an intermediate atom. Example (verified step 6 proved `sin(x)**2 = cos(0) - cos(x)**2`):
+            ```yaml
+            8:
+              - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+              - {step: 6}
+            ```
+            SymPy finds `sin(x)**2` as a single atom and replaces it with `cos(0) - cos(x)**2`,
+            giving `2*cos(x)**2 - cos(0)`. Then `cos_zero` converts `cos(0) → 1` separately.
+
+            Use `{step: K}` when you want to rewrite one occurrence of a single-atom sub-expression.
+            Use `{trans: [i, j, ...]}` only when steps i, j, ... form a proper chain (each step's RHS equals the next step's LHS).
+        - role: user
+          content: |
+            **Target**: `cos(pi/2 + x) = -sin(x)`
+
+            **Original draft** (context only — do NOT reference its step ids):
+            ```yaml
+            1:
+              - - cos(pi/2 + x)
+                - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: x
+            2:
+              - - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+                - -sin(pi/2)*sin(x)
+              - rule: sin_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(x)
+                - -sin(x)
+              - rule: sin_halfpi
+                vars: {}
+            4:
+              - - cos(pi/2 + x)
+                - -sin(x)
+              - trans:
+                  - 1
+                  - 2
+                  - 3
+
+            ```
+
+            **Verified proof so far** (reference only these step ids):
+            ```yaml
+            1:
+              - - cos(pi/2 + x)
+                - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: x
+
+            ```
+
+            The following draft step failed verification as step 2:
+            ```yaml
+            2:
+              - - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+                - -sin(pi/2)*sin(x)
+              - rule: sin_halfpi
+                vars: {}
+
+            ```
+
+            Error:
+            ```
+            Error at step 2: Rule application failed. Obtained: '-sin(x) + cos(pi/2)*cos(x)' instead of the expected right-hand side.
+            ```
+
+            Write a corrected step **2** as a single YAML code block.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              2:
+                - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
+                - {rule: cos_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/2 + x) = -sin(x)`
+
+            **Original draft** (context only — do NOT reference its step ids):
+            ```yaml
+            1:
+              - - cos(pi/2 + x)
+                - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: x
+            2:
+              - - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+                - -sin(pi/2)*sin(x)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(x)
+                - -sin(x)
+              - rule: sin_halfpi
+                vars: {}
+
+            ```
+
+            **Verified proof so far** (reference only these step ids):
+            ```yaml
+            1:
+              - - cos(pi/2 + x)
+                - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: x
+            2:
+              - - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+                - -sin(pi/2)*sin(x)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(x)
+                - -sin(x)
+              - rule: sin_halfpi
+                vars: {}
+
+            ```
+
+            The draft is exhausted but the proof does not end with the target equality yet.
+
+            Write the next step **4** as a single YAML code block.
+            Either add one new local equality, or finish with a valid `sym` / `trans` step if the
+            proof is ready.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              4:
+                - ["cos(pi/2 + x)", "-sin(x)"]
+                - {trans: [1, 2, 3]}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(2*x) = 2*cos(x)**2 - 1`
+
+            **Original draft** (context only — do NOT reference its step ids):
+            ```yaml
+            1:
+              - - cos(0)
+                - cos(x)*cos(-x) - sin(x)*sin(-x)
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: -x
+            2:
+              - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                - cos(x)**2 - sin(x)*sin(-x)
+              - rule: cos_neg
+                vars:
+                  x: x
+            3:
+              - - cos(x)**2 - sin(x)*sin(-x)
+                - cos(x)**2 + sin(x)**2
+              - rule: sin_neg
+                vars:
+                  x: x
+            4:
+              - - cos(0)
+                - cos(x)**2 + sin(x)**2
+              - trans:
+                  - 1
+                  - 2
+                  - 3
+            5:
+              - - sin(x)**2
+                - cos(0) - cos(x)**2
+              - sym: 4
+            6:
+              - - cos(2*x)
+                - cos(x)**2 - sin(x)**2
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: x
+            7:
+              - - cos(x)**2 - sin(x)**2
+                - 2*cos(x)**2 - cos(0)
+              - step: 5
+            8:
+              - - 2*cos(x)**2 - cos(0)
+                - 2*cos(x)**2 - 1
+              - rule: cos_zero
+                vars: {}
+            9:
+              - - cos(2*x)
+                - 2*cos(x)**2 - 1
+              - trans:
+                  - 6
+                  - 7
+                  - 8
+
+            ```
+
+            **Verified proof so far** (reference only these step ids):
+            ```yaml
+            1:
+              - - cos(0)
+                - cos(x)*cos(-x) - sin(x)*sin(-x)
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: -x
+            2:
+              - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                - cos(x)**2 - sin(x)*sin(-x)
+              - rule: cos_neg
+                vars:
+                  x: x
+            3:
+              - - cos(x)**2 - sin(x)*sin(-x)
+                - cos(x)**2 + sin(x)**2
+              - rule: sin_neg
+                vars:
+                  x: x
+            4:
+              - - cos(0)
+                - cos(x)**2 + sin(x)**2
+              - trans:
+                  - 1
+                  - 2
+                  - 3
+
+            ```
+
+            The following draft step failed verification as step 5:
+            ```yaml
+            5:
+              - - sin(x)**2
+                - cos(0) - cos(x)**2
+              - sym: 4
+
+            ```
+
+            Error:
+            ```
+            Error at step 5: Application of symmetry failed.
+            ```
+
+            Write a corrected step **5** as a single YAML code block.
+      options:
+        model: gpt-5.4-mini
+        reasoning_effort: low
+      num_completions: 5
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```yaml
+          5:
+            - ["cos(0) - cos(x)**2", "sin(x)**2"]
+            - {step: 4}
+          ```
+        tool_calls: []
+      - content: |-
+          ```yaml
+          5:
+            - ["cos(0) - cos(x)**2", "sin(x)**2"]
+            - {step: 4}
+          ```
+        tool_calls: []
+      - content: |-
+          ```yaml
+          5:
+            - ["cos(x)**2 + sin(x)**2", "cos(0)"]
+            - {sym: 4}
+          ```
+        tool_calls: []
+      - content: |-
+          ```yaml
+          5:
+            - ["sin(x)**2", "cos(0) - cos(x)**2"]
+            - {step: 4}
+          ```
+        tool_calls: []
+      - content: |-
+          ```yaml
+          5:
+            - ["cos(0) - cos(x)**2", "sin(x)**2"]
+            - {step: 4}
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 5
+        input_tokens: 3260
+        output_tokens: 4615
+        cached_input_tokens: 2304
+        price: 0.0216573
+    log_items: []
+    model_name: gpt-5.4-mini-2026-03-17
+    usage_info:
+      completion_tokens: 4615
+      prompt_tokens: 3260
+      total_tokens: 7875
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 4369
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 2304
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - step: 5
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: 'Rule application failed. Obtained: ''-sin(x)**2 + cos(x)**2'' instead of the expected right-hand
+            side.'
+          step: 7
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            ## Task
+
+            You are proving a trigonometric equality one step at a time.
+            A draft proof was produced, and it is being replayed against a strict
+            checker. Verification has now stopped: either the current draft step
+            failed to verify, or the draft ran out before the proof was complete.
+
+            Write exactly ONE new step as a YAML code block. Do not repeat verified steps.
+            The last step of the complete proof must state the target equality.
+
+            ## Step format
+
+            ```yaml
+            <step_id>:
+              - ["<lhs>", "<rhs>"]
+              - <justification>
+            ```
+
+            Justifications can be:
+            - `{rule: <rule_name>, vars: {<var>: "<value>", ...}}`
+            - `{step: <prev_step_id>}`
+            - `{sym: <prev_step_id>}`
+            - `{trans: [<step_id_1>, ..., <step_id_n>]}`
+
+            ## Hard constraints
+
+            - Use only the rule names listed below.
+            - Do not invent rule names.
+            - Do not put nested objects inside `trans`; it must be a flat list of previous step ids.
+            - **Reference only step ids that appear in the VERIFIED proof.** The draft is context
+              only — its numbering may differ from the verified proof's numbering, and its
+              unverified steps cannot be referenced.
+            - Prefer a small local rewrite over a large jump.
+            - Exponentiation is `**`.
+            - Variable substitution in `vars` is sequential (NOT simultaneous). Never use a rule
+              variable name (x or y) as a replacement value when that name is also being replaced.
+              For example, `vars:{x:"y", y:"-x"}` is WRONG — use `vars:{x:"-x", y:"y"}` instead.
+
+            ## Rule application replaces ALL occurrences
+
+            When you apply a rule like `sin_halfpi` (`sin(pi/2) = 1`), the checker substitutes ALL
+            occurrences of `sin(pi/2)` in the LHS simultaneously. For example:
+            - LHS: `sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)`
+            - After `sin_halfpi`: `cos(pi/2) + cos(pi/2)` = `2*cos(pi/2)` (NOT `cos(pi/2) + cos(pi/2)*sin(pi/2)`)
+
+            Do NOT trust the draft blindly — its failing step may show a partial replacement.
+            Always compute the correct RHS by replacing ALL matching subexpressions.
+
+            ## Arithmetic note
+
+            The checker accepts ordinary arithmetic simplification of expressions.
+            For example, after a valid trig rewrite, terms like `sin(x)*cos(x) + cos(x)*sin(x)`
+            may match `2*sin(x)*cos(x)` without an extra algebra rule.
+            However, no extra trigonometric identities are allowed unless listed below.
+
+            ## Available rules
+
+            ```
+            - cos_zero: `cos(0) = 1`
+            - sin_zero: `sin(0) = 0`
+            - sin_halfpi: `sin(pi/2) = 1`
+            - cos_halfpi: `cos(pi/2) = 0`
+            - sin_neg: `sin(-x) = -sin(x)`
+            - cos_neg: `cos(-x) = cos(x)`
+            - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+            - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+            ```
+
+            ## Common proof patterns
+
+            - For `sin(a - b)` or `cos(a - b)`, rewrite subtraction as addition with a negative argument.
+            - To evaluate `cos(pi)`, `sin(pi)`, `cos(2*pi)`, `sin(2*pi)`: expand via `cos_add`/`sin_add`
+              with arguments summing to the target angle (e.g. `cos(pi) = cos(pi/2+pi/2)` via `cos_add`,
+              then simplify each factor using `cos_halfpi` and `sin_halfpi`).
+            - For `sin(2*x)` or `cos(2*x)`, use `sin_add` or `cos_add` with both arguments equal to `x`.
+            - For `cos(2*x) = 2*cos(x)**2 - 1` or `cos(2*x) = 1 - 2*sin(x)**2`: use the indirect
+              sub-lemma technique — derive `cos(0) = cos(x)**2 + sin(x)**2` (4 steps), then apply
+              `{step: K}` on `cos(0) - cos(x)**2` to get `sin(x)**2 = cos(0) - cos(x)**2`, substitute
+              the `sin(x)**2` atom, and finalize with `cos_zero`.
+            - For `sin(2*x) = 2*sin(x)*cos(x)`: use `sin_add` with `vars:{x:"x", y:"x"}` which gives
+              `sin(x)*cos(x) + cos(x)*sin(x)`. The checker's arithmetic simplification handles
+              `sin(x)*cos(x) + cos(x)*sin(x) = 2*sin(x)*cos(x)` automatically. This is a ONE-step proof.
+            - When direct rewriting is hard, prove both sides equal to a common intermediate form and then use `sym` and `trans`.
+            - Use `trans` only when the chain is already justified by earlier verified steps.
+
+            ## Sub-lemma awareness
+
+            Drafts often derive intermediate results (like `cos(pi) = -1` or `sin(pi) = 0`) before
+            the main argument. For such sub-lemma steps, the LHS of your step is the sub-lemma
+            expression (e.g., `cos(pi)`), **NOT** the main target expression (e.g., `cos(pi + x)`).
+
+            ## How `{step: K}` works
+
+            `{step: K}` rewrites a sub-expression inside the current step's LHS using the equality
+            from step K of the VERIFIED proof. If step K proved `A = B`, then `{step: K}`
+            substitutes `A → B` inside the current LHS.
+
+            Example: if verified step 3 proved `sin(pi) = 0`, then:
+            ```yaml
+            4:
+              - ["sin(x)*cos(pi) + cos(x)*sin(pi)", "sin(x)*cos(pi) + cos(x)*0"]
+              - {step: 3}
+            ```
+
+            **Critical constraint**: `{step: K}` only works when K's LHS is a **single atom** (e.g.
+            `sin(x)**2`, `cos(0)`). Sum patterns like `cos(x)**2 + sin(x)**2` do NOT work — SymPy
+            simplifies them away before the substitution can match.
+
+            **NEVER use `{step: K}` when K's LHS is `1`** — the atom `1` appears everywhere and will
+            be replaced in ALL occurrences, corrupting the expression. Keep `cos(0)` as the intermediate
+            atom and only apply `cos_zero` at the very end.
+
+            **Indirect sub-lemma pattern**: to substitute the Pythagorean identity, keep `cos(0)` as
+            an intermediate atom. Example (verified step 6 proved `sin(x)**2 = cos(0) - cos(x)**2`):
+            ```yaml
+            8:
+              - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+              - {step: 6}
+            ```
+            SymPy finds `sin(x)**2` as a single atom and replaces it with `cos(0) - cos(x)**2`,
+            giving `2*cos(x)**2 - cos(0)`. Then `cos_zero` converts `cos(0) → 1` separately.
+
+            Use `{step: K}` when you want to rewrite one occurrence of a single-atom sub-expression.
+            Use `{trans: [i, j, ...]}` only when steps i, j, ... form a proper chain (each step's RHS equals the next step's LHS).
+        - role: user
+          content: |
+            **Target**: `cos(pi/2 + x) = -sin(x)`
+
+            **Original draft** (context only — do NOT reference its step ids):
+            ```yaml
+            1:
+              - - cos(pi/2 + x)
+                - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: x
+            2:
+              - - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+                - -sin(pi/2)*sin(x)
+              - rule: sin_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(x)
+                - -sin(x)
+              - rule: sin_halfpi
+                vars: {}
+            4:
+              - - cos(pi/2 + x)
+                - -sin(x)
+              - trans:
+                  - 1
+                  - 2
+                  - 3
+
+            ```
+
+            **Verified proof so far** (reference only these step ids):
+            ```yaml
+            1:
+              - - cos(pi/2 + x)
+                - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: x
+
+            ```
+
+            The following draft step failed verification as step 2:
+            ```yaml
+            2:
+              - - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+                - -sin(pi/2)*sin(x)
+              - rule: sin_halfpi
+                vars: {}
+
+            ```
+
+            Error:
+            ```
+            Error at step 2: Rule application failed. Obtained: '-sin(x) + cos(pi/2)*cos(x)' instead of the expected right-hand side.
+            ```
+
+            Write a corrected step **2** as a single YAML code block.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              2:
+                - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
+                - {rule: cos_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/2 + x) = -sin(x)`
+
+            **Original draft** (context only — do NOT reference its step ids):
+            ```yaml
+            1:
+              - - cos(pi/2 + x)
+                - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: x
+            2:
+              - - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+                - -sin(pi/2)*sin(x)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(x)
+                - -sin(x)
+              - rule: sin_halfpi
+                vars: {}
+
+            ```
+
+            **Verified proof so far** (reference only these step ids):
+            ```yaml
+            1:
+              - - cos(pi/2 + x)
+                - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: x
+            2:
+              - - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+                - -sin(pi/2)*sin(x)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(x)
+                - -sin(x)
+              - rule: sin_halfpi
+                vars: {}
+
+            ```
+
+            The draft is exhausted but the proof does not end with the target equality yet.
+
+            Write the next step **4** as a single YAML code block.
+            Either add one new local equality, or finish with a valid `sym` / `trans` step if the
+            proof is ready.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              4:
+                - ["cos(pi/2 + x)", "-sin(x)"]
+                - {trans: [1, 2, 3]}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(2*x) = 2*cos(x)**2 - 1`
+
+            **Original draft** (context only — do NOT reference its step ids):
+            ```yaml
+            1:
+              - - cos(0)
+                - cos(x)*cos(-x) - sin(x)*sin(-x)
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: -x
+            2:
+              - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                - cos(x)**2 - sin(x)*sin(-x)
+              - rule: cos_neg
+                vars:
+                  x: x
+            3:
+              - - cos(x)**2 - sin(x)*sin(-x)
+                - cos(x)**2 + sin(x)**2
+              - rule: sin_neg
+                vars:
+                  x: x
+            4:
+              - - cos(0)
+                - cos(x)**2 + sin(x)**2
+              - trans:
+                  - 1
+                  - 2
+                  - 3
+            5:
+              - - sin(x)**2
+                - cos(0) - cos(x)**2
+              - sym: 4
+            6:
+              - - cos(2*x)
+                - cos(x)**2 - sin(x)**2
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: x
+            7:
+              - - cos(x)**2 - sin(x)**2
+                - 2*cos(x)**2 - cos(0)
+              - step: 5
+            8:
+              - - 2*cos(x)**2 - cos(0)
+                - 2*cos(x)**2 - 1
+              - rule: cos_zero
+                vars: {}
+            9:
+              - - cos(2*x)
+                - 2*cos(x)**2 - 1
+              - trans:
+                  - 6
+                  - 7
+                  - 8
+
+            ```
+
+            **Verified proof so far** (reference only these step ids):
+            ```yaml
+            1:
+              - - cos(0)
+                - cos(x)*cos(-x) - sin(x)*sin(-x)
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: -x
+            2:
+              - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                - cos(x)**2 - sin(x)*sin(-x)
+              - rule: cos_neg
+                vars:
+                  x: x
+            3:
+              - - cos(x)**2 - sin(x)*sin(-x)
+                - cos(x)**2 + sin(x)**2
+              - rule: sin_neg
+                vars:
+                  x: x
+            4:
+              - - cos(0)
+                - cos(x)**2 + sin(x)**2
+              - trans:
+                  - 1
+                  - 2
+                  - 3
+            5:
+              - - cos(0) - cos(x)**2
+                - sin(x)**2
+              - step: 4
+            6:
+              - - cos(2*x)
+                - cos(x)**2 - sin(x)**2
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: x
+
+            ```
+
+            The following draft step failed verification as step 7:
+            ```yaml
+            7:
+              - - cos(x)**2 - sin(x)**2
+                - 2*cos(x)**2 - cos(0)
+              - step: 5
+
+            ```
+
+            Error:
+            ```
+            Error at step 7: Rule application failed. Obtained: '-sin(x)**2 + cos(x)**2' instead of the expected right-hand side.
+            ```
+
+            Write a corrected step **7** as a single YAML code block.
+      options:
+        model: gpt-5.4-mini
+        reasoning_effort: low
+      num_completions: 5
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          ```yaml
+          7:
+            - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+            - {step: 5}
+          ```
+        tool_calls: []
+      - content: |-
+          ```yaml
+          7:
+            - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+            - {sym: 5}
+          ```
+        tool_calls: []
+      - content: |-
+          ```yaml
+          7:
+            - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+            - {step: 5}
+          ```
+        tool_calls: []
+      - content: |-
+          ```yaml
+          7:
+            - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+            - {step: 5}
+          ```
+        tool_calls: []
+      - content: |-
+          ```yaml
+          7:
+            - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+            - {step: 5}
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 5
+        input_tokens: 3358
+        output_tokens: 806
+        cached_input_tokens: 2816
+        price: 0.0042447
+    log_items: []
+    model_name: gpt-5.4-mini-2026-03-17
+    usage_info:
+      completion_tokens: 806
+      prompt_tokens: 3358
+      total_tokens: 4164
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 565
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 2816
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - step: 5
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 2
+  output:
+    outputs:
+      - content: |
+          feedback: 'Rule application failed. Obtained: ''-sin(x)**2 + cos(x)**2'' instead of the expected right-hand
+            side.'
+          step: 7
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            ## Task
+
+            You are proving a trigonometric equality one step at a time.
+            A draft proof was produced, and it is being replayed against a strict
+            checker. Verification has now stopped: either the current draft step
+            failed to verify, or the draft ran out before the proof was complete.
+
+            Write exactly ONE new step as a YAML code block. Do not repeat verified steps.
+            The last step of the complete proof must state the target equality.
+
+            ## Step format
+
+            ```yaml
+            <step_id>:
+              - ["<lhs>", "<rhs>"]
+              - <justification>
+            ```
+
+            Justifications can be:
+            - `{rule: <rule_name>, vars: {<var>: "<value>", ...}}`
+            - `{step: <prev_step_id>}`
+            - `{sym: <prev_step_id>}`
+            - `{trans: [<step_id_1>, ..., <step_id_n>]}`
+
+            ## Hard constraints
+
+            - Use only the rule names listed below.
+            - Do not invent rule names.
+            - Do not put nested objects inside `trans`; it must be a flat list of previous step ids.
+            - **Reference only step ids that appear in the VERIFIED proof.** The draft is context
+              only — its numbering may differ from the verified proof's numbering, and its
+              unverified steps cannot be referenced.
+            - Prefer a small local rewrite over a large jump.
+            - Exponentiation is `**`.
+            - Variable substitution in `vars` is sequential (NOT simultaneous). Never use a rule
+              variable name (x or y) as a replacement value when that name is also being replaced.
+              For example, `vars:{x:"y", y:"-x"}` is WRONG — use `vars:{x:"-x", y:"y"}` instead.
+
+            ## Rule application replaces ALL occurrences
+
+            When you apply a rule like `sin_halfpi` (`sin(pi/2) = 1`), the checker substitutes ALL
+            occurrences of `sin(pi/2)` in the LHS simultaneously. For example:
+            - LHS: `sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)`
+            - After `sin_halfpi`: `cos(pi/2) + cos(pi/2)` = `2*cos(pi/2)` (NOT `cos(pi/2) + cos(pi/2)*sin(pi/2)`)
+
+            Do NOT trust the draft blindly — its failing step may show a partial replacement.
+            Always compute the correct RHS by replacing ALL matching subexpressions.
+
+            ## Arithmetic note
+
+            The checker accepts ordinary arithmetic simplification of expressions.
+            For example, after a valid trig rewrite, terms like `sin(x)*cos(x) + cos(x)*sin(x)`
+            may match `2*sin(x)*cos(x)` without an extra algebra rule.
+            However, no extra trigonometric identities are allowed unless listed below.
+
+            ## Available rules
+
+            ```
+            - cos_zero: `cos(0) = 1`
+            - sin_zero: `sin(0) = 0`
+            - sin_halfpi: `sin(pi/2) = 1`
+            - cos_halfpi: `cos(pi/2) = 0`
+            - sin_neg: `sin(-x) = -sin(x)`
+            - cos_neg: `cos(-x) = cos(x)`
+            - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+            - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+            ```
+
+            ## Common proof patterns
+
+            - For `sin(a - b)` or `cos(a - b)`, rewrite subtraction as addition with a negative argument.
+            - To evaluate `cos(pi)`, `sin(pi)`, `cos(2*pi)`, `sin(2*pi)`: expand via `cos_add`/`sin_add`
+              with arguments summing to the target angle (e.g. `cos(pi) = cos(pi/2+pi/2)` via `cos_add`,
+              then simplify each factor using `cos_halfpi` and `sin_halfpi`).
+            - For `sin(2*x)` or `cos(2*x)`, use `sin_add` or `cos_add` with both arguments equal to `x`.
+            - For `cos(2*x) = 2*cos(x)**2 - 1` or `cos(2*x) = 1 - 2*sin(x)**2`: use the indirect
+              sub-lemma technique — derive `cos(0) = cos(x)**2 + sin(x)**2` (4 steps), then apply
+              `{step: K}` on `cos(0) - cos(x)**2` to get `sin(x)**2 = cos(0) - cos(x)**2`, substitute
+              the `sin(x)**2` atom, and finalize with `cos_zero`.
+            - For `sin(2*x) = 2*sin(x)*cos(x)`: use `sin_add` with `vars:{x:"x", y:"x"}` which gives
+              `sin(x)*cos(x) + cos(x)*sin(x)`. The checker's arithmetic simplification handles
+              `sin(x)*cos(x) + cos(x)*sin(x) = 2*sin(x)*cos(x)` automatically. This is a ONE-step proof.
+            - When direct rewriting is hard, prove both sides equal to a common intermediate form and then use `sym` and `trans`.
+            - Use `trans` only when the chain is already justified by earlier verified steps.
+
+            ## Sub-lemma awareness
+
+            Drafts often derive intermediate results (like `cos(pi) = -1` or `sin(pi) = 0`) before
+            the main argument. For such sub-lemma steps, the LHS of your step is the sub-lemma
+            expression (e.g., `cos(pi)`), **NOT** the main target expression (e.g., `cos(pi + x)`).
+
+            ## How `{step: K}` works
+
+            `{step: K}` rewrites a sub-expression inside the current step's LHS using the equality
+            from step K of the VERIFIED proof. If step K proved `A = B`, then `{step: K}`
+            substitutes `A → B` inside the current LHS.
+
+            Example: if verified step 3 proved `sin(pi) = 0`, then:
+            ```yaml
+            4:
+              - ["sin(x)*cos(pi) + cos(x)*sin(pi)", "sin(x)*cos(pi) + cos(x)*0"]
+              - {step: 3}
+            ```
+
+            **Critical constraint**: `{step: K}` only works when K's LHS is a **single atom** (e.g.
+            `sin(x)**2`, `cos(0)`). Sum patterns like `cos(x)**2 + sin(x)**2` do NOT work — SymPy
+            simplifies them away before the substitution can match.
+
+            **NEVER use `{step: K}` when K's LHS is `1`** — the atom `1` appears everywhere and will
+            be replaced in ALL occurrences, corrupting the expression. Keep `cos(0)` as the intermediate
+            atom and only apply `cos_zero` at the very end.
+
+            **Indirect sub-lemma pattern**: to substitute the Pythagorean identity, keep `cos(0)` as
+            an intermediate atom. Example (verified step 6 proved `sin(x)**2 = cos(0) - cos(x)**2`):
+            ```yaml
+            8:
+              - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+              - {step: 6}
+            ```
+            SymPy finds `sin(x)**2` as a single atom and replaces it with `cos(0) - cos(x)**2`,
+            giving `2*cos(x)**2 - cos(0)`. Then `cos_zero` converts `cos(0) → 1` separately.
+
+            Use `{step: K}` when you want to rewrite one occurrence of a single-atom sub-expression.
+            Use `{trans: [i, j, ...]}` only when steps i, j, ... form a proper chain (each step's RHS equals the next step's LHS).
+        - role: user
+          content: |
+            **Target**: `cos(pi/2 + x) = -sin(x)`
+
+            **Original draft** (context only — do NOT reference its step ids):
+            ```yaml
+            1:
+              - - cos(pi/2 + x)
+                - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: x
+            2:
+              - - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+                - -sin(pi/2)*sin(x)
+              - rule: sin_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(x)
+                - -sin(x)
+              - rule: sin_halfpi
+                vars: {}
+            4:
+              - - cos(pi/2 + x)
+                - -sin(x)
+              - trans:
+                  - 1
+                  - 2
+                  - 3
+
+            ```
+
+            **Verified proof so far** (reference only these step ids):
+            ```yaml
+            1:
+              - - cos(pi/2 + x)
+                - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: x
+
+            ```
+
+            The following draft step failed verification as step 2:
+            ```yaml
+            2:
+              - - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+                - -sin(pi/2)*sin(x)
+              - rule: sin_halfpi
+                vars: {}
+
+            ```
+
+            Error:
+            ```
+            Error at step 2: Rule application failed. Obtained: '-sin(x) + cos(pi/2)*cos(x)' instead of the expected right-hand side.
+            ```
+
+            Write a corrected step **2** as a single YAML code block.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              2:
+                - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
+                - {rule: cos_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(pi/2 + x) = -sin(x)`
+
+            **Original draft** (context only — do NOT reference its step ids):
+            ```yaml
+            1:
+              - - cos(pi/2 + x)
+                - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: x
+            2:
+              - - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+                - -sin(pi/2)*sin(x)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(x)
+                - -sin(x)
+              - rule: sin_halfpi
+                vars: {}
+
+            ```
+
+            **Verified proof so far** (reference only these step ids):
+            ```yaml
+            1:
+              - - cos(pi/2 + x)
+                - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+              - rule: cos_add
+                vars:
+                  x: pi/2
+                  y: x
+            2:
+              - - cos(pi/2)*cos(x) - sin(pi/2)*sin(x)
+                - -sin(pi/2)*sin(x)
+              - rule: cos_halfpi
+                vars: {}
+            3:
+              - - -sin(pi/2)*sin(x)
+                - -sin(x)
+              - rule: sin_halfpi
+                vars: {}
+
+            ```
+
+            The draft is exhausted but the proof does not end with the target equality yet.
+
+            Write the next step **4** as a single YAML code block.
+            Either add one new local equality, or finish with a valid `sym` / `trans` step if the
+            proof is ready.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              4:
+                - ["cos(pi/2 + x)", "-sin(x)"]
+                - {trans: [1, 2, 3]}
+              ```
+        - role: user
+          content: |
+            **Target**: `cos(2*x) = 2*cos(x)**2 - 1`
+
+            **Original draft** (context only — do NOT reference its step ids):
+            ```yaml
+            1:
+              - - cos(0)
+                - cos(x)*cos(-x) - sin(x)*sin(-x)
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: -x
+            2:
+              - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                - cos(x)**2 - sin(x)*sin(-x)
+              - rule: cos_neg
+                vars:
+                  x: x
+            3:
+              - - cos(x)**2 - sin(x)*sin(-x)
+                - cos(x)**2 + sin(x)**2
+              - rule: sin_neg
+                vars:
+                  x: x
+            4:
+              - - cos(0)
+                - cos(x)**2 + sin(x)**2
+              - trans:
+                  - 1
+                  - 2
+                  - 3
+            5:
+              - - sin(x)**2
+                - cos(0) - cos(x)**2
+              - sym: 4
+            6:
+              - - cos(2*x)
+                - cos(x)**2 - sin(x)**2
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: x
+            7:
+              - - cos(x)**2 - sin(x)**2
+                - 2*cos(x)**2 - cos(0)
+              - step: 5
+            8:
+              - - 2*cos(x)**2 - cos(0)
+                - 2*cos(x)**2 - 1
+              - rule: cos_zero
+                vars: {}
+            9:
+              - - cos(2*x)
+                - 2*cos(x)**2 - 1
+              - trans:
+                  - 6
+                  - 7
+                  - 8
+
+            ```
+
+            **Verified proof so far** (reference only these step ids):
+            ```yaml
+            1:
+              - - cos(0)
+                - cos(x)*cos(-x) - sin(x)*sin(-x)
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: -x
+            2:
+              - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                - cos(x)**2 - sin(x)*sin(-x)
+              - rule: cos_neg
+                vars:
+                  x: x
+            3:
+              - - cos(x)**2 - sin(x)*sin(-x)
+                - cos(x)**2 + sin(x)**2
+              - rule: sin_neg
+                vars:
+                  x: x
+            4:
+              - - cos(0)
+                - cos(x)**2 + sin(x)**2
+              - trans:
+                  - 1
+                  - 2
+                  - 3
+            5:
+              - - cos(0) - cos(x)**2
+                - sin(x)**2
+              - step: 4
+            6:
+              - - cos(2*x)
+                - cos(x)**2 - sin(x)**2
+              - rule: cos_add
+                vars:
+                  x: x
+                  y: x
+
+            ```
+
+            The following draft step failed verification as step 7:
+            ```yaml
+            7:
+              - - cos(x)**2 - sin(x)**2
+                - 2*cos(x)**2 - cos(0)
+              - step: 5
+
+            ```
+
+            Error:
+            ```
+            Error at step 7: Rule application failed. Obtained: '-sin(x)**2 + cos(x)**2' instead of the expected right-hand side.
+            ```
+
+            Write a corrected step **7** as a single YAML code block.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              7:
+                - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+                - {step: 5}
+              ```
+        - role: user
+          content: |
+            Your step was rejected.
+
+            ```
+            Error at step 7: Rule application failed. Obtained: '-sin(x)**2 + cos(x)**2' instead of the expected right-hand side.
+            ```
+
+            Fix the same step number and try again.
+            Write exactly one YAML step.
+
+            - Your step is too large or the variables are wrong. Back up and propose a smaller local rewrite.
+            - Consider using `{step: K}` to substitute a previously proved equality into a sub-expression of the LHS, instead of a large `trans` or `rule` jump.
+      options:
+        model: gpt-5.4-mini
+        reasoning_effort: low
+      num_completions: 5
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```yaml
+          7:
+            - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+            - {sym: 5}
+          ```
+        tool_calls: []
+      - content: |-
+          ```yaml
+          7:
+            - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+            - {sym: 5}
+          ```
+        tool_calls: []
+      - content: |-
+          ```yaml
+          7:
+            - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+            - {sym: 5}
+          ```
+        tool_calls: []
+      - content: |-
+          ```yaml
+          7:
+            - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+            - {sym: 5}
+          ```
+        tool_calls: []
+      - content: |
+          ```yaml
+          7:
+            - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+            - {sym: 5}
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 5
+        input_tokens: 3521
+        output_tokens: 1743
+        cached_input_tokens: 2816
+        price: 0.00858345
+    log_items: []
+    model_name: gpt-5.4-mini-2026-03-17
+    usage_info:
+      completion_tokens: 1743
+      prompt_tokens: 3521
+      total_tokens: 5264
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 1502
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 2816
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - sym: 5
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: Application of symmetry failed.
+          step: 7
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - sym: 5
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 2
+  output:
+    outputs:
+      - content: |
+          feedback: Application of symmetry failed.
+          step: 7
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - sym: 5
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 3
+  output:
+    outputs:
+      - content: |
+          feedback: Application of symmetry failed.
+          step: 7
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - sym: 5
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 4
+  output:
+    outputs:
+      - content: |
+          feedback: Application of symmetry failed.
+          step: 7
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - sym: 5
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 5
+  output:
+    outputs:
+      - content: |
+          feedback: Application of symmetry failed.
+          step: 7
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - sym: 5
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 6
+  output:
+    outputs:
+      - content: |
+          feedback: Application of symmetry failed.
+          step: 7
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - step: 5
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 3
+  output:
+    outputs:
+      - content: |
+          feedback: 'Rule application failed. Obtained: ''-sin(x)**2 + cos(x)**2'' instead of the expected right-hand
+            side.'
+          step: 7
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - step: 5
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 4
+  output:
+    outputs:
+      - content: |
+          feedback: 'Rule application failed. Obtained: ''-sin(x)**2 + cos(x)**2'' instead of the expected right-hand
+            side.'
+          step: 7
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - step: 5
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 5
+  output:
+    outputs:
+      - content: |
+          feedback: 'Rule application failed. Obtained: ''-sin(x)**2 + cos(x)**2'' instead of the expected right-hand
+            side.'
+          step: 7
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 2
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 2
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - step: 5
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 6
+  output:
+    outputs:
+      - content: |
+          feedback: 'Rule application failed. Obtained: ''-sin(x)**2 + cos(x)**2'' instead of the expected right-hand
+            side.'
+          step: 7
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(x)**2 + sin(x)**2
+                    - cos(0)
+                  - sym: 4
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(x)**2 + sin(x)**2
+                    - cos(0)
+                  - sym: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(x)**2 + sin(x)**2
+                    - cos(0)
+                  - sym: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - step: 5
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: 'Rule application failed. Obtained: ''-sin(x)**2 + cos(x)**2'' instead of the expected right-hand
+            side.'
+          step: 7
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - sin(x)**2
+                    - cos(0) - cos(x)**2
+                  - step: 4
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          feedback: 'Rule application failed. Obtained: ''sin(x)**2'' instead of the expected right-hand side.'
+          step: 5
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 3
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 3
+  output:
+    outputs:
+      - content: |
+          feedback: The proof does not end with the equation to be proved.
+          step: null
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                7:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - step: 5
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 7
+  output:
+    outputs:
+      - content: |
+          feedback: 'Rule application failed. Obtained: ''-sin(x)**2 + cos(x)**2'' instead of the expected right-hand
+            side.'
+          step: 7
+- input:
+    request:
+      chat:
+        - role: system
+          content: |-
+            ## Task
+
+            You are proving a trigonometric equality for a strict checker.
+            Write a COMPLETE machine-checkable proof as a YAML code block.
+
+            Your proof is a draft: every step will be verified individually, and
+            steps that fail verification will be repaired later. Still, aim for a
+            proof that is fully correct on the first attempt.
+
+            ## Proof format
+
+            A proof is a YAML mapping from step numbers (1, 2, ...) to steps.
+            Each step is a pair of an equality and a justification:
+
+            ```yaml
+            1:
+              - ["<lhs>", "<rhs>"]
+              - <justification>
+            2:
+              - ["<lhs>", "<rhs>"]
+              - <justification>
+            ```
+
+            Justifications can be:
+            - `{rule: <rule_name>, vars: {<var>: "<value>", ...}}`
+            - `{step: <prev_step_id>}`
+            - `{sym: <prev_step_id>}`
+            - `{trans: [<step_id_1>, ..., <step_id_n>]}`
+
+            The last step must state the target equality.
+
+            ## Hard constraints
+
+            - Use only the rule names listed below. Do not invent rule names.
+            - Do not put nested objects inside `trans`; it must be a flat list of
+              at least TWO previous step ids.
+            - Do not reference future or missing steps.
+            - Prefer small local rewrites over large jumps.
+            - Exponentiation is `**`.
+            - Variable substitution in `vars` is sequential (NOT simultaneous). Never use a rule
+              variable name (x or y) as a replacement value when that name is also being replaced.
+              If you write `vars:{x:"y", y:"-x"}`, the checker first replaces `x→y`, then `y→-x`,
+              turning `sin(x+y)` into `sin(-2*x)` — NOT `sin(-x+y)`. Put the negative sign on the
+              variable being replaced instead:
+              - For `sin(y - x)`: use `vars:{x:"-x", y:"y"}` (gives `sin(-x+y)` ✓)
+              - For `cos(x - y)`: use `vars:{x:"x", y:"-y"}` (gives `cos(x-y)` ✓)
+              - For `cos(0)` via `cos(y-y)`: use `vars:{x:"-y", y:"y"}` (gives `cos(0)` ✓)
+
+            ## Rule application replaces ALL occurrences
+
+            When you apply a rule like `sin_halfpi` (`sin(pi/2) = 1`), the checker substitutes ALL
+            occurrences of `sin(pi/2)` in the LHS simultaneously. For example:
+            - LHS: `sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)`
+            - After `sin_halfpi`: `cos(pi/2) + cos(pi/2)` = `2*cos(pi/2)` (NOT `cos(pi/2) + cos(pi/2)*sin(pi/2)`)
+
+            Always compute the RHS of each step by replacing ALL matching subexpressions.
+
+            ## Arithmetic note
+
+            The checker accepts ordinary arithmetic simplification of expressions.
+            For example, after a valid trig rewrite, terms like `sin(x)*cos(x) + cos(x)*sin(x)`
+            may match `2*sin(x)*cos(x)` without an extra algebra rule.
+            However, no extra trigonometric identities are allowed unless listed below.
+
+            ## Available rules
+
+            ```
+            - cos_zero: `cos(0) = 1`
+            - sin_zero: `sin(0) = 0`
+            - sin_halfpi: `sin(pi/2) = 1`
+            - cos_halfpi: `cos(pi/2) = 0`
+            - sin_neg: `sin(-x) = -sin(x)`
+            - cos_neg: `cos(-x) = cos(x)`
+            - cos_add: `cos(x + y) = cos(x)*cos(y) - sin(x)*sin(y)`
+            - sin_add: `sin(x + y) = sin(x)*cos(y) + cos(x)*sin(y)`
+            ```
+
+            ## Keep proofs SHORT
+
+            Budget is limited. Prefer shorter proofs. When the same sub-lemma pattern
+            (e.g., deriving cos(0) = cos(v)**2 + sin(v)**2) is needed for multiple variables,
+            derive it once with a generic variable then reference that result. Do NOT duplicate
+            the 4-step Pythagorean derivation for each variable separately.
+
+            ## How `{step: K}` works
+
+            `{step: K}` rewrites a sub-expression inside the current step's LHS using the equality
+            from step K. If step K proved `A = B`, then `{step: K}` substitutes `A → B` inside the
+            current LHS.
+
+            **Critical constraint**: `{step: K}` only works when K's LHS is a **single atom** (e.g.
+            `sin(x)**2`, `cos(0)`). Sum patterns like `cos(x)**2 + sin(x)**2` do NOT work — SymPy
+            simplifies them away before the substitution can match.
+
+            **NEVER use `{step: K}` when K's LHS is `1`** — the atom `1` appears everywhere and will
+            be replaced in ALL occurrences, corrupting the expression. Keep `cos(0)` as the
+            intermediate atom and only apply `cos_zero` at the very end.
+
+            **NEVER use `{step: K}` when K's RHS is a sum like `A + B` inside a larger target** if
+            SymPy may auto-simplify the sum away before substitution. Rearrange the proof so that
+            the substituted atom is a single term (like `sin(x)**2` or `cos(0)`).
+
+            ## Common proof patterns
+
+            - For `sin(a - b)` or `cos(a - b)`, rewrite subtraction as addition with a negative argument.
+            - To evaluate `cos(pi)`, `sin(pi)`, `cos(2*pi)`, `sin(2*pi)`: expand via `cos_add`/`sin_add`
+              with arguments summing to the target angle (e.g. `cos(pi) = cos(pi/2+pi/2)` via `cos_add`),
+              then simplify each factor using `cos_halfpi` and `sin_halfpi`. Derive these constant
+              values as sub-lemmas, then substitute them with `{step: K}` (see Example 3).
+            - For `sin(2*x)` or `cos(2*x)`, use `sin_add` or `cos_add` with both arguments equal to `x`.
+            - For `sin(2*x) = 2*sin(x)*cos(x)`: this is nearly a ONE-step proof. `sin_add` with
+              `vars:{x:"x", y:"x"}` gives `sin(x)*cos(x) + cos(x)*sin(x)`, and the checker's
+              arithmetic simplification recognizes this equals `2*sin(x)*cos(x)`. Do NOT try to
+              combine identical terms with `{step}` or `{trans}` — the checker handles it.
+            - For double-angle identities involving `cos(x)**2` or `sin(x)**2` (Pythagorean
+              rearrangements), use the indirect sub-lemma technique (see Example 2):
+              1. Derive `cos(0) = cos(x)**2 + sin(x)**2` (4 steps via cos_add+cos_neg+sin_neg+trans).
+              2. Apply `{step: K}` to the expression `cos(0) - cos(x)**2`: this substitutes the atom
+                 `cos(0)` with `cos(x)**2 + sin(x)**2`, giving `sin(x)**2`. This step proves
+                 `cos(0) - cos(x)**2 = sin(x)**2`.
+              3. Use `sym` to get `sin(x)**2 = cos(0) - cos(x)**2`.
+              4. Apply `{step}` on the result of `cos_add` to substitute the `sin(x)**2` atom,
+                 yielding an expression with `cos(0)` instead of `1`.
+              5. Apply `cos_zero` to convert `cos(0) → 1` in the final step.
+            - When direct rewriting is hard, prove both sides equal to a common intermediate form
+              and then use `sym` and `trans`.
+            - Use `trans` only when the chain is properly justified: each step's RHS must equal the
+              next step's LHS, the first LHS must match the target LHS, and the last RHS must match
+              the target RHS.
+
+            ## Worked examples
+
+            Example 1 (cos(pi/2 + x) = -sin(x)):
+
+            ```yaml
+            1:
+              - ["cos(pi/2 + x)", "cos(pi/2)*cos(x) - sin(pi/2)*sin(x)"]
+              - {rule: cos_add, vars: {x: "pi/2", y: "x"}}
+            2:
+              - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
+              - {rule: cos_halfpi, vars: {}}
+            3:
+              - ["-sin(pi/2)*sin(x)", "-sin(x)"]
+              - {rule: sin_halfpi, vars: {}}
+            4:
+              - ["cos(pi/2 + x)", "-sin(x)"]
+              - {trans: [1, 2, 3]}
+            ```
+
+            Example 2 (cos(x)**2 - sin(x)**2 = 2*cos(x)**2 - 1), showing the indirect sub-lemma
+            technique:
+
+            ```yaml
+            1:
+              - ["cos(0)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+              - {rule: cos_add, vars: {x: "x", y: "-x"}}
+            2:
+              - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)**2 - sin(x)*sin(-x)"]
+              - {rule: cos_neg, vars: {x: "x"}}
+            3:
+              - ["cos(x)**2 - sin(x)*sin(-x)", "cos(x)**2 + sin(x)**2"]
+              - {rule: sin_neg, vars: {x: "x"}}
+            4:
+              - ["cos(0)", "cos(x)**2 + sin(x)**2"]
+              - {trans: [1, 2, 3]}
+            5:
+              - ["cos(0) - cos(x)**2", "sin(x)**2"]
+              - {step: 4}
+            6:
+              - ["sin(x)**2", "cos(0) - cos(x)**2"]
+              - {sym: 5}
+            7:
+              - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+              - {step: 6}
+            8:
+              - ["2*cos(x)**2 - cos(0)", "2*cos(x)**2 - 1"]
+              - {rule: cos_zero, vars: {}}
+            9:
+              - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - 1"]
+              - {trans: [7, 8]}
+            ```
+
+            Key for step 5: LHS = `cos(0) - cos(x)**2`. Apply step 4 to substitute atom `cos(0)` →
+            `cos(x)**2 + sin(x)**2`, giving `sin(x)**2`. Keep `cos(0)` explicit — do NOT replace
+            with `1` yet (that happens in step 8 via cos_zero).
+            Key for step 7: step 6 proved `sin(x)**2 = cos(0) - cos(x)**2`. Apply `{step: 6}` to
+            `cos(x)**2 - sin(x)**2` to substitute the atom `sin(x)**2`, giving `2*cos(x)**2 - cos(0)`.
+
+            Example 3 (cos(pi - x) = -cos(x)), showing constant evaluation as sub-lemmas:
+
+            ```yaml
+            1:
+              - ["cos(pi)", "cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)"]
+              - {rule: cos_add, vars: {x: "pi/2", y: "pi/2"}}
+            2:
+              - ["cos(pi/2)*cos(pi/2) - sin(pi/2)*sin(pi/2)", "-sin(pi/2)*sin(pi/2)"]
+              - {rule: cos_halfpi, vars: {}}
+            3:
+              - ["-sin(pi/2)*sin(pi/2)", "-1"]
+              - {rule: sin_halfpi, vars: {}}
+            4:
+              - ["cos(pi)", "-1"]
+              - {trans: [1, 2, 3]}
+            5:
+              - ["sin(pi)", "sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)"]
+              - {rule: sin_add, vars: {x: "pi/2", y: "pi/2"}}
+            6:
+              - ["sin(pi/2)*cos(pi/2) + cos(pi/2)*sin(pi/2)", "2*cos(pi/2)"]
+              - {rule: sin_halfpi, vars: {}}
+            7:
+              - ["2*cos(pi/2)", "0"]
+              - {rule: cos_halfpi, vars: {}}
+            8:
+              - ["sin(pi)", "0"]
+              - {trans: [5, 6, 7]}
+            9:
+              - ["cos(pi - x)", "cos(pi)*cos(-x) - sin(pi)*sin(-x)"]
+              - {rule: cos_add, vars: {x: "pi", y: "-x"}}
+            10:
+              - ["cos(pi)*cos(-x) - sin(pi)*sin(-x)", "-cos(-x) - sin(pi)*sin(-x)"]
+              - {step: 4}
+            11:
+              - ["-cos(-x) - sin(pi)*sin(-x)", "-cos(-x)"]
+              - {step: 8}
+            12:
+              - ["-cos(-x)", "-cos(x)"]
+              - {rule: cos_neg, vars: {x: "x"}}
+            13:
+              - ["cos(pi - x)", "-cos(x)"]
+              - {trans: [9, 10, 11, 12]}
+            ```
+
+            Key: steps 1-4 derive `cos(pi) = -1` and steps 5-8 derive `sin(pi) = 0` as sub-lemmas.
+            Step 1's LHS is `cos(pi)` (i.e. `cos(pi/2+pi/2)`), NOT the main target `cos(pi - x)`.
+            Steps 10-11 use `{step: K}` to substitute these constant values into the expansion.
+
+            ## Output format
+
+            Return the complete proof as a single YAML code block. No prose inside the code block.
+        - role: user
+          content: |-
+            Write a complete machine-checkable proof of:
+
+            `sin(x)*cos(y) + cos(x)*sin(y) = sin(x + y)`
+
+            Return it as a single YAML code block.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["sin(x + y)", "sin(x)*cos(y) + cos(x)*sin(y)"]
+                - {rule: sin_add, vars: {x: "x", y: "y"}}
+              2:
+                - ["sin(x)*cos(y) + cos(x)*sin(y)", "sin(x + y)"]
+                - {sym: 1}
+              ```
+        - role: user
+          content: |-
+            Write a complete machine-checkable proof of:
+
+            `cos(pi/2 + x) = -sin(x)`
+
+            Return it as a single YAML code block.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["cos(pi/2 + x)", "cos(pi/2)*cos(x) - sin(pi/2)*sin(x)"]
+                - {rule: cos_add, vars: {x: "pi/2", y: "x"}}
+              2:
+                - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
+                - {rule: sin_halfpi, vars: {}}
+              3:
+                - ["-sin(pi/2)*sin(x)", "-sin(x)"]
+                - {rule: sin_halfpi, vars: {}}
+              4:
+                - ["cos(pi/2 + x)", "-sin(x)"]
+                - {trans: [1, 2, 3]}
+              ```
+        - role: user
+          content: |-
+            Write a complete machine-checkable proof of:
+
+            `cos(pi/2 + x) = -sin(x)`
+
+            Return it as a single YAML code block.
+        - role: assistant
+          answer:
+            mode: null
+            content: |
+              ```yaml
+              1:
+                - ["cos(pi/2 + x)", "cos(pi/2)*cos(x) - sin(pi/2)*sin(x)"]
+                - {rule: cos_add, vars: {x: "pi/2", y: "x"}}
+              2:
+                - ["cos(pi/2)*cos(x) - sin(pi/2)*sin(x)", "-sin(pi/2)*sin(x)"]
+                - {rule: cos_halfpi, vars: {}}
+              3:
+                - ["-sin(pi/2)*sin(x)", "-sin(x)"]
+                - {rule: sin_halfpi, vars: {}}
+              ```
+        - role: user
+          content: |-
+            Write a complete machine-checkable proof of:
+
+            `cos(2*x) = 2*cos(x)**2 - 1`
+
+            Return it as a single YAML code block.
+      options:
+        model: gpt-5.4
+        reasoning_effort: medium
+    iter: 1
+  output:
+    outputs:
+      - content: |-
+          ```yaml
+          1:
+            - ["cos(0)", "cos(x)*cos(-x) - sin(x)*sin(-x)"]
+            - {rule: cos_add, vars: {x: "x", y: "-x"}}
+          2:
+            - ["cos(x)*cos(-x) - sin(x)*sin(-x)", "cos(x)**2 - sin(x)*sin(-x)"]
+            - {rule: cos_neg, vars: {x: "x"}}
+          3:
+            - ["cos(x)**2 - sin(x)*sin(-x)", "cos(x)**2 + sin(x)**2"]
+            - {rule: sin_neg, vars: {x: "x"}}
+          4:
+            - ["cos(0)", "cos(x)**2 + sin(x)**2"]
+            - {trans: [1, 2, 3]}
+          5:
+            - ["cos(0) - cos(x)**2", "sin(x)**2"]
+            - {step: 4}
+          6:
+            - ["sin(x)**2", "cos(0) - cos(x)**2"]
+            - {sym: 5}
+          7:
+            - ["cos(2*x)", "cos(x)**2 - sin(x)**2"]
+            - {rule: cos_add, vars: {x: "x", y: "x"}}
+          8:
+            - ["cos(x)**2 - sin(x)**2", "2*cos(x)**2 - cos(0)"]
+            - {step: 6}
+          9:
+            - ["2*cos(x)**2 - cos(0)", "2*cos(x)**2 - 1"]
+            - {rule: cos_zero, vars: {}}
+          10:
+            - ["cos(2*x)", "2*cos(x)**2 - 1"]
+            - {trans: [7, 8, 9]}
+          ```
+        tool_calls: []
+    budget:
+      values:
+        num_requests: 1
+        num_completions: 1
+        input_tokens: 3750
+        output_tokens: 734
+        cached_input_tokens: 3328
+        price: 0.012897
+    log_items: []
+    model_name: gpt-5.4-2026-03-05
+    usage_info:
+      completion_tokens: 734
+      prompt_tokens: 3750
+      total_tokens: 4484
+      completion_tokens_details:
+        accepted_prediction_tokens: 0
+        audio_tokens: 0
+        reasoning_tokens: 336
+        rejected_prediction_tokens: 0
+      prompt_tokens_details:
+        audio_tokens: 0
+        cached_tokens: 3328
+- input:
+    request:
+      chat:
+        - role: user
+          content: |
+            fun: check
+            args:
+              eq:
+                - cos(2*x)
+                - 2*cos(x)**2 - 1
+              proof:
+                1:
+                  - - cos(0)
+                    - cos(x)*cos(-x) - sin(x)*sin(-x)
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: -x
+                2:
+                  - - cos(x)*cos(-x) - sin(x)*sin(-x)
+                    - cos(x)**2 - sin(x)*sin(-x)
+                  - rule: cos_neg
+                    vars:
+                      x: x
+                3:
+                  - - cos(x)**2 - sin(x)*sin(-x)
+                    - cos(x)**2 + sin(x)**2
+                  - rule: sin_neg
+                    vars:
+                      x: x
+                4:
+                  - - cos(0)
+                    - cos(x)**2 + sin(x)**2
+                  - trans:
+                      - 1
+                      - 2
+                      - 3
+                5:
+                  - - cos(0) - cos(x)**2
+                    - sin(x)**2
+                  - step: 4
+                6:
+                  - - sin(x)**2
+                    - cos(0) - cos(x)**2
+                  - sym: 5
+                7:
+                  - - cos(2*x)
+                    - cos(x)**2 - sin(x)**2
+                  - rule: cos_add
+                    vars:
+                      x: x
+                      y: x
+                8:
+                  - - cos(x)**2 - sin(x)**2
+                    - 2*cos(x)**2 - cos(0)
+                  - step: 6
+                9:
+                  - - 2*cos(x)**2 - cos(0)
+                    - 2*cos(x)**2 - 1
+                  - rule: cos_zero
+                    vars: {}
+                10:
+                  - - cos(2*x)
+                    - 2*cos(x)**2 - 1
+                  - trans:
+                      - 7
+                      - 8
+                      - 9
+              rules:
+                cos_zero:
+                  - cos(0)
+                  - '1'
+                sin_zero:
+                  - sin(0)
+                  - '0'
+                sin_halfpi:
+                  - sin(pi/2)
+                  - '1'
+                cos_halfpi:
+                  - cos(pi/2)
+                  - '0'
+                sin_neg:
+                  - sin(-x)
+                  - -sin(x)
+                cos_neg:
+                  - cos(-x)
+                  - cos(x)
+                cos_add:
+                  - cos(x + y)
+                  - cos(x)*cos(y) - sin(x)*sin(y)
+                sin_add:
+                  - sin(x + y)
+                  - sin(x)*cos(y) + cos(x)*sin(y)
+      options:
+        model: __compute__
+    iter: 1
+  output:
+    outputs:
+      - content: |
+          null
+          ...
