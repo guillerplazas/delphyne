@@ -200,10 +200,12 @@ class Schema:
         """
         Build a schema from a Python type annotation
         """
+        is_tool_call = False
         if isinstance(annot, type):
             if issubclass(annot, AbstractTool):
                 name = annot.tool_name()
                 description = annot.tool_description()
+                is_tool_call = True
             else:
                 name = tool_name_of_class_name(annot.__name__)
                 # For a dataclass, if no docstring is provided,
@@ -219,10 +221,17 @@ class Schema:
             name = str(annot)
             description = None
         adapter = pydantic.TypeAdapter(cast(Any, annot))
+        schema = adapter.json_schema()
+        # When generating a schema for a tool definition, the
+        # schema.description field is useless since it is present in the
+        # tool description already. This is added to avoid redundancy
+        # and for backwards compatibility.
+        if is_tool_call and "description" in schema:
+            del schema["description"]
         return Schema(
             name=name,
             description=description,
-            schema=adapter.json_schema(),
+            schema=schema,
         )
 
     def _hashable_repr(self) -> str:
