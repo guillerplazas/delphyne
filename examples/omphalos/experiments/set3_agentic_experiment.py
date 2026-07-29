@@ -16,7 +16,7 @@ import delphyne as dp
 configs = [
     mf.AgenticConfig(
         bench_name=name,
-        model_name="gpt-5.4-2026-03-05",
+        model_name=mf.CANONICAL_MODEL,
         temperature=None,
         toolset="rich",
         num_requests=32,
@@ -34,6 +34,7 @@ if __name__ == "__main__":
         configs=configs,
         output_dir="experiments/output/set3_agentic",
         config_naming=lambda cfg, _uid: (
-            f"{cfg.bench_name}__{cfg.toolset}__seed{cfg.seed}"
+            f"{cfg.bench_name}__{cfg.toolset}__{cfg.model_name}"
+            f"__seed{cfg.seed}"
         ),
     ).run_cli()

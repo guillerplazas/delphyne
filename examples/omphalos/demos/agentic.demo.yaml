@@ -9515,3 +9515,90 @@
             simpl in *. nia.
         ```
       example: true
+
+# Probing-only workflow example (`toolset: probing`, non-empty
+# `prefix`): demonstrates the intended TryTactics discipline — one
+# batched probe call whose report identifies a winner, followed by a
+# proposal that uses the winner verbatim. The tool call and its report
+# were materialized against Rocq via `pytanque_utils.try_tactics` (the
+# report text is genuine tool output). The toolset-aware example
+# selector in `prove_agentic._matching_toolset_examples` injects this
+# example ONLY into `toolset: probing` prompts, so the frozen "rich" /
+# "lean" benchmark prompts are unaffected.
+- demonstration: fewshot_trytactics_workflow
+  query: ProposeProofScriptAgentic
+  args:
+    spec:
+      file: /home/guille/anaconda3/envs/guille/delphyne/examples/omphalos/miniF2F/valid/mathd/numbertheory/mathd_numbertheory_136.v
+      theorem_name: mathd_numbertheory_136
+      theorem_statement: |-
+        (n : nat) :
+          123 * n + 17 = 39500 -> n = 321
+      informal_statement: |-
+        When 39,500 is divided by an integer $n$, the quotient is 123 and the remainder is
+           17. Find $n$. Show that it is 321.
+      informal_proof: |-
+        Turning our sentence into math we have \[39500=123n+17\]and we want to solve for $n$.
+           That gives  \[n=\frac{39500-17}{123}=\frac{39483}{123}=321.\]
+      imports: Require Import Arith.
+    available_skills:
+      rocq-phrasebook: Common math-to-Rocq translations.
+      proof-templates: Structured proof skeletons for common patterns in Rocq.
+      tactics-reference: Comprehensive tactics reference for Rocq theorem proving.
+      tactic-patterns: Quick reference for choosing tactics based on goal structure.
+      compilation-errors: Error-by-error guidance for Rocq compilation errors. Read this first for
+        any build error.
+      compiler-guided-repair: Quick reference for compiler-guided proof repair. Escalation-only —
+        not first-pass.
+      coq-stdlib-guide: Navigation guide for the Coq standard library and common packages.
+    toolset: probing
+    turn_budget: 32
+    prefix:
+      - kind: oracle
+        answer:
+          mode: null
+          content: ''
+          tool_calls:
+            - name: TryTactics
+              args:
+                tactics: intros H.
+                candidates:
+                  - lia.
+                  - 'assert (Hn : 123 * n = 39483) by lia. lia.'
+                  - replace 39500 with (395 * 100) in H by reflexivity. lia.
+                  - destruct n as [| n']; lia.
+          justification: null
+      - kind: tool
+        call:
+          name: TryTactics
+          args:
+            tactics: intros H.
+            candidates:
+              - lia.
+              - 'assert (Hn : 123 * n = 39483) by lia. lia.'
+              - replace 39500 with (395 * 100) in H by reflexivity. lia.
+              - destruct n as [| n']; lia.
+        result: |-
+          Tried 4 candidate(s) after your 1-tactic prefix — 1 open goal(s) at that state. Nothing was committed.
+
+          #1 `lia.` -> FAILS: (-32003, 'Coq: Tactic failure:  Cannot find witness.')
+
+          #2 `assert (Hn : 123 * n = 39483) by lia. lia.` -> FAILS: (-32003, 'Coq: Tactic failure:  Cannot find witness.')
+
+          #3 `replace 39500 with (395 * 100) in H by reflexivity. lia.` -> PROOF FINISHED: closes every remaining goal.
+
+          #4 `destruct n as [| n']; lia.` -> FAILS: (-32003, 'Coq: Tactic failure:  Cannot find witness.')
+
+          Candidate #3 finishes the proof — submit your prefix followed by that candidate as your final fenced proof body.
+  answers:
+    - answer: |-
+        The probe explains the failures: the literal `39500` is too large
+        for `lia` to see through, and the `replace ... by reflexivity`
+        bridge fixes exactly that. Candidate #3 is verified to finish, so
+        I submit prefix + winner immediately.
+        ```rocq
+        intros H.
+        replace 39500 with (395 * 100) in H by reflexivity.
+        lia.
+        ```
+      example: true

@@ -21,8 +21,13 @@ but the LLM has *exploration* tools available alongside proposing:
     of cheap closing tactics (`lia`, `nra`, `ring`, ...) on *each*
     remaining subgoal and reports which subgoal closes with what. One
     request buys dozens of Rocq attempts.
+  - `TryTactics(tactics=..., candidates=[...])` replays a prefix, then
+    evaluates up to 20 *model-chosen* candidate tactics independently
+    against that same held state, in one call and without committing
+    anything — the model-directed generalization of `TryAutomation`
+    for comparing structural moves (openers, rewrites, asserts).
 
-Two toolsets are exposed behind the `toolset` strategy argument:
+Three toolsets are exposed behind the `toolset` strategy argument:
 
   - `"lean"` — `ReadSkill` + `SearchRocq`. Structural exploration
     happens through *partial proposals*: `check_proof` reports the
@@ -32,6 +37,7 @@ Two toolsets are exposed behind the `toolset` strategy argument:
   - `"rich"` — `ReadSkill` + `InspectAt` + `TryAutomation`
     (`InspectAt` with an empty prefix subsumes `SearchRocq`, so the
     latter is not advertised separately).
+  - `"probing"` — `"rich"` + `TryTactics` (candidate probing).
 
 Budgeting: every assistant turn (tool round or proposal) costs one LLM
 request. The policy deliberately leaves search depth unbounded by
@@ -55,20 +61,23 @@ from typing import Any, Literal
 
 import delphyne as dp
 from delphyne import Branch, Compute, Strategy, dfs, strategy
+from delphyne.stdlib.queries import SelectedExample
 
 import pytanque_utils as pt
 import skills as sk
+from model_registry import make_model
 from prove_standard import ProofScript
 
 # fmt: off
 
 
-type Toolset = Literal["lean", "rich"]
+type Toolset = Literal["lean", "rich", "probing"]
 """
 Which exploration tools the LLM is offered: `"lean"` advertises
 `ReadSkill` + `SearchRocq`; `"rich"` advertises `ReadSkill` +
 `InspectAt` + `TryAutomation` (state-level introspection and
-automation probing).
+automation probing); `"probing"` extends `"rich"` with `TryTactics`
+(model-chosen candidate probing at a held state).
 """
 
 
@@ -169,6 +178,41 @@ class TryAutomation(dp.AbstractTool[str]):
     tactics: str
 
 
+@dataclass
+class TryTactics(dp.AbstractTool[str]):
+    """
+    Replay a tactic prefix from the theorem's initial proof state
+    (WITHOUT committing), then evaluate up to 20 candidate tactics YOU
+    choose, each independently against that same held state, in ONE
+    call. Use it to compare *structural* moves — alternative openers,
+    competing rewrites, bridging asserts, different witnesses — before
+    spending a proposal on one.
+
+    Arguments:
+    - `tactics`: prefix to replay, each sentence ending with `.`.
+      Empty string = probe the initial state.
+    - `candidates`: candidate tactics (max 20). A candidate may be a
+      short sequence (`"intros n. induction n."`) and acts on the
+      WHOLE proof state, so goal selectors (`"2: lia."`) are legal.
+
+    Returns one block per candidate: the Rocq error, `PROOF FINISHED`,
+    or the goal-count change plus the first resulting goal.
+
+    Discipline (one call costs one request, same as a proposal):
+    - BATCH: send 6-15 varied candidates per call. Several calls with
+      2-3 candidates each waste requests; never re-probe the same
+      prefix with a small variation of a failed batch — vary more, or
+      extend the prefix with a winner and probe deeper.
+    - Real names first: if candidates depend on stdlib lemma names,
+      discover them with `InspectAt` + `Search` before probing;
+      guessed names are the top cause of all-fail reports.
+    - Don't probe bare closers (`lia.`, `nra.`, ...): the verifier and
+      `TryAutomation` already try the closing battery for free.
+    """
+    tactics: str
+    candidates: list[str]
+
+
 #####
 ##### Strategy
 #####
@@ -239,6 +283,18 @@ def _try_automation_handler(
 
 
 @strategy
+def _try_tactics_handler(
+    problem_file: str, theorem_name: str,
+    tactics: str, candidates: list[str],
+) -> Strategy[Compute, object, str]:
+    """Wraps pt.try_tactics so the TryTactics handler returns a StrategyInstance."""
+    text = yield from dp.compute(pt.try_tactics)(
+        problem_file, theorem_name, tactics, candidates
+    )
+    return text
+
+
+@strategy
 def prove_theorem_agentic(
     problem_file: str,
     theorem_name: str,
@@ -272,6 +328,11 @@ def prove_theorem_agentic(
                 _try_automation_handler(
                     problem_file, theorem_name, call.tactics
                 ).using(dp.just_compute),
+            TryTactics: lambda call:
+                _try_tactics_handler(
+                    problem_file, theorem_name,
+                    call.tactics, call.candidates,
+                ).using(dp.just_compute),
         },
     )
     return script
@@ -282,7 +343,8 @@ class ProposeProofScriptAgentic(
     dp.Query[
         dp.Response[
             ProofScript | dp.WrappedParseError,
-            ReadSkill | SearchRocq | InspectAt | TryAutomation,
+            ReadSkill | SearchRocq | InspectAt | TryAutomation
+            | TryTactics,
         ]
     ]
 ):
@@ -295,7 +357,8 @@ class ProposeProofScriptAgentic(
     def parser(self) -> dp.Parser[
         dp.Response[
             ProofScript | dp.WrappedParseError,
-            ReadSkill | SearchRocq | InspectAt | TryAutomation,
+            ReadSkill | SearchRocq | InspectAt | TryAutomation
+            | TryTactics,
         ]
     ]:
         # The advertised toolset depends on the query instance, hence
@@ -306,6 +369,10 @@ class ProposeProofScriptAgentic(
         parser = dp.last_code_block.wrap_errors
         if self.toolset == "lean":
             return parser.response_with(ReadSkill | SearchRocq)
+        if self.toolset == "probing":
+            return parser.response_with(
+                ReadSkill | InspectAt | TryAutomation | TryTactics
+            )
         return parser.response_with(ReadSkill | InspectAt | TryAutomation)
 
     def advertised_tools(self) -> Sequence[type[dp.AbstractTool[Any]]]:
@@ -324,6 +391,40 @@ class ProposeProofScriptAgentic(
 #####
 
 
+def _matching_toolset_examples() -> dp.ExampleSelector:
+    """
+    Example selector for the agentic proposal query.
+
+    Toolset-neutral examples (empty `prefix` — plain proposal
+    demonstrations) are kept for every toolset; tool-workflow examples
+    (non-empty `prefix`, which renders as real tool-call/tool-result
+    messages) are kept only when their pinned `toolset` matches the
+    input query's. This lets `"probing"` carry a TryTactics workflow
+    example without perturbing the `"rich"`/`"lean"` prompts (which
+    must stay byte-identical to their frozen benchmark runs).
+    """
+    def select(
+        env: dp.PolicyEnv,
+        query: dp.AbstractQuery[Any],
+        examples: Sequence[SelectedExample],
+    ) -> Sequence[SelectedExample]:
+        kept: list[SelectedExample] = []
+        for ex in examples:
+            exq = ex.example.query
+            if not isinstance(exq, ProposeProofScriptAgentic):
+                kept.append(ex)
+            elif not exq.prefix:
+                kept.append(ex)
+            elif (
+                isinstance(query, ProposeProofScriptAgentic)
+                and exq.toolset == query.toolset
+            ):
+                kept.append(ex)
+        return kept
+
+    return dp.all_examples.filter(select)
+
+
 @dp.ensure_compatible(prove_theorem_agentic)
 def prove_theorem_agentic_policy(
     model_name: str,
@@ -340,9 +441,14 @@ def prove_theorem_agentic_policy(
     level) is the binding constraint instead — this keeps tool calls
     from eating into a separate, scarcer proposal allowance.
     """
-    model = dp.standard_model(model_name)
+    model = make_model(model_name, for_tool_calls=True)
     sp = dfs(max_depth=max_turns)
     if loop:
         sp = dp.loop() @ sp
-    pp = dp.few_shot(model, temperature=temperature, max_requests=1)
+    pp = dp.few_shot(
+        model,
+        temperature=temperature,
+        max_requests=1,
+        select_examples=_matching_toolset_examples(),
+    )
     return sp & pp

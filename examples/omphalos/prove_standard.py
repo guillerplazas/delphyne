@@ -19,6 +19,7 @@ import delphyne as dp
 from delphyne import Branch, Compute, Strategy, dfs, strategy
 
 import pytanque_utils as pt
+from model_registry import make_model
 
 # fmt: off
 
@@ -93,7 +94,7 @@ def prove_theorem_standard_policy(
     max_feedback_cycles: int = 3,
     loop: bool = False,
 ) -> dp.Policy[Branch, dp.PromptingPolicy]:
-    model = dp.standard_model(model_name)
+    model = make_model(model_name)
     sp = dfs(max_depth=max_feedback_cycles + 1)
     if loop:
         sp = dp.loop() @ sp

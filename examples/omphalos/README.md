@@ -150,8 +150,10 @@ Prerequisites:
 
 - `rocq` available on your opam switch.
 - Conda env `guille` activated (Delphyne + `pytanque` installed).
-- An API key for the configured model (default: `gpt-5.4-2026-03-05`,
-  overridable via `policy_args.model_name`).
+- An API key for the configured model (default: `gpt-5.6-terra`,
+  overridable via `policy_args.model_name`; gpt-5.6 pricing and the
+  tool-call `reasoning_effort` workaround live in
+  `model_registry.py`).
 
 ### Running the baselines
 
@@ -169,7 +171,9 @@ make summary-set1         # regenerate results_summary.csv from cache
 
 Code map: strategies, queries and policies in `prove_standard.py` /
 `prove_agentic.py` (the `ReadSkill` / `SearchRocq` / `InspectAt` /
-`TryAutomation` tools live there too); the pytanque bridge in
+`TryAutomation` / `TryTactics` tools live there too); model
+resolution and gpt-5.6
+pricing in `model_registry.py`; the pytanque bridge in
 `pytanque_utils.py`; skill loading in `skills.py`; prompts in
 `prompts/*.jinja`; experiment configs in
 `experiments/miniF2F_bench.py`. `check_proof` reports an
@@ -196,31 +200,95 @@ live in `benchmarks/`:
 - `set3.txt` — second holdout (fully out-of-sample: never used for
   any iteration).
 
-Both baselines run on every set with one seed, model
-`gpt-5.4-2026-03-05`, few-shot examples enabled (see Demonstrations
-below); the agentic side budgets `num_requests=32` per problem (one
-pool for tool calls and proposals, depth unbounded), the standard
-side keeps `max_feedback_cycles=3`. Verification is
+Both baselines run on every set with one seed, few-shot examples
+enabled (see Demonstrations below); the agentic side budgets
+`num_requests=32` per problem (one pool for tool calls and proposals,
+depth unbounded), the standard side keeps `max_feedback_cycles=3`.
+Per-problem dollar caps are deliberately non-binding safety nets:
+the request/cycle budget is the controlled variable. Verification is
 automation-assisted on the agentic side and plain on the standard
 side — a deliberate, documented design choice (the battery is part
 of the agentic *system*).
 
+**Models.** Set 1 doubles as a cost/performance frontier over the
+gpt-5.6 family (sol / terra / luna; exact pricing in
+`model_registry.py`). Sets 2–3 run only the canonical model,
+**`gpt-5.6-terra`**, picked by the documented rule (most agentic
+successes per dollar on set 1, ties to the cheaper tier — see
+`experiments/frontier_report.py`). One experimental condition to
+know: gpt-5.6 rejects function tools with reasoning on the Chat
+Completions API, so all *agentic* requests run with
+`reasoning_effort="none"` while standard requests keep the server
+default — an API constraint, not a choice (see `model_registry.py`).
+
+Set 1 frontier (20 problems, one seed):
+
+| model | standard | agentic "rich" | agentic spend | agentic $/solve |
+|---|---:|---:|---:|---:|
+| gpt-5.6-sol | 18 / 20 | 19 / 20 | $1.55 | $0.081 |
+| **gpt-5.6-terra** | 10 / 20 | **20 / 20** | $1.13 | **$0.056** |
+| gpt-5.6-luna | 8 / 20 | 15 / 20 | $1.89 | $0.126 |
+
+Canonical results, `gpt-5.6-terra`:
+
 | set | standard | **agentic "rich"** | gap | spend (std / agentic) |
 |---|---:|---:|---:|---|
-| set 1 (dev) | 9 / 20 | **18 / 20** | +9 | $0.15 / $0.80 |
-| set 2 (holdout) | 7 / 20 | **14 / 20** | +7 | $0.38 / $1.19 |
-| set 3 (holdout, fully unseen) | 7 / 20 | **13 / 20** | +6 | $0.23 / $1.54 |
+| set 1 (dev) | 10 / 20 | **20 / 20** | +10 | $0.86 / $1.13 |
+| set 2 (holdout) | 11 / 20 | **14 / 20** | +3 | $1.43 / $2.97 |
+| set 3 (holdout, fully unseen) | 5 / 20 | **14 / 20** | +9 | $1.46 / $4.45 |
 
 On every set the agentic baseline solves a **strict superset** of the
 standard baseline's wins. Set 1 numbers are partly in-sample (the
-baselines were iterated against it); set 3 is the cleanest
-out-of-sample evidence. One seed per config — run-to-run variance is
-roughly ±1–2 problems per cell.
+baselines were iterated against it, under gpt-5.4); set 3 is the
+cleanest out-of-sample evidence. One seed per config — run-to-run
+variance is roughly ±1–2 problems per cell.
+
+Two frontier readings worth stating explicitly: the agentic scaffold
+lifts the mid-tier terra *above* the flagship's plain-baseline
+performance at a fraction of the cost, and the cheapest tier (luna)
+is not the cheapest system — it spends the most agentic dollars on
+set 1 because failed searches burn the full request budget.
+
+**"probing" toolset ablation** (`TryTactics`): the `"probing"`
+toolset extends `"rich"` with `TryTactics(tactics, candidates)` — up
+to 20 model-chosen candidate tactics evaluated against a held proof
+state in one call, nothing committed (the native analog of a
+stepwise-exploration primitive found valuable during development;
+implemented purely on pytanque). Two evaluation rounds on the
+holdout sets, two samples per problem
+(`experiments/set{2,3}_probing_experiment.py`); v2 adds calibration
+(probing-only prompt discipline, a materialized TryTactics few-shot
+workflow example gated by a toolset-aware example selector):
+
+| sweep | "rich" (control) | probing v1 s0 / s1 | probing v2 s0 / s1 |
+|---|---:|---:|---:|
+| set 2 | 14 / 20 | 13 / 12 | 12* / 15 |
+| set 3 | 14 / 20 | 14 / 15 | — (aborted) |
+
+*one config unfinished (counted unsolved). The calibration
+measurably fixed how the model uses the tool (candidates per call
+2.8 → 4.7, zero-signal calls 54% → 24%, adoption 7 → 18 configs,
+and v1's robust regression `mathd_numbertheory_110` was recovered
+via 9 probe calls) — but solve rates stayed within the ±1–2 noise
+band of the control at slightly higher cost (the probing prompt
+costs ~15% more input tokens on every request). Verdict per the
+pre-registered rule (details and failure-mode study in PROGRESS.md;
+analysis tool: `tools/analyze_probing.py`): archived as a measured
+negative result for this agent design — under `dfs`/`interact` with
+automation-assisted verification and partial-proposal previews, the
+tool substitutes for feedback cycles without adding solving power.
+`"rich"` remains the canonical toolset; the residual potential of
+K-probes-per-request lies in policy-level integration (`bestfs`
+fan-out scoring), not prompting.
 
 Outputs land under `experiments/output/set{1,2,3}_{standard,agentic}/`
+and `experiments/output/set{2,3}_probing{,_v2}/`
 (gitignored; regenerate with the `experiments/set*_experiment.py`
-scripts). Earlier iterations are archived locally under
-`experiments/previous/` with per-run notes.
+scripts — the probing scripts now write to the `_v2` dirs; the v1
+outputs are frozen, their prompt predates the calibration). Earlier iterations — including the final gpt-5.4 sweeps
+(set1 9/18, set2 7/14, set3 7/13, billed at gpt-5 fallback rates) —
+are archived locally under `experiments/previous/` with per-run
+notes.
 
 ### Demonstrations & few-shot examples
 

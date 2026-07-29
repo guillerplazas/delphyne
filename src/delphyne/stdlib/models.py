@@ -128,9 +128,11 @@ type Chat = tuple[ChatMessage, ...]
 # We specifically require tuples so that Chat is hashable.
 
 
-type ReasoningEffort = Literal["minimal", "low", "medium", "high"]
+type ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
 """
-Reasoning effort for reasoning-capable models.
+Reasoning effort for reasoning-capable models. `"none"` disables
+reasoning where the provider supports it (e.g., GPT-5-class models,
+which require it for function tools on the Chat Completions API).
 """
 
 

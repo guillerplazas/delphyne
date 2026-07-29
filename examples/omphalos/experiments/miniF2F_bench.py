@@ -77,6 +77,7 @@ assert (
 _DEMO_PROBLEMS = (
     "algebra_binomnegdiscrineq_10alt28asqp1",
     "induction_sum_odd",
+    "mathd_numbertheory_136",  # probing few-shot (TryTactics workflow)
 )
 assert not any(
     p in s
@@ -92,6 +93,26 @@ ALL_PROBLEMS: Mapping[str, tuple[str, str]] = {
 }
 
 
+FRONTIER_MODELS: tuple[str, ...] = (
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+)
+"""
+The gpt-5.6 family, priciest first (see `model_registry.GPT56_PRICING`).
+The set1 experiments sweep all three to map the cost/performance
+frontier; sets 2-3 run only the canonical model chosen from it (rule:
+best agentic pass-rate-per-dollar on set1, ties to the cheaper tier —
+see `experiments/frontier_report.py`).
+"""
+
+CANONICAL_MODEL = "gpt-5.6-terra"
+"""
+Winner of the 2026-07-21 set1 frontier: 20/20 agentic at $0.056/solve
+(sol: 19/20 at $0.081; luna: 15/20 at $0.126). See PROGRESS.md.
+"""
+
+
 @dataclass
 class StandardConfig:
     bench_name: str
@@ -100,7 +121,10 @@ class StandardConfig:
     max_feedback_cycles: int
     seed: int
     loop: bool = False
-    max_dollar_budget: float | None = 0.2
+    # Safety net only, deliberately non-binding at every gpt-5.6 tier
+    # (worst observed standard problem is well under this even at sol
+    # rates): the feedback-cycle budget is the controlled variable.
+    max_dollar_budget: float | None = 0.5
 
     def instantiate(self, context: object) -> dp.RunStrategyArgs:
         problem_file, theorem_name = ALL_PROBLEMS[self.bench_name]
@@ -133,8 +157,9 @@ class AgenticConfig:
     Extra knobs compared to `StandardConfig`:
 
     - `toolset`: `"rich"` (ReadSkill + InspectAt + TryAutomation;
-      canonical) or `"lean"` (ReadSkill + SearchRocq; partial
-      proposals cover structural exploration).
+      canonical), `"probing"` (rich + TryTactics candidate probing),
+      or `"lean"` (ReadSkill + SearchRocq; partial proposals cover
+      structural exploration).
     - `num_requests`: the *total* request budget — LLM proposal
       attempts and tool calls draw from this one pool. It is the
       binding constraint and is also surfaced to the model as the
@@ -152,7 +177,11 @@ class AgenticConfig:
     seed: int
     max_turns: int | None = None
     loop: bool = False
-    max_dollar_budget: float | None = 0.5
+    # Safety net only, deliberately non-binding at every gpt-5.6 tier:
+    # `num_requests` is the controlled budget variable, and a binding
+    # dollar cap would handicap the expensive tiers in the frontier
+    # comparison. Sized ~3x the worst per-problem spend at sol rates.
+    max_dollar_budget: float | None = 2.0
 
     def instantiate(self, context: object) -> dp.RunStrategyArgs:
         problem_file, theorem_name = ALL_PROBLEMS[self.bench_name]

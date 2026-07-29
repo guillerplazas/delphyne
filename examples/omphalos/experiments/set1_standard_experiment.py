@@ -2,6 +2,10 @@
 Standard baseline on benchmark set 1 (`benchmarks/set1.txt`,
 the curated development subset).
 
+Set 1 doubles as the cost/performance frontier: every problem runs
+once per gpt-5.6 tier (`mf.FRONTIER_MODELS`). Summarize the frontier
+with `experiments/frontier_report.py`.
+
 Usage:
     python experiments/set1_standard_experiment.py run --max_workers=4
     python experiments/set1_standard_experiment.py replay
@@ -17,12 +21,13 @@ import delphyne as dp
 configs = [
     mf.StandardConfig(
         bench_name=name,
-        model_name="gpt-5.4-2026-03-05",
+        model_name=model,
         temperature=None,
         max_feedback_cycles=3,
         loop=False,
         seed=0,
     )
+    for model in mf.FRONTIER_MODELS
     for name in mf.SET1_PROBLEMS
 ]
 
@@ -33,5 +38,7 @@ if __name__ == "__main__":
         context=dp.workspace_execution_context(__file__),
         configs=configs,
         output_dir="experiments/output/set1_standard",
-        config_naming=lambda cfg, _uid: f"{cfg.bench_name}__seed{cfg.seed}",
+        config_naming=lambda cfg, _uid: (
+            f"{cfg.bench_name}__{cfg.model_name}__seed{cfg.seed}"
+        ),
     ).run_cli()

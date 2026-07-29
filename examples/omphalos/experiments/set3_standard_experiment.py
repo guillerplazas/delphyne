@@ -15,7 +15,7 @@ import delphyne as dp
 configs = [
     mf.StandardConfig(
         bench_name=name,
-        model_name="gpt-5.4-2026-03-05",
+        model_name=mf.CANONICAL_MODEL,
         temperature=None,
         max_feedback_cycles=3,
         loop=False,
@@ -31,5 +31,7 @@ if __name__ == "__main__":
         context=dp.workspace_execution_context(__file__),
         configs=configs,
         output_dir="experiments/output/set3_standard",
-        config_naming=lambda cfg, _uid: f"{cfg.bench_name}__seed{cfg.seed}",
+        config_naming=lambda cfg, _uid: (
+            f"{cfg.bench_name}__{cfg.model_name}__seed{cfg.seed}"
+        ),
     ).run_cli()

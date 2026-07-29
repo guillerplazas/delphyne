@@ -15,6 +15,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from pytanque import PetanqueError, Pytanque, PytanqueMode, State
 
@@ -401,6 +402,28 @@ AUTOMATION_BATTERY: tuple[str, ...] = (
 # to Rocq's `Timeout`, which rejects non-integer literals.
 AUTOMATION_TACTIC_TIMEOUT = 4
 
+# Per-sentence cap for *replaying* scripts (verification, prefix
+# replay, introspection commands), in seconds. Generous on purpose:
+# legitimate proposal tactics may be slow, but without any cap a
+# single diverging tactic in a sampled proposal parks the pet process
+# forever (observed 2026-07-22: one experiment config spun Rocq at
+# 100% CPU for 13+ hours). Residual hole: pytanque only wraps
+# `Timeout` around sentences that end with `.` and do not start with
+# a bullet, so bullet-led tactics (`- nia.`) still run unguarded.
+PROOF_TACTIC_TIMEOUT = 120
+
+# Cap on the number of candidates one `try_tactics` call evaluates
+# (parity with the 20-tactic batch limit of comparable stepping APIs);
+# extras are reported as dropped, not silently ignored.
+MAX_TRY_TACTICS_CANDIDATES = 20
+
+# `try_tactics` reports on up to `MAX_TRY_TACTICS_CANDIDATES` outcomes,
+# so it gets a larger overall cap than single-command queries, plus a
+# per-candidate cap on the goal excerpt so a few verbose goals cannot
+# crowd out the other candidates' results.
+TRY_TACTICS_OUTPUT_CHAR_CAP = 6000
+TRY_TACTICS_GOAL_CHAR_CAP = 500
+
 
 def try_automation(
     file: str,
@@ -431,6 +454,61 @@ def try_automation(
     with _augmented_file(file, extra_imports) as run_file:
         return _automation_against(
             run_file, theorem_name, tactics, char_cap, tactic_timeout
+        )
+
+
+def try_tactics(
+    file: str,
+    theorem_name: str,
+    tactics_script: str,
+    candidates: list[str],
+    extra_imports: tuple[str, ...] = DEFAULT_EXTRA_IMPORTS,
+    char_cap: int = TRY_TACTICS_OUTPUT_CHAR_CAP,
+    tactic_timeout: int = AUTOMATION_TACTIC_TIMEOUT,
+) -> str:
+    """
+    Replay a tactic prefix from the initial proof state of
+    `theorem_name` in `file` (without committing), then evaluate each
+    of `candidates` independently against that same held state and
+    report the per-candidate outcome.
+
+    This is the model-directed counterpart of `try_automation`: instead
+    of the fixed closing battery, the caller supplies the tactics to
+    try — alternative structural openers, competing rewrites, asserts.
+    Proof state is functional (`client.run` leaves its input state
+    valid), so the prefix is replayed once and every candidate starts
+    from the identical state; nothing is ever committed.
+
+    Semantics per candidate:
+      - split into sentences with `split_into_tactics`, so a candidate
+        may be a short *sequence* ("intros n. induction n.");
+      - each sentence runs under `tactic_timeout` (int — see
+        `AUTOMATION_TACTIC_TIMEOUT`); sentences act on the whole proof
+        state, so goal selectors ("2: lia.") are legal candidates;
+      - exact duplicates and empty candidates are skipped without
+        spending Rocq calls; at most `MAX_TRY_TACTICS_CANDIDATES` are
+        evaluated (extras are reported as dropped).
+
+    A failing prefix produces the same failure report as `inspect_at`;
+    a prefix that already closes the proof short-circuits to the
+    "PROOF FINISHED" report.
+    """
+    file = _resolve(file)
+    prefix = split_into_tactics(tactics_script)
+    if not any(c.strip() for c in candidates):
+        return (
+            "No candidates to try: `candidates` is empty. Pass a list "
+            "of candidate tactics (each sentence ending with `.`)."
+        )
+
+    with _augmented_file(file, extra_imports) as run_file:
+        return _try_tactics_against(
+            run_file,
+            theorem_name,
+            prefix,
+            candidates,
+            char_cap,
+            tactic_timeout,
         )
 
 
@@ -483,7 +561,7 @@ def _replay_prefix(
     succeeded: list[str] = []
     for i, tac in enumerate(tactics):
         try:
-            state = client.run(state, tac)
+            state = client.run(state, tac, timeout=PROOF_TACTIC_TIMEOUT)
         except PetanqueError as e:
             return None, _format_try_failure(
                 failing_index=i,
@@ -532,7 +610,7 @@ def _inspect_against(
             )
 
         try:
-            after = client.run(state, command)
+            after = client.run(state, command, timeout=PROOF_TACTIC_TIMEOUT)
         except PetanqueError as e:
             return f"Rocq rejected the command: {e}"
 
@@ -594,6 +672,197 @@ def _automation_against(
 
         closers = _probe_goals(client, state, n, tactic_timeout)
         return _format_automation_report(tactics, goals, closers, char_cap)
+
+
+@dataclass
+class _CandidateOutcome:
+    """Outcome of evaluating one `try_tactics` candidate."""
+
+    candidate: str
+    status: Literal["finished", "applied", "error", "skipped"]
+    detail: str = ""  # Rocq error / skip reason
+    goals_after: list[str] = field(default_factory=list[str])
+
+
+def _try_tactics_against(
+    abs_file: str,
+    theorem_name: str,
+    prefix: list[str],
+    candidates: list[str],
+    char_cap: int,
+    tactic_timeout: int,
+) -> str:
+    """
+    Inner implementation of `try_tactics`: replay the prefix once, then
+    run every candidate off that one held state (pytanque states are
+    functional, so candidates never see each other's effects) and
+    collect a `_CandidateOutcome` per candidate.
+    """
+    with _pytanque_session() as client:
+        state, report = _replay_prefix(
+            client, abs_file, theorem_name, prefix, char_cap
+        )
+        if report is not None:
+            return report
+        assert state is not None
+
+        base_goals = _safe_goals(client, state)
+        n = len(base_goals)
+        if n == 0:
+            return (
+                "No goals remain after your prefix, but the proof is "
+                "not marked finished — submit the prefix and let the "
+                "verifier attempt `Qed.`."
+            )
+
+        kept = candidates[:MAX_TRY_TACTICS_CANDIDATES]
+        dropped = len(candidates) - len(kept)
+        seen: dict[str, int] = {}
+        results: list[_CandidateOutcome] = []
+        for cand in kept:
+            key = cand.strip()
+            if key in seen:
+                results.append(
+                    _CandidateOutcome(
+                        candidate=cand,
+                        status="skipped",
+                        detail=f"duplicate of candidate #{seen[key]}",
+                    )
+                )
+                continue
+            seen[key] = len(results) + 1
+
+            sentences = split_into_tactics(cand)
+            if not sentences:
+                results.append(
+                    _CandidateOutcome(
+                        candidate=cand,
+                        status="skipped",
+                        detail="no complete Rocq sentence (missing the "
+                        "final `.`?)",
+                    )
+                )
+                continue
+
+            results.append(
+                _run_candidate(client, state, cand, sentences, tactic_timeout)
+            )
+
+        return _format_try_tactics_report(
+            prefix, n, results, dropped, char_cap
+        )
+
+
+def _run_candidate(
+    client: Pytanque,
+    state: State,
+    candidate: str,
+    sentences: list[str],
+    tactic_timeout: int,
+) -> _CandidateOutcome:
+    """
+    Run one candidate's sentences sequentially from `state` (which is
+    left untouched) and classify the outcome. The `except Exception`
+    breadth matches `_probe_goals`: rejections and timeouts both count
+    as the candidate failing.
+    """
+    cur = state
+    for j, sentence in enumerate(sentences):
+        try:
+            cur = client.run(cur, sentence, timeout=tactic_timeout)
+        except Exception as e:
+            detail = str(e)
+            if len(sentences) > 1:
+                detail = f"at sentence #{j + 1} `{sentence}`: {detail}"
+            return _CandidateOutcome(
+                candidate=candidate, status="error", detail=detail
+            )
+        if cur.proof_finished:
+            return _CandidateOutcome(candidate=candidate, status="finished")
+    return _CandidateOutcome(
+        candidate=candidate,
+        status="applied",
+        goals_after=_safe_goals(client, cur),
+    )
+
+
+def _format_try_tactics_report(
+    prefix: list[str],
+    n_goals: int,
+    results: list[_CandidateOutcome],
+    dropped: int,
+    char_cap: int,
+) -> str:
+    where = (
+        f"after your {len(prefix)}-tactic prefix"
+        if prefix
+        else "at the initial state"
+    )
+    parts: list[str] = [
+        f"Tried {len(results)} candidate(s) {where} — {n_goals} open "
+        "goal(s) at that state. Nothing was committed.",
+        "",
+    ]
+    for i, r in enumerate(results, 1):
+        # Candidates may span lines; collapse whitespace so the
+        # one-line-per-candidate layout survives.
+        shown = " ".join(r.candidate.split())
+        if r.status == "finished":
+            parts.append(
+                f"#{i} `{shown}` -> PROOF FINISHED: closes every "
+                "remaining goal."
+            )
+        elif r.status == "error":
+            parts.append(f"#{i} `{shown}` -> FAILS: {r.detail}")
+        elif r.status == "skipped":
+            parts.append(f"#{i} `{shown}` -> skipped: {r.detail}")
+        else:
+            n_after = len(r.goals_after)
+            if n_after < n_goals:
+                verdict = (
+                    f"applies, closes {n_goals - n_after} goal(s) "
+                    f"({n_goals} -> {n_after})"
+                )
+            else:
+                verdict = f"applies ({n_goals} -> {n_after} goals)"
+            parts.append(f"#{i} `{shown}` -> {verdict}.")
+            if r.goals_after:
+                head = r.goals_after[0].strip()
+                if len(head) > TRY_TACTICS_GOAL_CHAR_CAP:
+                    head = (
+                        head[:TRY_TACTICS_GOAL_CHAR_CAP].rstrip()
+                        + "\n[goal truncated]"
+                    )
+                parts.append("First resulting goal:")
+                parts.append("```")
+                parts.append(head)
+                parts.append("```")
+        parts.append("")
+
+    if dropped > 0:
+        parts.append(
+            f"{dropped} candidate(s) beyond the "
+            f"{MAX_TRY_TACTICS_CANDIDATES}-candidate cap were not "
+            "evaluated."
+        )
+        parts.append("")
+    finished = [i for i, r in enumerate(results, 1) if r.status == "finished"]
+    if finished:
+        parts.append(
+            f"Candidate #{finished[0]} finishes the proof — submit "
+            "your prefix followed by that candidate as your final "
+            "fenced proof body."
+        )
+    else:
+        parts.append(
+            "Pick the most promising candidate, then either probe "
+            "deeper (TryTactics with the extended prefix) or submit "
+            "prefix + candidate as a (partial) proposal."
+        )
+    text = "\n".join(parts)
+    if len(text) > char_cap:
+        text = text[:char_cap].rstrip() + "\n[truncated]"
+    return text
 
 
 def _probe_goals(
@@ -814,7 +1083,7 @@ def _query_against(
         except PetanqueError as e:
             return f"Failed to open session: {e}"
         try:
-            state = client.run(state, command)
+            state = client.run(state, command, timeout=PROOF_TACTIC_TIMEOUT)
         except PetanqueError as e:
             return f"Rocq rejected the command: {e}"
         return _format_feedback(state, char_cap)
@@ -853,7 +1122,7 @@ def _check_against(
 
         for i, tac in enumerate(tactics):
             try:
-                state = client.run(state, tac)
+                state = client.run(state, tac, timeout=PROOF_TACTIC_TIMEOUT)
             except PetanqueError as e:
                 return _failure_feedback(
                     client,
@@ -867,7 +1136,7 @@ def _check_against(
             proof_so_far.append(tac)
 
         try:
-            state = client.run(state, "Qed.")
+            state = client.run(state, "Qed.", timeout=PROOF_TACTIC_TIMEOUT)
         except PetanqueError as e:
             return _failure_feedback(
                 client,
@@ -919,7 +1188,7 @@ def _failure_feedback(
                 try:
                     if not fstate.proof_finished:
                         raise PetanqueError(0, "goals remain")
-                    client.run(fstate, "Qed.")
+                    client.run(fstate, "Qed.", timeout=PROOF_TACTIC_TIMEOUT)
                     return Feedback(
                         success=True,
                         proof_so_far=[*proof_so_far, *applied],

@@ -15,7 +15,7 @@ import miniF2F_bench as mf
 import delphyne as dp
 
 
-MODELS = ["gpt-5.4-2026-03-05"]
+MODELS = [mf.CANONICAL_MODEL]
 SEEDS = [0]
 
 
