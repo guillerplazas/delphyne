@@ -651,6 +651,25 @@ class LearningExperimentCLI:
             exp.mark_errors_as_todos()
         exp.resume(max_workers=max_workers, interactive=interactive)
 
+    def replay(
+        self,
+        *,
+        iter: int,
+        mode: Literal["train", "test"],
+        config_name: int,
+    ):
+        """
+        Replay a training or testing configuration using its cache.
+
+        The cache is opened in replay mode, so replaying does not modify it.
+        """
+        if mode == "train":
+            exp = self.experiment.training_experiment(iter)
+        else:
+            exp = self.experiment.testing_experiment(iter)
+        exp.load()
+        exp.replay_config_by_name(config_name)  # type: ignore[arg-type]
+
     def results(self, *, final_iter: int):
         """
         Print a summary of training and testing results up to a given
