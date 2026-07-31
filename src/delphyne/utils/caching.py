@@ -14,13 +14,17 @@ from pydantic import TypeAdapter
 
 from delphyne.utils.pretty_yaml import pretty_yaml
 
-type CacheMode = Literal["read_write", "off", "create", "replay"]
+type CacheMode = Literal[
+    "read_write", "read_only", "off", "create", "replay"
+]
 """
 Caching mode:
 
 - `off`: the cache is disabled.
 - `read_write`: values can be read and written to the cache (no extra
       check is made).
+- `read_only`: cached values are returned when available; missing values
+      are computed but are not stored.
 - `create`: the cache is used in write-only mode, and an exception is
       raised if a cached value already exists.
 - `replay`: all requests must hit the cache or an exception is raised.
@@ -53,7 +57,8 @@ class Cache[P, T]:
                 f"Cache entry not found for:\n\n {arg}"
             )
             ret = func(arg)
-            self.dict[arg] = ret
+            if self.mode != "read_only":
+                self.dict[arg] = ret
             return ret
 
         return cached_func
@@ -85,14 +90,20 @@ class Cache[P, T]:
                 if arg in self.dict:
                     cached_already.add(i)
             to_compute = [i for i in range(n) if i not in cached_already]
+            computed_by_arg: dict[P, T] = {}
             if to_compute:
                 assert self.mode != "replay", (
                     f"Cache entry not found for:\n\n{args[to_compute[0]]}"
                 )
                 computed = func([args[j] for j in to_compute])
                 for i, v in zip(to_compute, computed):
-                    self.dict[args[i]] = v
-            return [self.dict[a] for a in args]
+                    computed_by_arg[args[i]] = v
+                    if self.mode != "read_only":
+                        self.dict[args[i]] = v
+            return [
+                self.dict[a] if a in self.dict else computed_by_arg[a]
+                for a in args
+            ]
 
         return cached_func
 
@@ -119,13 +130,14 @@ def load_cache(
         yield Cache(cache, mode)
     finally:
         # Upon destruction, write the cache back to disk
-        file.parent.mkdir(parents=True, exist_ok=True)
-        with file.open("w") as f:
-            assoc = [Assoc(i, o) for i, o in cache.items()]
-            assoc_yaml = assoc_adapter.dump_python(
-                assoc, exclude_defaults=True
-            )
-            f.write(pretty_yaml(assoc_yaml))
+        if mode not in ("read_only", "replay"):
+            file.parent.mkdir(parents=True, exist_ok=True)
+            with file.open("w") as f:
+                assoc = [Assoc(i, o) for i, o in cache.items()]
+                assoc_yaml = assoc_adapter.dump_python(
+                    assoc, exclude_defaults=True
+                )
+                f.write(pretty_yaml(assoc_yaml))
 
 
 @dataclass
