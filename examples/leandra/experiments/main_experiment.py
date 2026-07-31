@@ -1,9 +1,12 @@
+import os
+
 import learning_experiments as le
 
 if __name__ == "__main__":
+    output_dir = os.environ.get("OUTPUT_DIR", "output")
     experiment = le.make_experiment(
         le.ExperimentSettings(
-            output="output",
+            output=output_dir,
             mode="both",
             training_problems=list(le.TRAINING_THEOREMS.keys()),
             testing_problems=list(le.TESTING_THEOREMS.keys()),
