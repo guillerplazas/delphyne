@@ -39,18 +39,25 @@ class ToolCallIdGenerator:
 
     def __init__(self):
         self.next_id = 1
-        self.calls: dict[ToolCall, int] = {}
+        self.pending_calls: list[tuple[ToolCall, str]] = []
+        self.next_pending_call = 0
 
-    def get_raw_id(self, tool_call: ToolCall) -> int:
-        if tool_call in self.calls:
-            return self.calls[tool_call]
-        else:
-            self.calls[tool_call] = self.next_id
-            self.next_id += 1
-            return self.calls[tool_call]
+    def emit_id(self, tool_call: ToolCall) -> str:
+        call_id = f"call_{self.next_id}"
+        self.next_id += 1
+        self.pending_calls.append((tool_call, call_id))
+        return call_id
 
-    def get_id(self, tool_call: ToolCall) -> str:
-        return f"call_{self.get_raw_id(tool_call)}"
+    def result_id(self, tool_call: ToolCall) -> str:
+        if self.next_pending_call >= len(self.pending_calls):
+            raise ValueError("Tool message has no preceding tool call")
+        expected_call, call_id = self.pending_calls[self.next_pending_call]
+        if tool_call != expected_call:
+            raise ValueError(
+                "Tool messages must appear in the same order as tool calls"
+            )
+        self.next_pending_call += 1
+        return call_id
 
 
 def translate_logprob_info(
@@ -84,7 +91,8 @@ def translate_chat(
     We translate the chat into the format expected by OpenAI's
     Chat Completions API.
 
-    Unique ids are generated for tool calls.
+    Unique, increasing ids are generated for tool calls. Tool messages must
+    appear in the same order as the corresponding tool calls.
     """
     gen = ToolCallIdGenerator()
 
@@ -109,7 +117,9 @@ def translate_chat(
                 if answer.tool_calls:
                     res["tool_calls"] = [
                         {
-                            "id": gen.get_id(call),
+                            # IDs identify occurrences rather than ToolCall
+                            # values: equal calls still need distinct IDs.
+                            "id": gen.emit_id(call),
                             "type": "function",
                             "function": {
                                 "name": call.name,
@@ -127,7 +137,9 @@ def translate_chat(
                 return {
                     "role": "tool",
                     "content": content,
-                    "tool_call_id": gen.get_id(call),
+                    # Pair results by position because ToolCall deliberately
+                    # carries no API-specific ID in chats/demonstrations.
+                    "tool_call_id": gen.result_id(call),
                 }
 
     return [translate(msg) for msg in chat]
@@ -336,10 +348,11 @@ class OpenAICompatibleModel(StandardModel):
         options = req.options
         assert "model" in options, "No model was specified"
         tools = [_make_chat_tool(tool) for tool in req.tools]
+        messages = translate_chat(req.chat)
         try:
             response: ochat.ChatCompletion = client.chat.completions.create(
                 model=options["model"],
-                messages=translate_chat(req.chat),
+                messages=messages,
                 n=req.num_completions,
                 temperature=options.get("temperature", omit),
                 reasoning_effort=options.get("reasoning_effort", omit),
@@ -716,7 +729,7 @@ def translate_chat_for_responses(
                         "type": "function_call",
                         "name": call.name,
                         "arguments": json.dumps(call.args),
-                        "call_id": gen.get_id(call),
+                        "call_id": gen.emit_id(call),
                     }
                     input_items.append(call_item)
             case md.ToolMessage(call=call, result=result):
@@ -726,7 +739,7 @@ def translate_chat_for_responses(
                     content = pretty_yaml(result.structured)
                 output_item: oresp_param.FunctionCallOutput = {
                     "type": "function_call_output",
-                    "call_id": gen.get_id(call),
+                    "call_id": gen.result_id(call),
                     "output": content,
                 }
                 input_items.append(output_item)

@@ -118,6 +118,14 @@ class AssistantMessage:
 
 @dataclass(frozen=True)
 class ToolMessage:
+    """
+    The result of a tool call.
+
+    Within a chat, tool messages must occur in the same order as the tool
+    calls they answer. This lets API adapters assign fresh IDs to individual
+    call occurrences, including when several calls have the same value.
+    """
+
     role: Literal["tool"]
     call: ToolCall
     result: str | Structured
@@ -132,7 +140,12 @@ type ChatMessage = SystemMessage | UserMessage | AssistantMessage | ToolMessage
 
 
 type Chat = tuple[ChatMessage, ...]
-# We specifically require tuples so that Chat is hashable.
+"""
+A chat transcript.
+
+Tool messages must appear in the same order as their corresponding tool calls.
+We specifically require tuples so that chats are hashable.
+"""
 
 
 type ReasoningEffort = Literal["minimal", "low", "medium", "high"]
