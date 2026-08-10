@@ -15,6 +15,13 @@ from delphyne.stdlib.openai_api import OpenAICompatibleModel
 #####
 
 type OpenAIModelName = Literal[
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-5.5",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.4-nano",
     "gpt-5.2",
     "gpt-5.1",
     "gpt-5",
@@ -29,6 +36,13 @@ type OpenAIModelName = Literal[
     "o4-mini",
 ]
 
+type OpenAIResponsesExclusiveModelName = Literal[
+    "gpt-5.5-pro",
+    "gpt-5.4-pro",
+    "gpt-5.2-pro",
+    "gpt-5-pro",
+]
+
 type MistralModelName = Literal["mistral-small-2503", "magistral-small-2506"]
 
 type DeepSeekModelName = Literal["deepseek-chat", "deepseek-reasoner"]
@@ -38,15 +52,32 @@ type GeminiModelName = Literal[
 ]
 
 type StandardModelName = (
-    OpenAIModelName | MistralModelName | DeepSeekModelName | GeminiModelName
+    OpenAIResponsesExclusiveModelName
+    | OpenAIModelName
+    | MistralModelName
+    | DeepSeekModelName
+    | GeminiModelName
 )
 
 PRICING: dict[str, tuple[float, float, float]] = {
+    # OpenAI: https://developers.openai.com/api/docs/pricing
+    # "Pro" models do not benefit from a cached input discount.
+    "gpt-5.6-sol": (5.00, 0.50, 30.00),
+    "gpt-5.6-terra": (2.50, 0.25, 15.00),
+    "gpt-5.6-luna": (1.00, 0.10, 6.00),
+    "gpt-5.5": (5.00, 0.50, 30.00),
+    "gpt-5.5-pro": (30.00, 30.00, 180.00),
+    "gpt-5.4": (2.50, 0.25, 15.00),
+    "gpt-5.4-mini": (0.75, 0.075, 4.50),
+    "gpt-5.4-nano": (0.20, 0.02, 1.25),
+    "gpt-5.4-pro": (30.00, 30.00, 180.00),
     "gpt-5.2": (1.75, 0.175, 14.00),
+    "gpt-5.2-pro": (21.00, 21.00, 168.00),
     "gpt-5.1": (1.25, 0.125, 10.00),
     "gpt-5": (1.25, 0.125, 10.00),  # cached input 10x less expensive!
     "gpt-5-mini": (0.250, 0.025, 2.00),
     "gpt-5-nano": (0.050, 0.005, 0.40),
+    "gpt-5-pro": (15.00, 15.00, 120.00),
     "gpt-4.1": (2.00, 0.50, 8.00),
     "gpt-4.1-mini": (0.40, 0.10, 1.60),
     "gpt-4.1-nano": (0.10, 0.025, 0.40),
@@ -73,6 +104,7 @@ def test_pricing_dict_exhaustiveness():
     literal_values = set(
         [
             *_values(OpenAIModelName),
+            *_values(OpenAIResponsesExclusiveModelName),
             *_values(MistralModelName),
             *_values(DeepSeekModelName),
             *_values(GeminiModelName),
