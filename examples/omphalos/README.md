@@ -163,11 +163,16 @@ make test-standard        # single problem, standard baseline
 make test-agentic         # single problem, agentic "rich" baseline
 make regen-command-caches # refresh the smoke caches (real LLM calls)
 
-make test-set1            # 20-problem sweep, both baselines (real API)
-make test-set2            # same on the first holdout
-make test-set3            # same on the second holdout
-make summary-set1         # regenerate results_summary.csv from cache
+make sweep-train          # 20-problem sweep, both baselines (real API)
+make sweep-validation     # same on the validation partition
+make sweep-test           # same on the test partition
+make summary-train        # regenerate results_summary.csv from cache
+make reprice              # audit recorded costs offline (no API calls)
 ```
+
+The sweep targets are `sweep-*`, not `test-*`, so that `make test`
+keeps meaning "run the single-problem smoke tests" and does not read
+as "run the test partition".
 
 Code map: strategies, queries and policies in `prove_standard.py` /
 `prove_agentic.py` (the `ReadSkill` / `SearchRocq` / `InspectAt` /
@@ -188,19 +193,26 @@ split, MathComp retrieval, multi-seed runs, full miniF2F sweep via
 `experiments/full_*_experiment.py`) are on the thesis roadmap (see
 `bachelor_arbeit_plan.md`).
 
-## Benchmark sets & results
+## Benchmark partitions & results
 
-Three pairwise-disjoint 20-problem sets drawn from `miniF2F/valid`
-live in `benchmarks/`:
+Three pairwise-disjoint 20-problem partitions live in `benchmarks/`,
+named for the role each one plays:
 
-- `set1.txt` — the curated development subset (baselines were
-  iterated against it);
-- `set2.txt` — first holdout (one round of infrastructure fixes was
-  mined from its failure traces);
-- `set3.txt` — second holdout (fully out-of-sample: never used for
-  any iteration).
+- `train.txt` — the curated development partition; the baselines were
+  iterated against it, so its numbers are in-sample by construction;
+- `validation.txt` — the tuning partition; held out of development,
+  but one round of infrastructure fixes was mined from its failure
+  traces, which makes it partly in-sample;
+- `test.txt` — the final evaluation partition; fully out-of-sample,
+  never used for any iteration or tuning decision.
 
-Both baselines run on every set with one seed, few-shot examples
+> **Naming caveat.** All three partitions are drawn from the miniF2F
+> **`valid`** split described above — none of them come from
+> `miniF2F/test/`. "train" / "validation" / "test" describe how *we*
+> use each partition and are unrelated to miniF2F's own directory
+> names. In particular, `benchmarks/test.txt` ⊄ `miniF2F/test/`.
+
+Both baselines run on every partition with one seed, few-shot examples
 enabled (see Demonstrations below); the agentic side budgets
 `num_requests=32` per problem (one pool for tool calls and proposals,
 depth unbounded), the standard side keeps `max_feedback_cycles=3`.
@@ -210,18 +222,20 @@ automation-assisted on the agentic side and plain on the standard
 side — a deliberate, documented design choice (the battery is part
 of the agentic *system*).
 
-**Models.** Set 1 doubles as a cost/performance frontier over the
+**Models.** Train doubles as a cost/performance frontier over the
 gpt-5.6 family (sol / terra / luna; exact pricing in
-`model_registry.py`). Sets 2–3 run only the canonical model,
-**`gpt-5.6-terra`**, picked by the documented rule (most agentic
-successes per dollar on set 1, ties to the cheaper tier — see
-`experiments/frontier_report.py`). One experimental condition to
+`model_registry.py`). Validation and test run only the canonical
+model, **`gpt-5.6-terra`**, picked by the documented rule (most
+agentic successes per dollar on train, ties to the cheaper tier — see
+`experiments/frontier_report.py`). Model selection is a tuning
+decision, so it is made on train and never on test. One experimental
+condition to
 know: gpt-5.6 rejects function tools with reasoning on the Chat
 Completions API, so all *agentic* requests run with
 `reasoning_effort="none"` while standard requests keep the server
 default — an API constraint, not a choice (see `model_registry.py`).
 
-Set 1 frontier (20 problems, one seed):
+Train frontier (20 problems, one seed):
 
 | model | standard | agentic "rich" | agentic spend | agentic $/solve |
 |---|---:|---:|---:|---:|
@@ -231,23 +245,24 @@ Set 1 frontier (20 problems, one seed):
 
 Canonical results, `gpt-5.6-terra`:
 
-| set | standard | **agentic "rich"** | gap | spend (std / agentic) |
+| partition | standard | **agentic "rich"** | gap | spend (std / agentic) |
 |---|---:|---:|---:|---|
-| set 1 (dev) | 10 / 20 | **20 / 20** | +10 | $0.86 / $1.13 |
-| set 2 (holdout) | 11 / 20 | **14 / 20** | +3 | $1.43 / $2.97 |
-| set 3 (holdout, fully unseen) | 5 / 20 | **14 / 20** | +9 | $1.46 / $4.45 |
+| train (in-sample) | 10 / 20 | **20 / 20** | +10 | $0.86 / $1.13 |
+| validation (partly in-sample) | 11 / 20 | **14 / 20** | +3 | $1.43 / $2.97 |
+| **test (fully unseen)** | 5 / 20 | **14 / 20** | **+9** | $1.46 / $4.45 |
 
-On every set the agentic baseline solves a **strict superset** of the
-standard baseline's wins. Set 1 numbers are partly in-sample (the
-baselines were iterated against it, under gpt-5.4); set 3 is the
-cleanest out-of-sample evidence. One seed per config — run-to-run
-variance is roughly ±1–2 problems per cell.
+On every partition the agentic baseline solves a **strict superset**
+of the standard baseline's wins. Train numbers are in-sample (the
+baselines were iterated against it, under gpt-5.4) and validation is
+partly so; **test is the headline result** — the only partition never
+touched by any iteration or tuning decision. One seed per config —
+run-to-run variance is roughly ±1–2 problems per cell.
 
 Two frontier readings worth stating explicitly: the agentic scaffold
 lifts the mid-tier terra *above* the flagship's plain-baseline
 performance at a fraction of the cost, and the cheapest tier (luna)
 is not the cheapest system — it spends the most agentic dollars on
-set 1 because failed searches burn the full request budget.
+train because failed searches burn the full request budget.
 
 **"probing" toolset ablation** (`TryTactics`): the `"probing"`
 toolset extends `"rich"` with `TryTactics(tactics, candidates)` — up
@@ -255,15 +270,16 @@ to 20 model-chosen candidate tactics evaluated against a held proof
 state in one call, nothing committed (the native analog of a
 stepwise-exploration primitive found valuable during development;
 implemented purely on pytanque). Two evaluation rounds on the
-holdout sets, two samples per problem
-(`experiments/set{2,3}_probing_experiment.py`); v2 adds calibration
+validation and test partitions, two samples per problem
+(`experiments/{validation,test}_probing_experiment.py`); v2 adds
+calibration
 (probing-only prompt discipline, a materialized TryTactics few-shot
 workflow example gated by a toolset-aware example selector):
 
 | sweep | "rich" (control) | probing v1 s0 / s1 | probing v2 s0 / s1 |
 |---|---:|---:|---:|
-| set 2 | 14 / 20 | 13 / 12 | 12* / 15 |
-| set 3 | 14 / 20 | 14 / 15 | — (aborted) |
+| validation | 14 / 20 | 13 / 12 | 12* / 15 |
+| test | 14 / 20 | 14 / 15 | — (aborted) |
 
 *one config unfinished (counted unsolved). The calibration
 measurably fixed how the model uses the tool (candidates per call
@@ -281,21 +297,37 @@ tool substitutes for feedback cycles without adding solving power.
 K-probes-per-request lies in policy-level integration (`bestfs`
 fan-out scoring), not prompting.
 
-Outputs land under `experiments/output/set{1,2,3}_{standard,agentic}/`
-and `experiments/output/set{2,3}_probing{,_v2}/`
-(gitignored; regenerate with the `experiments/set*_experiment.py`
-scripts — the probing scripts now write to the `_v2` dirs; the v1
-outputs are frozen, their prompt predates the calibration). Earlier iterations — including the final gpt-5.4 sweeps
-(set1 9/18, set2 7/14, set3 7/13, billed at gpt-5 fallback rates) —
-are archived locally under `experiments/previous/` with per-run
-notes.
+Outputs land under
+`experiments/output/{train,validation,test}_{standard,agentic}/` and
+`experiments/output/{validation,test}_probing{,_v2}/`
+(gitignored; regenerate with the
+`experiments/{train,validation,test}_*_experiment.py` scripts — the
+probing scripts now write to the `_v2` dirs; the v1 outputs are
+frozen, their prompt predates the calibration). Earlier iterations —
+including the final gpt-5.4 sweeps (9/18 train, 7/14 validation, 7/13
+test, $7.93 across the six sweeps) — are archived locally under
+`experiments/previous/`, whose directory names are deliberately left
+at their historical `set{1,2,3}` / `holdout` spellings as a
+provenance record (see `experiments/previous/README.txt` for the
+mapping).
+
+**A note on cost figures.** Delphyne's `price` metric is computed at
+request time from the pricing the model was built with, and the stdlib
+table infers an unknown model's rate from the longest matching name
+prefix — which billed every archived gpt-5.4 run at `gpt-5` rates,
+~1.75x too cheap. `model_registry.py` now refuses to price a
+guarded-family name it does not know exactly, and `tools/reprice.py`
+recomputes any run's cost offline from its recorded token counts.
+Checked with it, **every gpt-5.6 figure on this page reproduces
+exactly** (`python tools/reprice.py experiments/output` → zero
+deltas); only the archived gpt-5.4 figures needed correcting.
 
 ### Demonstrations & few-shot examples
 
 `demos/standard.demo.yaml` and `demos/agentic.demo.yaml` demonstrate
 the **same two problems** — `algebra_binomnegdiscrineq_10alt28asqp1`
 and `induction_sum_odd` — both chosen from **outside** all three
-benchmark sets (asserted at load time in
+benchmark partitions (asserted at load time in
 `experiments/miniF2F_bench.py`), so demonstrations and evaluation
 problems never overlap. The only difference between the baselines'
 demos is the agentic elements (tool calls, feedback cycles, assisted

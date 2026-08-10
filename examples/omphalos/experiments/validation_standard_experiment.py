@@ -1,9 +1,11 @@
 """
-Standard baseline on benchmark set 2 (`benchmarks/set2.txt`,
-the first holdout). Same knobs as `set1_standard_experiment.py`.
+Standard baseline on the validation partition
+(`benchmarks/validation.txt`, the tuning set: one round of
+infrastructure fixes was mined from its failure traces). Same knobs
+as `train_standard_experiment.py`.
 
 Usage:
-    python experiments/set2_standard_experiment.py run --max_workers=4
+    python experiments/validation_standard_experiment.py run --max_workers=4
 """
 
 # pyright: strict
@@ -21,7 +23,7 @@ configs = [
         loop=False,
         seed=0,
     )
-    for name in mf.SET2_PROBLEMS
+    for name in mf.VALIDATION_PROBLEMS
 ]
 
 
@@ -30,7 +32,7 @@ if __name__ == "__main__":
         config_class=mf.StandardConfig,
         context=dp.workspace_execution_context(__file__),
         configs=configs,
-        output_dir="experiments/output/set2_standard",
+        output_dir="experiments/output/validation_standard",
         config_naming=lambda cfg, _uid: (
             f"{cfg.bench_name}__{cfg.model_name}__seed{cfg.seed}"
         ),

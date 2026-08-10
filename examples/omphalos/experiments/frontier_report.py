@@ -1,13 +1,16 @@
 """
-Cost/performance frontier report for the set1 gpt-5.6 sweeps.
+Cost/performance frontier report for the train-partition gpt-5.6
+sweeps.
 
-Reads `experiments/output/set1_{standard,agentic}/results_summary.csv`
-(regenerate with `make summary-set1`) and prints, per (model,
+Reads `experiments/output/train_{standard,agentic}/results_summary.csv`
+(regenerate with `make summary-train`) and prints, per (model,
 baseline): pass rate, total spend, and dollars per solved problem.
 
 It also applies the canonical-model selection rule agreed for this
 project: **the canonical model is the tier with the most agentic
-successes per dollar on set1, ties going to the cheaper tier.** The
+successes per dollar on train, ties going to the cheaper tier.** Model
+selection is a tuning decision, so it is made on the train partition
+and never on validation or test. The
 rule intentionally scores economy rather than raw pass rate — budget
 control is the point of the thesis — so the report prints the full
 table and warns when the pick trails the best pass rate by more than
@@ -31,7 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import miniF2F_bench as mf
-from model_registry import GPT56_PRICING
+from model_registry import pricing_for
 
 _OUTPUT_DIR = Path(__file__).resolve().parent / "output"
 
@@ -74,7 +77,7 @@ def load_stats(summary: Path) -> dict[str, BaselineStats]:
 
 
 def input_price(model: str) -> float:
-    return GPT56_PRICING[model].dollars_per_input_token
+    return pricing_for(model).dollars_per_input_token
 
 
 def pick_canonical(agentic: dict[str, BaselineStats]) -> str:
@@ -111,9 +114,9 @@ def _fmt_row(model: str, s: BaselineStats) -> str:
 def main() -> None:
     tables: dict[str, dict[str, BaselineStats]] = {}
     for baseline in ("standard", "agentic"):
-        summary = _OUTPUT_DIR / f"set1_{baseline}" / "results_summary.csv"
+        summary = _OUTPUT_DIR / f"train_{baseline}" / "results_summary.csv"
         tables[baseline] = load_stats(summary)
-        print(f"\nset1 {baseline}:")
+        print(f"\ntrain {baseline}:")
         print(f"  {'model':<16} {'solved':<12} {'spend':>7}   $/solve")
         for model in mf.FRONTIER_MODELS:
             if model in tables[baseline]:

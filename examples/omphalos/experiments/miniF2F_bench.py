@@ -20,8 +20,8 @@ from typing import Any
 
 import delphyne as dp
 
-# The experiment scripts live in `experiments/`; the subset files and
-# the miniF2F tree live one directory up.
+# The experiment scripts live in `experiments/`; the partition files
+# and the miniF2F tree live one directory up.
 _OMPHALOS_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -30,16 +30,16 @@ def _parse_theorem_name(v_path: Path) -> str:
     return v_path.stem
 
 
-def load_subset(filename: str) -> Mapping[str, tuple[str, str]]:
+def load_partition(filename: str) -> Mapping[str, tuple[str, str]]:
     """
     Return `{theorem_name: (problem_file_relpath, theorem_name)}` for
-    every line in a subset file. Paths are kept relative to the
+    every line in a partition file. Paths are kept relative to the
     omphalos workspace root so the experiment is reproducible from any
     cwd.
     """
     problems: dict[str, tuple[str, str]] = {}
-    subset_file = _OMPHALOS_DIR / filename
-    for raw in subset_file.read_text().splitlines():
+    partition_file = _OMPHALOS_DIR / filename
+    for raw in partition_file.read_text().splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
@@ -51,28 +51,32 @@ def load_subset(filename: str) -> Mapping[str, tuple[str, str]]:
     return problems
 
 
-SET1_PROBLEMS: Mapping[str, tuple[str, str]] = load_subset(
-    "benchmarks/set1.txt"
+TRAIN_PROBLEMS: Mapping[str, tuple[str, str]] = load_partition(
+    "benchmarks/train.txt"
 )
-"""Set 1: the curated 20-problem development subset."""
+"""Train: the curated 20-problem development partition (in-sample)."""
 
-SET2_PROBLEMS: Mapping[str, tuple[str, str]] = load_subset(
-    "benchmarks/set2.txt"
+VALIDATION_PROBLEMS: Mapping[str, tuple[str, str]] = load_partition(
+    "benchmarks/validation.txt"
 )
-"""Set 2: a disjoint 20-problem holdout for robustness checks."""
+"""
+Validation: the tuning partition. Held out of development, but one
+round of infrastructure fixes was mined from its failure traces, so it
+is partly in-sample.
+"""
 
-SET3_PROBLEMS: Mapping[str, tuple[str, str]] = load_subset(
-    "benchmarks/set3.txt"
+TEST_PROBLEMS: Mapping[str, tuple[str, str]] = load_partition(
+    "benchmarks/test.txt"
 )
-"""Set 3: a second disjoint holdout (fully out-of-sample)."""
+"""Test: fully out-of-sample; never used for any iteration."""
 
 assert (
-    not set(SET1_PROBLEMS) & set(SET2_PROBLEMS)
-    and not set(SET1_PROBLEMS) & set(SET3_PROBLEMS)
-    and not set(SET2_PROBLEMS) & set(SET3_PROBLEMS)
-), "the benchmark sets must be pairwise disjoint"
+    not set(TRAIN_PROBLEMS) & set(VALIDATION_PROBLEMS)
+    and not set(TRAIN_PROBLEMS) & set(TEST_PROBLEMS)
+    and not set(VALIDATION_PROBLEMS) & set(TEST_PROBLEMS)
+), "the benchmark partitions must be pairwise disjoint"
 
-# Demonstration problems must never appear in any benchmark set
+# Demonstration problems must never appear in any benchmark partition
 # (otherwise the few-shot examples would leak solutions).
 _DEMO_PROBLEMS = (
     "algebra_binomnegdiscrineq_10alt28asqp1",
@@ -82,14 +86,14 @@ _DEMO_PROBLEMS = (
 assert not any(
     p in s
     for p in _DEMO_PROBLEMS
-    for s in (SET1_PROBLEMS, SET2_PROBLEMS, SET3_PROBLEMS)
-), "demonstration problems must not overlap with any benchmark set"
+    for s in (TRAIN_PROBLEMS, VALIDATION_PROBLEMS, TEST_PROBLEMS)
+), "demonstration problems must not overlap with any benchmark partition"
 
 # All problems any config may reference, keyed by theorem name.
 ALL_PROBLEMS: Mapping[str, tuple[str, str]] = {
-    **SET1_PROBLEMS,
-    **SET2_PROBLEMS,
-    **SET3_PROBLEMS,
+    **TRAIN_PROBLEMS,
+    **VALIDATION_PROBLEMS,
+    **TEST_PROBLEMS,
 }
 
 
@@ -99,16 +103,18 @@ FRONTIER_MODELS: tuple[str, ...] = (
     "gpt-5.6-luna",
 )
 """
-The gpt-5.6 family, priciest first (see `model_registry.GPT56_PRICING`).
-The set1 experiments sweep all three to map the cost/performance
-frontier; sets 2-3 run only the canonical model chosen from it (rule:
-best agentic pass-rate-per-dollar on set1, ties to the cheaper tier —
-see `experiments/frontier_report.py`).
+The gpt-5.6 family, priciest first (see
+`model_registry.OMPHALOS_PRICING`). The train experiments sweep all
+three to map the cost/performance frontier; validation and test run
+only the canonical model chosen from it (rule: best agentic
+pass-rate-per-dollar on train, ties to the cheaper tier — see
+`experiments/frontier_report.py`). Model selection is a tuning
+decision, which is why it is made on train and never on test.
 """
 
 CANONICAL_MODEL = "gpt-5.6-terra"
 """
-Winner of the 2026-07-21 set1 frontier: 20/20 agentic at $0.056/solve
+Winner of the 2026-07-21 train frontier: 20/20 agentic at $0.056/solve
 (sol: 19/20 at $0.081; luna: 15/20 at $0.126). See PROGRESS.md.
 """
 

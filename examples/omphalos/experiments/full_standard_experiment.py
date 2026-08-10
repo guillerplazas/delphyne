@@ -30,7 +30,7 @@ configs = [
         seed=seed,
         max_dollar_budget=0.5,
     )
-    for name in mf.SET1_PROBLEMS  # extend to the full valid split later
+    for name in mf.TRAIN_PROBLEMS  # extend to the full valid split later
     for model in MODELS
     for seed in SEEDS
 ]

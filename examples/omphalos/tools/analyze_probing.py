@@ -2,8 +2,9 @@
 Post-hoc analysis of the "probing" toolset sweeps.
 
 Reads the request caches (`cache.yaml`) and result summaries of the
-`set{2,3}_probing` sweeps and their `set{2,3}_agentic` ("rich")
-controls, reconstructs each config's conversation, and quantifies how
+`{validation,test}_probing` sweeps and their `{validation,test}_agentic`
+("rich") controls, reconstructs each config's conversation, and
+quantifies how
 the `TryTactics` tool was actually used:
 
   - tool-usage rates per arm (how many configs call any tool at all);
@@ -351,13 +352,13 @@ def _trytactics_summary(cfgs: list[ConfigAnalysis]) -> list[str]:
 def main() -> None:
     _ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
     arms: dict[str, list[ConfigAnalysis]] = {}
-    for s in ("2", "3"):
+    for partition in ("validation", "test"):
         for arm, dirname in (
-            ("probing", f"set{s}_probing"),
-            ("rich", f"set{s}_agentic"),
+            ("probing", f"{partition}_probing"),
+            ("rich", f"{partition}_agentic"),
         ):
             d = _OUTPUT / dirname
-            arms[f"set{s} {arm}"] = _analyze_arm(
+            arms[f"{partition} {arm}"] = _analyze_arm(
                 d, arm, d / "results_summary.csv"
             )
 

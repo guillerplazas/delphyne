@@ -1,9 +1,11 @@
 .PHONY: test test-standard test-agentic test-probing
-.PHONY: test-set1 test-set1-standard test-set1-agentic
-.PHONY: test-set2 test-set3 summary-set1 summary-set2 summary-set3
-.PHONY: test-probing-set2 test-probing-set3
-.PHONY: summary-probing-set2 summary-probing-set3
-.PHONY: replay-set1-standard replay-set1-agentic
+.PHONY: sweep-train sweep-train-standard sweep-train-agentic
+.PHONY: sweep-validation sweep-test
+.PHONY: sweep-probing-validation sweep-probing-test
+.PHONY: summary-train summary-validation summary-test
+.PHONY: summary-probing-validation summary-probing-test
+.PHONY: replay-train-standard replay-train-agentic
+.PHONY: reprice reprice-write
 .PHONY: regen-command-caches
 .PHONY: clean clean-experiments
 
@@ -21,52 +23,69 @@ test-probing:
 	delphyne run commands/prove_one_probing.exec.yaml --cache --no-header
 
 # --- benchmark sweeps (real API calls) ---
+#
+# The benchmark is partitioned into train / validation / test (see
+# benchmarks/). These targets are named `sweep-*` rather than `test-*`
+# so that `make test` keeps meaning "run the smoke tests" and does not
+# collide with the test *partition*.
 
-test-set1: test-set1-standard test-set1-agentic
+sweep-train: sweep-train-standard sweep-train-agentic
 
-test-set1-standard:
-	python experiments/set1_standard_experiment.py run --max_workers=4
+sweep-train-standard:
+	python experiments/train_standard_experiment.py run --max_workers=4
 
-test-set1-agentic:
-	python experiments/set1_agentic_experiment.py run --max_workers=4
+sweep-train-agentic:
+	python experiments/train_agentic_experiment.py run --max_workers=4
 
-test-set2:
-	python experiments/set2_standard_experiment.py run --max_workers=4
-	python experiments/set2_agentic_experiment.py run --max_workers=4
+sweep-validation:
+	python experiments/validation_standard_experiment.py run --max_workers=4
+	python experiments/validation_agentic_experiment.py run --max_workers=4
 
-test-set3:
-	python experiments/set3_standard_experiment.py run --max_workers=4
-	python experiments/set3_agentic_experiment.py run --max_workers=4
+sweep-test:
+	python experiments/test_standard_experiment.py run --max_workers=4
+	python experiments/test_agentic_experiment.py run --max_workers=4
 
-test-probing-set2:
-	python experiments/set2_probing_experiment.py run --max_workers=4
+sweep-probing-validation:
+	python experiments/validation_probing_experiment.py run --max_workers=4
 
-test-probing-set3:
-	python experiments/set3_probing_experiment.py run --max_workers=4
+sweep-probing-test:
+	python experiments/test_probing_experiment.py run --max_workers=4
 
-replay-set1-standard:
-	python experiments/set1_standard_experiment.py replay
+replay-train-standard:
+	python experiments/train_standard_experiment.py replay
 
-replay-set1-agentic:
-	python experiments/set1_agentic_experiment.py replay
+replay-train-agentic:
+	python experiments/train_agentic_experiment.py replay
 
-summary-set1:
-	python experiments/set1_standard_experiment.py force-summary --add-timing
-	python experiments/set1_agentic_experiment.py force-summary --add-timing
+summary-train:
+	python experiments/train_standard_experiment.py force-summary --add-timing
+	python experiments/train_agentic_experiment.py force-summary --add-timing
 
-summary-set2:
-	python experiments/set2_standard_experiment.py force-summary --add-timing
-	python experiments/set2_agentic_experiment.py force-summary --add-timing
+summary-validation:
+	python experiments/validation_standard_experiment.py force-summary --add-timing
+	python experiments/validation_agentic_experiment.py force-summary --add-timing
 
-summary-set3:
-	python experiments/set3_standard_experiment.py force-summary --add-timing
-	python experiments/set3_agentic_experiment.py force-summary --add-timing
+summary-test:
+	python experiments/test_standard_experiment.py force-summary --add-timing
+	python experiments/test_agentic_experiment.py force-summary --add-timing
 
-summary-probing-set2:
-	python experiments/set2_probing_experiment.py force-summary --add-timing
+summary-probing-validation:
+	python experiments/validation_probing_experiment.py force-summary --add-timing
 
-summary-probing-set3:
-	python experiments/set3_probing_experiment.py force-summary --add-timing
+summary-probing-test:
+	python experiments/test_probing_experiment.py force-summary --add-timing
+
+# --- cost auditing (offline, no API calls) ---
+#
+# Recompute every recorded price from its stored token counts at the
+# exact rates in model_registry.OMPHALOS_PRICING. `reprice` is a guard:
+# it fails if any run's recorded prices do not reproduce.
+
+reprice:
+	python tools/reprice.py
+
+reprice-write:
+	python tools/reprice.py --write
 
 # Regenerate the single-problem command caches after a prompt /
 # strategy / feedback change (makes real LLM calls).

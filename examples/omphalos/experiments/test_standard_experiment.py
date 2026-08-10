@@ -1,9 +1,10 @@
 """
-Standard baseline on benchmark set 3 (`benchmarks/set3.txt`,
-the second holdout). Same knobs as `set1_standard_experiment.py`.
+Standard baseline on the test partition (`benchmarks/test.txt`,
+fully out-of-sample: never used for any iteration or tuning
+decision). Same knobs as `train_standard_experiment.py`.
 
 Usage:
-    python experiments/set3_standard_experiment.py run --max_workers=4
+    python experiments/test_standard_experiment.py run --max_workers=4
 """
 
 # pyright: strict
@@ -21,7 +22,7 @@ configs = [
         loop=False,
         seed=0,
     )
-    for name in mf.SET3_PROBLEMS
+    for name in mf.TEST_PROBLEMS
 ]
 
 
@@ -30,7 +31,7 @@ if __name__ == "__main__":
         config_class=mf.StandardConfig,
         context=dp.workspace_execution_context(__file__),
         configs=configs,
-        output_dir="experiments/output/set3_standard",
+        output_dir="experiments/output/test_standard",
         config_naming=lambda cfg, _uid: (
             f"{cfg.bench_name}__{cfg.model_name}__seed{cfg.seed}"
         ),

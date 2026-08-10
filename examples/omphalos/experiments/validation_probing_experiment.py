@@ -1,13 +1,14 @@
 """
 Agentic baseline with the "probing" toolset (rich + TryTactics) on
-benchmark set 2 (`benchmarks/set2.txt`). Control arm: the archived
-seed-0 `"rich"` runs in `experiments/output/set2_agentic`; same model
-and request budget, so toolset is the only controlled difference.
+the validation partition (`benchmarks/validation.txt`). Control arm:
+the archived seed-0 `"rich"` runs in
+`experiments/output/validation_agentic`; same model and request
+budget, so toolset is the only controlled difference.
 
-Version note: outputs go to `set2_probing_v2` — the calibrated
+Version note: outputs go to `validation_probing_v2` — the calibrated
 probing arm (probing-gated system-prompt discipline, tightened
 TryTactics docstring, TryTactics few-shot workflow example). The
-frozen pre-calibration sweep lives in `set2_probing` (v1); its prompt
+frozen pre-calibration sweep lives in `validation_probing` (v1); its prompt
 is no longer reproducible from this tree.
 
 Two seeds per problem. Note that `seed` is a *labeling* knob:
@@ -17,7 +18,7 @@ are two independent samples (variation comes from provider
 nondeterminism at the default temperature).
 
 Usage:
-    python experiments/set2_probing_experiment.py run --max_workers=4
+    python experiments/validation_probing_experiment.py run --max_workers=4
 """
 
 # pyright: strict
@@ -37,7 +38,7 @@ configs = [
         seed=seed,
     )
     for seed in (0, 1)
-    for name in mf.SET2_PROBLEMS
+    for name in mf.VALIDATION_PROBLEMS
 ]
 
 
@@ -46,7 +47,7 @@ if __name__ == "__main__":
         config_class=mf.AgenticConfig,
         context=dp.workspace_execution_context(__file__),
         configs=configs,
-        output_dir="experiments/output/set2_probing_v2",
+        output_dir="experiments/output/validation_probing_v2",
         config_naming=lambda cfg, _uid: (
             f"{cfg.bench_name}__{cfg.toolset}__{cfg.model_name}"
             f"__seed{cfg.seed}"

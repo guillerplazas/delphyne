@@ -1,10 +1,11 @@
 """
-Agentic baseline (canonical "rich" toolset) on benchmark set 3
-(`benchmarks/set3.txt`, the second holdout). Same knobs as
-`set1_agentic_experiment.py`.
+Agentic baseline (canonical "rich" toolset) on the validation
+partition (`benchmarks/validation.txt`, the tuning set: one round of
+infrastructure fixes was mined from its failure traces). Same knobs as
+`train_agentic_experiment.py`.
 
 Usage:
-    python experiments/set3_agentic_experiment.py run --max_workers=4
+    python experiments/validation_agentic_experiment.py run --max_workers=4
 """
 
 # pyright: strict
@@ -23,7 +24,7 @@ configs = [
         loop=False,
         seed=0,
     )
-    for name in mf.SET3_PROBLEMS
+    for name in mf.VALIDATION_PROBLEMS
 ]
 
 
@@ -32,7 +33,7 @@ if __name__ == "__main__":
         config_class=mf.AgenticConfig,
         context=dp.workspace_execution_context(__file__),
         configs=configs,
-        output_dir="experiments/output/set3_agentic",
+        output_dir="experiments/output/validation_agentic",
         config_naming=lambda cfg, _uid: (
             f"{cfg.bench_name}__{cfg.toolset}__{cfg.model_name}"
             f"__seed{cfg.seed}"

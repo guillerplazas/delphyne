@@ -1,15 +1,16 @@
 """
-Agentic baseline (canonical "rich" toolset) on benchmark set 1
-(`benchmarks/set1.txt`, the curated development subset).
+Agentic baseline (canonical "rich" toolset) on the train partition
+(`benchmarks/train.txt`, the curated development set: the baselines
+were iterated against it, so its numbers are in-sample).
 
-Set 1 doubles as the cost/performance frontier: every problem runs
+Train doubles as the cost/performance frontier: every problem runs
 once per gpt-5.6 tier (`mf.FRONTIER_MODELS`). Summarize the frontier
 with `experiments/frontier_report.py`.
 
 Usage:
-    python experiments/set1_agentic_experiment.py run --max_workers=4
-    python experiments/set1_agentic_experiment.py replay
-    python experiments/set1_agentic_experiment.py force-summary --add-timing
+    python experiments/train_agentic_experiment.py run --max_workers=4
+    python experiments/train_agentic_experiment.py replay
+    python experiments/train_agentic_experiment.py force-summary --add-timing
 """
 
 # pyright: strict
@@ -29,7 +30,7 @@ configs = [
         seed=0,
     )
     for model in mf.FRONTIER_MODELS
-    for name in mf.SET1_PROBLEMS
+    for name in mf.TRAIN_PROBLEMS
 ]
 
 
@@ -38,7 +39,7 @@ if __name__ == "__main__":
         config_class=mf.AgenticConfig,
         context=dp.workspace_execution_context(__file__),
         configs=configs,
-        output_dir="experiments/output/set1_agentic",
+        output_dir="experiments/output/train_agentic",
         config_naming=lambda cfg, _uid: (
             f"{cfg.bench_name}__{cfg.toolset}__{cfg.model_name}"
             f"__seed{cfg.seed}"
