@@ -37,6 +37,7 @@ import delphyne.stdlib.execution_contexts as ec
 import delphyne.stdlib.experiments.experiment_launcher as el
 import delphyne.stdlib.feedback_processing as fp
 import delphyne.stdlib.hindsight_feedback as hf
+from delphyne.utils.caching import CacheMode
 import delphyne.utils.typing as ty
 from delphyne.utils.yaml import dump_yaml
 
@@ -650,6 +651,31 @@ class LearningExperimentCLI:
         if retry_errors:
             exp.mark_errors_as_todos()
         exp.resume(max_workers=max_workers, interactive=interactive)
+
+    def replay(
+        self,
+        *,
+        iter: int,
+        mode: Literal["train", "test"],
+        config_name: int,
+        cache_mode: CacheMode = "replay",
+    ):
+        """
+        Replay a training or testing configuration using its cache.
+
+        By default, the cache is opened in replay mode and is not modified.
+
+        Arguments:
+            cache_mode: Cache mode to use while replaying.
+        """
+        if mode == "train":
+            exp = self.experiment.training_experiment(iter)
+        else:
+            exp = self.experiment.testing_experiment(iter)
+        exp.load()
+        exp.replay_config_by_name(
+            config_name, cache_mode=cache_mode  # type: ignore[arg-type]
+        )
 
     def results(self, *, final_iter: int):
         """

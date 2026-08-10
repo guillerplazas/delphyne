@@ -22,3 +22,12 @@ clean:
 # Clean all nonversioned files
 full-clean: clean
 	rm -rf node_modules
+
+# Update npm dependencies
+#
+# Note: some vulnerabilities may remain due to dependencies like Mocha
+# forcing unsecure dependencies.
+#
+#     npx npm-check-updates -u
+#     npm audit
+#     npm update

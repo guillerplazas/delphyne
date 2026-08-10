@@ -1355,7 +1355,7 @@ class ExampleSelector:
             ]
 
         return self.filter(select)
-
+    
     def cached(self) -> "ExampleSelector":
         """
         Return a new example selector that caches its output the first
@@ -1386,12 +1386,28 @@ def all_examples(
     env: PolicyEnv, query: dp.AbstractQuery[Any]
 ) -> Sequence[SelectedExample]:
     """
-    Select all examples relevant to a query.
+    Select all examples for a given query type.
     """
     examples = env.examples.examples_for(query.query_name())
     return [
         SelectedExample(example=e, index=i, similarity=None)
         for i, e in enumerate(examples)
+    ]
+
+
+@ExampleSelector
+def all_relevant_examples(
+    env: PolicyEnv, query: dp.AbstractQuery[Any]
+) -> Sequence[SelectedExample]:
+    """
+    Select all examples for a given query type.
+    """
+    # TODO: clean up implementation
+    examples = env.examples.examples_for(query.query_name())
+    selected = [e for e in examples if query.shares_examples_with(e.query)]
+    return [
+        SelectedExample(example=e, index=i, similarity=None)
+        for i, e in enumerate(selected)
     ]
 
 
@@ -1643,6 +1659,7 @@ def _instance_prompt(
     params: dict[str, object],
     mode: dp.AnswerMode,
     example_id: int | None,
+    tag_user_feedback_messages: bool = False,
 ):
     msgs: list[md.ChatMessage] = []
     prompt = query.generate_prompt(
@@ -1673,7 +1690,13 @@ def _instance_prompt(
                     extra_args={"feedback": elt},
                     env=env,
                 )
-                msgs.append(md.UserMessage(fmsg))
+                user_msg = (
+                    md.UserMessage(fmsg)
+                    if not tag_user_feedback_messages
+                    else md.UserMessage(fmsg, is_feedback=True)
+                    # tag user message as feedback
+                )
+                msgs.append(user_msg)
             else:
                 assert isinstance(elt, dp.ToolResult)
                 msgs.append(md.ToolMessage(elt.call, elt.result))
@@ -1686,6 +1709,7 @@ def create_prompt(
     params: dict[str, object],
     mode: dp.AnswerMode,
     env: dp.AbstractTemplatesManager | None,
+    tag_user_feedback_messages: bool = False,
 ) -> md.Chat:
     msgs: list[md.ChatMessage] = []
     sys = query.generate_prompt(
@@ -1694,9 +1718,19 @@ def create_prompt(
     msgs.append(md.SystemMessage(sys))
     for i, e in enumerate(examples):
         ans = e.answer
-        msgs.extend(_instance_prompt(e.query, env, params, ans.mode, i + 1))
+        # Here, `tag_user_feedback_messages` is explicitly set to `False`
+        # because the messages of type `dp.FeedbackMessage` in the few-shot
+        # example conversations are still part of the examples and not
+        # user feedback messages related to the main query.
+        msgs.extend(
+            _instance_prompt(e.query, env, params, ans.mode, i + 1, False)
+        )
         msgs.append(md.AssistantMessage(ans))
-    msgs.extend(_instance_prompt(query, env, params, mode, None))
+    msgs.extend(
+        _instance_prompt(
+            query, env, params, mode, None, tag_user_feedback_messages
+        )
+    )
     return tuple(msgs)
 
 
@@ -1832,8 +1866,8 @@ def classify[T](
         env: The global policy environment.
         model: The LLM to use for answering the query.
         params: Prompt hyperparameters.
-        select_examples: Example selector. By default, `all_examples` is
-            used.
+        select_examples: Example selector. By default, `all_relevant_examples`
+            is used.
         mode: The answer mode to use for parsing the query answer.
         top_logprobs: The number of top logprobs to request from the
             LLM, putting an upper bound on the support size of the
@@ -1848,7 +1882,7 @@ def classify[T](
     """
     env.tracer.trace_query(query)
     if select_examples is None:
-        select_examples = all_examples
+        select_examples = all_relevant_examples
     examples = select_examples(env, query.query)
     mngr = env.templates
     if params is None:
@@ -1958,6 +1992,7 @@ def few_shot[T](
     max_requests: int | None = None,
     no_wrap_parse_errors: bool = False,
     iterative_mode: bool = False,
+    tag_user_feedback_messages: bool = False,
 ) -> dp.StreamGen[T]:
     """
     The standard few-shot prompting policy.
@@ -1972,7 +2007,8 @@ def few_shot[T](
         model: The LLM to use for answering the query
         params: Prompt hyperparameters, which are passed to prompt
             templates as a `params` dictionary.
-        select_examples: Example selector (default: `all_examples`).
+        select_examples: Example selector
+            (default: `all_relevant_examples`).
         mode: The answer mode to use for parsing the query answer.
         temperature: The temperature parameter to use with the LLM, as a
             number from 0 to 2.
@@ -2002,6 +2038,16 @@ def few_shot[T](
             `repair` and `more` messages should be handled. For
             implementing more advanced conversational agents, see
             the standard `interact` strategy.
+        tag_user_feedback_messages: If set to `True`, user messages that
+            are meant as feedback to previous assistant answers are
+            tagged as such. This allows, when using a model accessed
+            through OpenAI Responses API, to convert these feedback
+            messages into tool call outputs before sending them to the
+            model in order to better utilize the KV cache and achieve better
+            token usage efficiency. The default value is `False` for
+            backward compatibility with existing `LLMCache` files that
+            were created using OpenAI Chat Completions API. See
+            `openai_api.OpenAIResponsesModel` for more details.
     """
     assert not iterative_mode or num_completions == 1
     assert max_requests is None or max_requests > 0
@@ -2023,12 +2069,14 @@ def few_shot[T](
         return
 
     if select_examples is None:
-        select_examples = all_examples
+        select_examples = all_relevant_examples
     examples = select_examples(env, query.query)
     mngr = env.templates
     if params is None:
         params = {}
-    prompt = create_prompt(query.query, examples, params, mode, mngr)
+    prompt = create_prompt(
+        query.query, examples, params, mode, mngr, tag_user_feedback_messages
+    )
     settings = query.query.query_settings(mode)
     options: md.RequestOptions = {}
     if temperature is not None:

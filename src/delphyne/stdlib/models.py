@@ -92,10 +92,17 @@ class SystemMessage:
 class UserMessage:
     role: Literal["user"]
     content: str
+    is_feedback: bool = False
+    # For differentiating between non-feedback user messages
+    # (e.g., initial message formulating a query or message introducing
+    # a few-shot example) and user feedback messages
+    # that occur e.g. in `interact` rounds. The default value is `False`
+    # for backward compatibility with existing `LLMCache`s.
 
-    def __init__(self, content: str):
+    def __init__(self, content: str, is_feedback: bool = False):
         object.__setattr__(self, "role", "user")
         object.__setattr__(self, "content", content)
+        object.__setattr__(self, "is_feedback", is_feedback)
 
 
 @dataclass(frozen=True)
@@ -111,6 +118,14 @@ class AssistantMessage:
 
 @dataclass(frozen=True)
 class ToolMessage:
+    """
+    The result of a tool call.
+
+    Within a chat, tool messages must occur in the same order as the tool
+    calls they answer. This lets API adapters assign fresh IDs to individual
+    call occurrences, including when several calls have the same value.
+    """
+
     role: Literal["tool"]
     call: ToolCall
     result: str | Structured
@@ -125,7 +140,12 @@ type ChatMessage = SystemMessage | UserMessage | AssistantMessage | ToolMessage
 
 
 type Chat = tuple[ChatMessage, ...]
-# We specifically require tuples so that Chat is hashable.
+"""
+A chat transcript.
+
+Tool messages must appear in the same order as their corresponding tool calls.
+We specifically require tuples so that chats are hashable.
+"""
 
 
 type ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
@@ -195,10 +215,12 @@ class Schema:
         """
         Build a schema from a Python type annotation
         """
+        is_tool_call = False
         if isinstance(annot, type):
             if issubclass(annot, AbstractTool):
                 name = annot.tool_name()
                 description = annot.tool_description()
+                is_tool_call = True
             else:
                 name = tool_name_of_class_name(annot.__name__)
                 # For a dataclass, if no docstring is provided,
@@ -214,10 +236,17 @@ class Schema:
             name = str(annot)
             description = None
         adapter = pydantic.TypeAdapter(cast(Any, annot))
+        schema = adapter.json_schema()
+        # When generating a schema for a tool definition, the
+        # schema.description field is useless since it is present in the
+        # tool description already. This is added to avoid redundancy
+        # and for backwards compatibility.
+        if is_tool_call and "description" in schema:
+            del schema["description"]
         return Schema(
             name=name,
             description=description,
-            schema=adapter.json_schema(),
+            schema=schema,
         )
 
     def _hashable_repr(self) -> str:

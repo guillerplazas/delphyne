@@ -24,6 +24,7 @@ import delphyne.stdlib.answer_loaders as al
 import delphyne.stdlib.commands as cmd
 from delphyne.stdlib.execution_contexts import ExecutionContext
 from delphyne.stdlib.tasks import run_command
+from delphyne.utils.caching import CacheMode
 from delphyne.utils.typing import pydantic_dump, pydantic_load
 
 EXPERIMENT_STATE_FILE = "experiment.yaml"
@@ -579,15 +580,18 @@ class Experiment[C: ExperimentConfig]:
                 print("State saved.")
             worker_send.put("done")
 
-    def replay_config_by_name(self, config_name: str) -> None:
+    def replay_config_by_name(
+        self, config_name: str, *, cache_mode: CacheMode = "replay"
+    ) -> None:
         """
-        Replay a configuration with a given name, reusing the cache if
-        it exists.
+        Replay a configuration with a given name, using the requested
+        cache mode.
 
-        This way, one can debug the execution of an experiment after the
-        fact, without any LLMs being called. Note that one can also
-        replay a configuration that failed with an exception within a
-        debugger to investigate it.
+        The default `replay` mode guarantees that all requests hit the
+        cache and does not modify it. This way, one can debug the
+        execution of an experiment after the fact without any LLMs
+        being called. Note that one can also replay a configuration that
+        failed with an exception within a debugger to investigate it.
         """
         state = self._load_state()
         assert state is not None
@@ -598,7 +602,7 @@ class Experiment[C: ExperimentConfig]:
         cmdargs.embeddings_cache_file = _relative_embeddings_cache_path(
             config_name
         )
-        cmdargs.cache_mode = "replay"
+        cmdargs.cache_mode = cache_mode
         run_command(
             command=cmd.run_strategy,
             args=cmdargs,
@@ -608,15 +612,17 @@ class Experiment[C: ExperimentConfig]:
             dump_log=None,
         )
 
-    def replay_config(self, config: C) -> None:
+    def replay_config(
+        self, config: C, *, cache_mode: CacheMode = "replay"
+    ) -> None:
         """
         Replay a configuration. See `replay_config_by_name` for details.
         """
         config_name = self._existing_config_name(config)
         assert config_name is not None
-        self.replay_config_by_name(config_name)
+        self.replay_config_by_name(config_name, cache_mode=cache_mode)
 
-    def replay_all_configs(self):
+    def replay_all_configs(self, *, cache_mode: CacheMode = "replay"):
         """
         Replay all configurations, replicating the experiment.
         """
@@ -624,7 +630,7 @@ class Experiment[C: ExperimentConfig]:
         assert state is not None
         for config_name in state.configs:
             print(f"Replaying configuration: {config_name}...")
-            self.replay_config_by_name(config_name)
+            self.replay_config_by_name(config_name, cache_mode=cache_mode)
 
     def config_success_values_by_name(
         self, config_name: str, *, type: Any
@@ -1041,19 +1047,26 @@ class ExperimentCLI:
             f"  - {status_counts['failed']} configurations failed"
         )
 
-    def replay(self, config: str | None = None):
+    def replay(
+        self,
+        config: str | None = None,
+        cache_mode: CacheMode = "replay",
+    ):
         """
         Replay one or all configurations.
 
         Arguments:
             config: The name of the configuration to replay. If not
                 provided, all configurations are replayed.
+            cache_mode: Cache mode to use while replaying.
         """
         self.experiment.load()
         if config is None:
-            self.experiment.replay_all_configs()
+            self.experiment.replay_all_configs(cache_mode=cache_mode)
         else:
-            self.experiment.replay_config_by_name(config)
+            self.experiment.replay_config_by_name(
+                config, cache_mode=cache_mode
+            )
 
     def clean_index(self):
         """

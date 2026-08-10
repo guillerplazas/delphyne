@@ -87,3 +87,34 @@ A common pattern for interacting with LLMs is to have multi-message exchanges wh
 ## Performing Expensive Computations in Strategies {#compute}
 
 For efficiency and replicability reasons, strategies must not directly perform expensive and possibly nondeterministic computations (e.g. a call to an external SMT solver with a wall clock timeout). In such cases, the [`Compute`][delphyne.Compute] effect should be used. See the [reference page][delphyne.Compute] for details and explanations. For example usage, see `examples/find_invariants/abduct_and_branch.py` and the associated demonstration file.
+
+## Maximizing Input Token Caching and Preserving Reasoning State {#resend-reasoning}
+
+In multi-turn conversations with reasoning models, the _Chat Completions_ API used by default by 
+[`standard_model`][delphyne.stdlib.standard_models.standard_model]
+cannot fully take advantage of input token caching because it does not 
+return reasoning items that can be resent in later requests within the same conversation, thereby repeatedly invalidating the cache. 
+
+In contrast, the _OpenAI Responses_ API returns encrypted reasoning items alongside model answers, which can be resent. In addition to improving caching behavior, resending reasoning tokens can save output tokens or even improve performance in some cases.
+
+To leverage the Responses API and resend reasoning tokens, you can pass the following additional arguments to  
+[`standard_model`][delphyne.stdlib.standard_models.standard_model]:
+
+```python
+model = dp.standard_model("gpt-5",
+    api_type="responses", 
+    use_reasoning_cache=True,
+    convert_user_feedback_to_tool=False)
+```
+
+The `use_reasoning_cache` argument enables a cache that associates each conversation prefix with the hidden reasoning tokens returned for that prefix by the Responses API. Because of this implementation choice, reasoning tokens are a policy detail that never appear in demonstrations or even in replay caches (`LLMCache`).
+
+The `convert_user_feedback_to_tool` argument is provided to work around a current limitation of the OpenAI Responses API, which only supports persisting the KV cache across tool calls following an assistant message, and **not** across ordinary user feedback messages.
+
+When `convert_user_feedback_to_tool` is set to `True`, feedback messages are not presented to the API as user messages but are converted into pairs of tool-call and tool-result messages. For this conversion to be possible, feedback messages must be tagged, as enabled by setting the `tag_user_feedback_messages` flag when calling the [`few_shot`][delphyne.stdlib.queries.few_shot] prompting policy:
+
+```python
+pp = dp.few_shot(model, tag_user_feedback_messages=True)
+```
+
+All the features described in this section are currently only supported for OpenAI models.

@@ -167,7 +167,9 @@ def load_embeddings_cache(file: Path, mode: caching.CacheMode):
     try:
         yield cache
     finally:
-        if cache.dict or file.exists():
+        if mode not in ("read_only", "replay") and (
+            cache.dict or file.exists()
+        ):
             file.parent.mkdir(parents=True, exist_ok=True)
             cache.save(file)
 
