@@ -34,9 +34,16 @@ Usage:
     python tools/reprice.py experiments/output  # check one root
     python tools/reprice.py --group-by toolset  # split runs per toolset
 
-`--check` (the default) exits non-zero if any run's recorded prices
-disagree with the recomputed ones, which makes it usable as a guard:
-`experiments/output` must always report zero deltas.
+Rates are *dated* (`OMPHALOS_PRICING` holds a history per model), so a
+run is priced at the rate in force when it ran rather than at today's.
+That distinction is load-bearing: OpenAI cut gpt-5.6 prices on
+2026-07-30, in the middle of this project's run history.
+
+`--check` (the default) exits non-zero only on a delta the rate history
+cannot explain. A recorded price that matches a *different* dated rate
+for the same model is a stale meter — wrong, but understood and exactly
+correctable by `--write` — and is reported without failing, because a
+guard that can never go green catches nothing.
 """
 
 # pyright: strict
@@ -44,7 +51,8 @@ disagree with the recomputed ones, which makes it usable as a guard:
 import argparse
 import csv
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -55,7 +63,11 @@ import yaml
 # workspace context; a plain script must add it itself).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from model_registry import pricing_for
+from model_registry import (
+    OMPHALOS_PRICING,
+    price_tokens,
+    stdlib_fallback_pricing,
+)
 
 _OMPHALOS_DIR = Path(__file__).resolve().parent.parent
 
@@ -81,18 +93,75 @@ class Usage:
     output_tokens: int
     billed_price: float
     group: str | None = None
+    ran_on: date | None = None
+
+    def _at(self, on: date | None) -> float:
+        return price_tokens(
+            self.model,
+            self.input_tokens,
+            self.cached_input_tokens,
+            self.output_tokens,
+            on=on,
+        )
 
     @property
     def true_price(self) -> float:
-        """The price these token counts cost at the model's real rate."""
-        pricing = pricing_for(self.model)
-        non_cached = self.input_tokens - self.cached_input_tokens
-        assert non_cached >= 0, f"{self.label}: cached exceeds input"
-        return (
-            non_cached * pricing.dollars_per_input_token
-            + self.cached_input_tokens * pricing.dollars_per_cached_input_token
-            + self.output_tokens * pricing.dollars_per_output_token
-        )
+        """
+        What these token counts cost at the rate in force *when the run
+        happened* — the number that should reproduce the recorded price.
+
+        `ran_on` comes from the experiment's own stored `start_time`. If
+        it is unknown the current rate is used, which is right for a run
+        made today and is flagged in the report otherwise.
+        """
+        return self._at(self.ran_on)
+
+    @property
+    def current_price(self) -> float:
+        """
+        What the same tokens would cost at today's rate.
+
+        Distinct from `true_price` for any run that predates a price
+        change, and it is the figure a reader planning new work wants.
+        """
+        return self._at(None)
+
+    @property
+    def explained(self) -> bool:
+        """
+        Whether the recorded price matches a rate we can name.
+
+        This separates a delta we understand from one we do not, and
+        this project has hit exactly two flavours of the former:
+
+        - a **stale table** — `price` is computed at request time from
+          whatever `OMPHALOS_PRICING` held then, so a run made after the
+          2026-07-30 cut but before the table caught up records the old
+          rate;
+        - the **stdlib prefix fallback** — every archived gpt-5.4 run
+          was billed at `gpt-5` rates before this module existed.
+
+        Both are wrong, both are exactly correctable from token counts,
+        and neither is a reason to fail a build. A price matching no
+        known rate is a different animal and is what the guard fails on.
+        """
+        if abs(self.true_price - self.billed_price) <= TOLERANCE:
+            return False
+        for effective_from, _ in OMPHALOS_PRICING.get(self.model, ()):
+            if abs(self._at(effective_from) - self.billed_price) <= TOLERANCE:
+                return True
+        fallback = stdlib_fallback_pricing(self.model)
+        if fallback is not None:
+            non_cached = self.input_tokens - self.cached_input_tokens
+            at_fallback = (
+                non_cached * fallback.dollars_per_input_token
+                + self.cached_input_tokens
+                * fallback.dollars_per_cached_input_token
+                + self.output_tokens * fallback.dollars_per_output_token
+            )
+            if abs(at_fallback - self.billed_price) <= TOLERANCE:
+                return True
+        return False
 
 
 @dataclass
@@ -105,6 +174,7 @@ class RunReport:
     billed: float = 0.0
     recomputed: float = 0.0
     n_mismatched: int = 0
+    n_explained: int = 0
     models: set[str] = field(default_factory=set[str])
 
     def add(self, usage: Usage) -> None:
@@ -114,6 +184,13 @@ class RunReport:
         self.models.add(usage.model)
         if abs(usage.true_price - usage.billed_price) > TOLERANCE:
             self.n_mismatched += 1
+            if usage.explained:
+                self.n_explained += 1
+
+    @property
+    def n_unexplained(self) -> int:
+        """Mismatches that no known dated rate accounts for."""
+        return self.n_mismatched - self.n_explained
 
     @property
     def name(self) -> str:
@@ -181,7 +258,40 @@ def usage_from_result(result_file: Path) -> Usage | None:
     )
 
 
-def usages_from_summary(summary: Path, group_by: str | None) -> list[Usage]:
+def run_date(run: Path) -> date | None:
+    """
+    The day a run was executed, from its own `experiment.yaml`.
+
+    This is what lets a price be checked against the rate that was in
+    force at the time rather than today's. Runs are launched in one
+    session, so the earliest recorded `start_time` dates the whole
+    directory; the one thing that would break that is a sweep left
+    running across a price change, which `main` warns about.
+    """
+    state = run / "experiment.yaml"
+    if not state.exists():
+        return None
+    with open(state) as f:
+        doc = _mapping(yaml.safe_load(f))
+    if doc is None:
+        return None
+    configs = _mapping(doc.get("configs"))
+    if configs is None:
+        return None
+    starts: list[date] = []
+    for info in configs.values():
+        entry = _mapping(info)
+        started = entry.get("start_time") if entry else None
+        if isinstance(started, datetime):
+            starts.append(started.date())
+        elif isinstance(started, date):
+            starts.append(started)
+    return min(starts) if starts else None
+
+
+def usages_from_summary(
+    summary: Path, group_by: str | None, ran_on: date | None = None
+) -> list[Usage]:
     """
     Read a `results_summary.csv`. Equivalent to reading every
     `result.yaml`, since the summary carries the same token columns —
@@ -202,6 +312,7 @@ def usages_from_summary(summary: Path, group_by: str | None) -> list[Usage]:
                     output_tokens=int(row["output_tokens"]),
                     billed_price=float(row["price"]),
                     group=row.get(group_by) if group_by else None,
+                    ran_on=ran_on,
                 )
             )
     return usages
@@ -218,12 +329,13 @@ def collect(run: Path, group_by: str | None) -> list[RunReport]:
     falling back to the per-config `result.yaml` files when it has none
     (some runs were never summarized).
     """
+    ran_on = run_date(run)
     summary = run / SUMMARY_NAME
     if summary.exists():
-        usages = usages_from_summary(summary, group_by)
+        usages = usages_from_summary(summary, group_by, ran_on)
     else:
         usages = [
-            u
+            replace(u, ran_on=ran_on)
             for f in sorted(run.glob("configs/*/result.yaml"))
             if (u := usage_from_result(f)) is not None
         ]
@@ -261,6 +373,7 @@ def write_repriced_summary(run: Path) -> Path | None:
             cached_input_tokens=int(row["cached_input_tokens"]),
             output_tokens=int(row["output_tokens"]),
             billed_price=float(row["price"]),
+            ran_on=run_date(run),
         )
         row["price_as_billed"] = row["price"]
         row["price"] = repr(usage.true_price)
@@ -359,12 +472,28 @@ def main() -> int:
     if not off:
         print("\nAll recorded prices reproduce exactly. Nothing to correct.")
         return 0
-    n = sum(r.n_mismatched for r in off)
-    print(
-        f"\n{n} config(s) across {len(off)} run(s) were billed at the "
-        "wrong rate."
-    )
-    return 0 if args.write else 1
+
+    explained = sum(r.n_explained for r in off)
+    unexplained = sum(r.n_unexplained for r in off)
+    if explained:
+        print(
+            f"\n{explained} config(s) recorded a price matching a known "
+            "but wrong rate — a stale OMPHALOS_PRICING entry, or the "
+            "stdlib prefix fallback. Their token counts are intact, so "
+            "`--write` corrects them exactly and no re-run is needed."
+        )
+    if unexplained:
+        print(
+            f"\n{unexplained} config(s) recorded a price matching NO "
+            "known rate for their model. That is not a stale table — "
+            "something else is wrong, and it needs looking at before "
+            "any cost claim rests on these runs."
+        )
+    # A delta the rate history explains is a fact about the past, not a
+    # regression; failing on it forever would make this guard useless
+    # (see the 2026-08-12 note about a check that could never pass).
+    # Only an unexplained delta should break the build.
+    return 1 if unexplained and not args.write else 0
 
 
 if __name__ == "__main__":

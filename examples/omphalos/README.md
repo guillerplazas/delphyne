@@ -258,6 +258,117 @@ partly so; **test is the headline result** — the only partition never
 touched by any iteration or tuning decision. One seed per config —
 run-to-run variance is roughly ±1–2 problems per cell.
 
+Two figures above are easy to misread and worth stating plainly. The
+often-quoted **$0.056 per solve is the train number**, where every
+problem is solved; out of sample it is $0.318 per solve against the
+standard baseline's $0.291. The agentic baseline buys **+9 solves at
+roughly equal cost per solve**, not cheaper solves. And **80% of its
+test spend goes to the six problems it never solves** — a failed search
+costs up to 26× an average success, because context grows with every
+turn.
+
+### Cost reduction: binding budgets + the Responses API (2026-08-12)
+
+Two changes, measured separately, both keeping the configuration and
+prompts otherwise identical:
+
+| configuration | test | spend | $/solve |
+|---|---:|---:|---:|
+| as published above | 14 / 20 | $3.56 | $0.254 |
+| \+ `$0.30` per-problem dollar cap | 14 / 20 | $2.09 | $0.149 |
+| \+ Responses API, `reasoning_effort="low"` | **16 / 20** | **$1.85** | **$0.116** |
+
+**48% less spend and 54% less per solve, with no problem lost.**
+All three rows are priced at *current* rates so they are comparable;
+the first two runs were billed at the higher pre-2026-07-30 rates
+($4.45 and $2.61 as billed). See the pricing note below.
+Against the standard baseline the gap on test becomes 5 → 16: eleven
+problems gained, none lost, p = 0.001.
+
+- **The cap** is calibrated on train alone — $0.30 is the smallest round
+  cap leaving train at 20/20 — and costs no solves on any partition. The
+  same calibration rule applied to the *request* budget yields 32, i.e.
+  no saving at all: late requests cost several times early ones, so a
+  request count is a poor proxy for spend. `make budget-ablation`
+  computes the curve from recorded prices; `make budget-replay`
+  re-executes it through Delphyne with `cache_mode="replay"`, so the
+  numbers are measured rather than projected and no API call is made.
+- **The Responses API** matters here for one reason: gpt-5.6 rejects
+  function tools on Chat Completions unless reasoning is off, so the
+  agentic baseline had *never* been allowed to reason. With
+  `effort="low"` it converges in 24% fewer turns and 51% fewer input
+  tokens, and spends fewer output tokens than before despite half of
+  them being reasoning. It is not that reasoning justifies its cost — it
+  is cheaper outright. `make responses-report`.
+
+### Migrating to gpt-5.6-luna (2026-08-13)
+
+Once reasoning was available, the cheap model tier became viable. On
+validation, `gpt-5.6-luna` with the `lean` toolset, `reasoning_effort=
+"medium"` and a `$0.05` per-problem cap **matches terra's solve count
+exactly at roughly a seventh of the cost**:
+
+| test (clean) | solved | spend | $/solve |
+|---|---:|---:|---:|
+| standard baseline | 5 / 20 | $1.17 | $0.233 |
+| agentic, chat, uncapped *(published)* | 14 / 20 | $3.56 | $0.254 |
+| agentic, terra, `low`, $0.30 cap | 16 / 20 | $1.85 | $0.116 |
+| **agentic, luna, `medium`, $0.05 cap** | **16 / 20** | **$0.29** | **$0.018** |
+
+Paired per problem, luna and terra are **zero discordant on test** —
+luna solves precisely the same sixteen problems and misses precisely the
+same four. They are indistinguishable in what they can prove and differ
+only in what they charge. Validation agrees: 16/20 on both seeds for
+$0.23, against terra's 16/20 for $1.64.
+
+Against the configuration published above that is **+2 problems and 92%
+less money**; against the standard baseline, 5 → 16 problems for a
+quarter of the spend. The whole luna study — a 240-config effort ×
+toolset grid, two-seed validation and one test run — cost **$2.87**.
+
+Three things this measurement settled that are worth carrying:
+
+- **Reasoning is what makes the cheap tier work**, not the price cut.
+  Luna without reasoning scores 12–13/20 on train and burns twice the
+  turns; with it, 20/20.
+- **Optimal reasoning effort is not transferable between model tiers.**
+  Terra's optimum is `low` (`low → medium` there costs +22% for no extra
+  solves); luna's is `medium` (36% cheaper than `low` at the same
+  20/20). Reasoning buys turns, turns are what cost money, and a weaker
+  model has more turns to save — so the optimum rises as the model gets
+  cheaper. Sweeping every effort level is cheap and the answer does not
+  port.
+- **A dollar cap has to be re-derived per model.** Luna's is `$0.05`
+  against terra's `$0.30`, by the identical rule. Reusing terra's would
+  have left luna effectively uncapped.
+
+`make sweep-luna-train` runs the full effort × toolset grid;
+`make luna-cap` reads the cap off it.
+
+Honesty line: the +2 solves is **not** statistically confirmed (2
+discordant problems, p = 0.50; see the note on sample size below). The
+spend reduction is the solid claim; the solve count held or rose
+everywhere.
+
+**Prices are dated.** OpenAI cut gpt-5.6 prices on 2026-07-30 (luna
+−80%, terra −20%) — in the middle of this project's run history, so a
+single rate per model cannot describe it. `OMPHALOS_PRICING` holds a
+rate *history* and `pricing_for(model, on=...)` resolves against it.
+Two distinct questions get two distinct answers: `make reprice` says
+what a run *did* cost (at the rate in force when it ran), while every
+table and chart here says what it *does* cost (today's rate), because
+comparing arms priced at different rates would fold a price change into
+an engineering result.
+
+**Sample size.** `make decision-audit` re-tests this project's
+historical design decisions with paired per-problem sign tests. Two numbers from
+it are worth carrying: identical configurations disagree on **1–3 of 20
+problems**, and an exact sign test needs **6 discordant problems, all
+one way**, to reach p < 0.05. A single 20-problem run therefore cannot
+establish any change converting fewer than six problems. The
+standard-vs-agentic gap clears that bar comfortably; most individual
+design increments in this project's history do not.
+
 Two frontier readings worth stating explicitly: the agentic scaffold
 lifts the mid-tier terra *above* the flagship's plain-baseline
 performance at a fraction of the cost, and the cheapest tier (luna)

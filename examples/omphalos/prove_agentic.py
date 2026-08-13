@@ -65,7 +65,7 @@ from delphyne.stdlib.queries import SelectedExample
 
 import pytanque_utils as pt
 import skills as sk
-from model_registry import make_model
+from model_registry import ApiType, OmphalosReasoningEffort, make_model
 from prove_standard import ProofScript
 
 # fmt: off
@@ -431,6 +431,9 @@ def prove_theorem_agentic_policy(
     temperature: float | None = None,
     max_turns: int | None = None,
     loop: bool = False,
+    api: ApiType = "chat_completions",
+    reasoning_effort: OmphalosReasoningEffort | None = None,
+    convert_user_feedback_to_tool: bool = True,
 ) -> dp.Policy[Branch, dp.PromptingPolicy]:
     """
     Policy for the agentic baseline.
@@ -440,8 +443,32 @@ def prove_theorem_agentic_policy(
     so that the request budget (`num_requests` passed at the experiment
     level) is the binding constraint instead — this keeps tool calls
     from eating into a separate, scarcer proposal allowance.
+
+    `api="responses"` is the only way to give this policy a reasoning
+    model. On Chat Completions the gpt-5.6 family rejects function tools
+    unless reasoning is switched off entirely, so every archived agentic
+    number was measured with `reasoning_effort="none"` — the baseline
+    has never been evaluated with reasoning on, against a standard
+    baseline that always had it. See `model_registry.make_model`.
+
+    `convert_user_feedback_to_tool` is exposed so the feature can be
+    ablated: it is what keeps the reasoning cache alive across
+    verification rounds, and it is the part of the Responses migration
+    most likely to change behaviour, since the model then sees verifier
+    feedback as a tool result rather than as a user message.
+
+    `tag_user_feedback_messages` is gated on the API rather than always
+    set: the flag is part of the hashed `LLMRequest`, so setting it
+    unconditionally would invalidate every archived cache and make the
+    frozen benchmark runs unreplayable.
     """
-    model = make_model(model_name, for_tool_calls=True)
+    model = make_model(
+        model_name,
+        for_tool_calls=True,
+        api=api,
+        reasoning_effort=reasoning_effort,
+        convert_user_feedback_to_tool=convert_user_feedback_to_tool,
+    )
     sp = dfs(max_depth=max_turns)
     if loop:
         sp = dp.loop() @ sp
@@ -450,5 +477,6 @@ def prove_theorem_agentic_policy(
         temperature=temperature,
         max_requests=1,
         select_examples=_matching_toolset_examples(),
+        tag_user_feedback_messages=(api == "responses"),
     )
     return sp & pp

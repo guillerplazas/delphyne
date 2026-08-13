@@ -19,7 +19,7 @@ import delphyne as dp
 from delphyne import Branch, Compute, Strategy, dfs, strategy
 
 import pytanque_utils as pt
-from model_registry import make_model
+from model_registry import ApiType, OmphalosReasoningEffort, make_model
 
 # fmt: off
 
@@ -93,10 +93,36 @@ def prove_theorem_standard_policy(
     temperature: float | None = None,
     max_feedback_cycles: int = 3,
     loop: bool = False,
+    api: ApiType = "chat_completions",
+    reasoning_effort: OmphalosReasoningEffort | None = None,
 ) -> dp.Policy[Branch, dp.PromptingPolicy]:
-    model = make_model(model_name)
+    """
+    Policy for the standard baseline.
+
+    `api="responses"` routes requests through the OpenAI Responses API
+    and enables the reasoning cache. This baseline is where that should
+    pay most: 75-85% of its cost is output tokens and ~70-85% of those
+    are reasoning tokens, all of which Chat Completions makes the model
+    re-derive from scratch on every feedback cycle because it does not
+    return reasoning items. See `model_registry.make_model`.
+
+    `tag_user_feedback_messages` is gated on the API rather than always
+    set. The flag marks verifier feedback so the Responses model can
+    present it as a tool result (without which the reasoning cache is
+    invalidated at each cycle), but it is part of the hashed
+    `LLMRequest`, so setting it unconditionally would invalidate every
+    archived cache and make the frozen benchmark runs unreplayable.
+    """
+    model = make_model(
+        model_name, api=api, reasoning_effort=reasoning_effort
+    )
     sp = dfs(max_depth=max_feedback_cycles + 1)
     if loop:
         sp = dp.loop() @ sp
-    pp = dp.few_shot(model, temperature=temperature, max_requests=1)
+    pp = dp.few_shot(
+        model,
+        temperature=temperature,
+        max_requests=1,
+        tag_user_feedback_messages=(api == "responses"),
+    )
     return sp & pp

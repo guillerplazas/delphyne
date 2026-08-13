@@ -114,8 +114,63 @@ decision, which is why it is made on train and never on test.
 
 CANONICAL_MODEL = "gpt-5.6-terra"
 """
-Winner of the 2026-07-21 train frontier: 20/20 agentic at $0.056/solve
-(sol: 19/20 at $0.081; luna: 15/20 at $0.126). See PROGRESS.md.
+The model every partition sweep in this file's experiments runs.
+
+It stays gpt-5.6-terra because sixteen scripts read this constant and
+their output directories are a frozen record: repointing it would send
+luna configs into terra's directories and silently invalidate them.
+
+**For new work the best known configuration is different**, measured
+2026-08-13: `gpt-5.6-luna` with `toolset="lean"`,
+`reasoning_effort="medium"` and `LUNA_DOLLAR_CAP`. On test it solves
+16/20 for $0.288 against terra's 16/20 for $1.852 — paired per problem
+they are *zero discordant*, i.e. the same sixteen solved and the same
+four missed, differing only in price. It lives in
+`experiments/luna_*_experiment.py`, which name the model explicitly
+rather than through this constant, precisely so that the frozen sweeps
+and the current recommendation cannot drift into each other.
+"""
+
+PER_PROBLEM_DOLLAR_CAP = 0.30
+"""
+Per-problem spend limit for the agentic baseline, as a *controlled*
+variable rather than a runaway guard.
+
+Derived on train alone (`tools/budget_ablation.py`): $0.30 is the
+smallest round cap that leaves train at 20/20, because train's most
+expensive success costs $0.299. Applied unchanged to the other
+partitions it holds the solve count everywhere while cutting spend by
+23% on validation and 41% on test ($0.318 -> $0.186 per solve) -- the
+agentic baseline spends ~80% of its test budget on the six problems it
+never solves, and a failed search costs up to 26x an average success
+because context grows with every turn.
+
+Note that the *request* budget cannot deliver this. Calibrated by the
+same rule on the same data it comes out at 32, i.e. no saving at all:
+late requests cost several times what early ones do, so a request count
+is a poor proxy for spend. Picking the right budget *metric* mattered
+more here than picking the right value for it.
+
+`AgenticConfig.max_dollar_budget` still defaults to the historical
+non-binding 2.0 on purpose: `Experiment` keys its stored per-config
+state on the config's field values, so changing the default would
+orphan every frozen run under `experiments/output`. New sweeps pass
+this constant explicitly.
+"""
+
+
+LUNA_DOLLAR_CAP = 0.05
+"""
+The same rule as `PER_PROBLEM_DOLLAR_CAP`, re-derived for gpt-5.6-luna:
+the smallest round cap that costs train no solves. Train's most
+expensive luna success is $0.046 (`imo_1964_p1_1`), so $0.05 is it.
+
+It is 6x tighter than terra's $0.30 for the obvious reason — luna's
+tokens are 10x cheaper — and that is the point. A cap is denominated in
+dollars, so it means something different for every model and after
+every price change; carrying terra's number over would have left luna
+effectively uncapped. See HINTS #8 and the 2026-08-13 entry, where a
+price cut was measured silently loosening a fixed cap.
 """
 
 
@@ -212,3 +267,69 @@ class AgenticConfig:
             policy_args=policy_args,
             budget=budget,
         )
+
+
+@dataclass
+class ResponsesAgenticConfig(AgenticConfig):
+    """
+    Agentic baseline reached through the OpenAI Responses API.
+
+    A separate dataclass rather than two more fields on `AgenticConfig`,
+    because `Experiment` keys its stored per-config state on the
+    config's field values (`_config_unique_repr`): adding a field, even
+    with a default, changes every existing key and orphans all ten
+    frozen runs under `experiments/output`.
+
+    What it buys is the one thing Chat Completions cannot do for this
+    baseline — **tools and reasoning at the same time**. Every archived
+    agentic run was measured with reasoning switched off, because that
+    is the price gpt-5.6 charges for function tools on Chat Completions.
+    `reasoning_effort` is therefore the variable of interest here, and
+    `api` exists mostly so the `"none"` arm can serve as a control that
+    isolates the API change from the reasoning change.
+
+    `convert_user_feedback_to_tool` is the second knob: it decides
+    whether the verifier's feedback reaches the model as a tool result
+    (keeping the reasoning cache alive across cycles) or as a plain user
+    message (which invalidates it). It is a field so the feature can be
+    ablated rather than assumed.
+    """
+
+    api: str = "responses"
+    reasoning_effort: str | None = None
+    convert_user_feedback_to_tool: bool = True
+
+    def instantiate(self, context: object) -> dp.RunStrategyArgs:
+        args = super().instantiate(context)
+        args.policy_args["api"] = self.api
+        args.policy_args["reasoning_effort"] = self.reasoning_effort
+        args.policy_args["convert_user_feedback_to_tool"] = (
+            self.convert_user_feedback_to_tool
+        )
+        return args
+
+
+@dataclass
+class ResponsesStandardConfig(StandardConfig):
+    """
+    Standard baseline reached through the OpenAI Responses API.
+
+    Separate from `StandardConfig` for the same state-stability reason
+    as `ResponsesAgenticConfig`.
+
+    This is where the reasoning cache should pay most, and for a reason
+    that has nothing to do with tools: **75-85% of this baseline's cost
+    is output tokens, and 70-85% of those are reasoning tokens**. Chat
+    Completions never returns reasoning items, so every feedback cycle
+    makes the model re-derive its entire chain of thought from scratch.
+    The Responses API can hand that state back instead.
+    """
+
+    api: str = "responses"
+    reasoning_effort: str | None = None
+
+    def instantiate(self, context: object) -> dp.RunStrategyArgs:
+        args = super().instantiate(context)
+        args.policy_args["api"] = self.api
+        args.policy_args["reasoning_effort"] = self.reasoning_effort
+        return args
