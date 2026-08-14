@@ -317,19 +317,32 @@ class ResponsesStandardConfig(StandardConfig):
     Separate from `StandardConfig` for the same state-stability reason
     as `ResponsesAgenticConfig`.
 
-    This is where the reasoning cache should pay most, and for a reason
-    that has nothing to do with tools: **75-85% of this baseline's cost
-    is output tokens, and 70-85% of those are reasoning tokens**. Chat
-    Completions never returns reasoning items, so every feedback cycle
-    makes the model re-derive its entire chain of thought from scratch.
-    The Responses API can hand that state back instead.
+    On paper this is where the reasoning cache should pay most, for a
+    reason that has nothing to do with tools: **75-85% of this
+    baseline's cost is output tokens, and 70-85% of those are reasoning
+    tokens**. Chat Completions never returns reasoning items, so every
+    feedback cycle makes the model re-derive its entire chain of thought
+    from scratch. The Responses API can hand that state back instead.
+
+    In practice it loses, and `use_reasoning_cache` /
+    `convert_user_feedback_to_tool` are fields rather than defaults so
+    that *why* can be measured. Resending reasoning items is what
+    inflates input; the feedback conversion only matters once the cache
+    is on. Together with `api` they give the four arms of the API
+    comparison — see `experiments/baseline_api_experiment.py`.
     """
 
     api: str = "responses"
     reasoning_effort: str | None = None
+    use_reasoning_cache: bool = True
+    convert_user_feedback_to_tool: bool = True
 
     def instantiate(self, context: object) -> dp.RunStrategyArgs:
         args = super().instantiate(context)
         args.policy_args["api"] = self.api
         args.policy_args["reasoning_effort"] = self.reasoning_effort
+        args.policy_args["use_reasoning_cache"] = self.use_reasoning_cache
+        args.policy_args["convert_user_feedback_to_tool"] = (
+            self.convert_user_feedback_to_tool
+        )
         return args

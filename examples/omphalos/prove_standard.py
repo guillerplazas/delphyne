@@ -95,26 +95,44 @@ def prove_theorem_standard_policy(
     loop: bool = False,
     api: ApiType = "chat_completions",
     reasoning_effort: OmphalosReasoningEffort | None = None,
+    use_reasoning_cache: bool = True,
+    convert_user_feedback_to_tool: bool = True,
 ) -> dp.Policy[Branch, dp.PromptingPolicy]:
     """
     Policy for the standard baseline.
 
-    `api="responses"` routes requests through the OpenAI Responses API
-    and enables the reasoning cache. This baseline is where that should
-    pay most: 75-85% of its cost is output tokens and ~70-85% of those
-    are reasoning tokens, all of which Chat Completions makes the model
-    re-derive from scratch on every feedback cycle because it does not
-    return reasoning items. See `model_registry.make_model`.
+    `api="responses"` routes requests through the OpenAI Responses API.
+    On paper this baseline is where the reasoning cache should pay most:
+    75-85% of its cost is output tokens and ~70-85% of those are
+    reasoning, all of which Chat Completions makes the model re-derive
+    on every feedback cycle because it does not return reasoning items.
+
+    In practice it is where the cache *loses*, and the two flags below
+    exist so the reason can be measured rather than argued:
+
+    - `use_reasoning_cache` is what resends earlier reasoning items. It
+      is the suspected cause of this baseline's input tokens rising 3.7x
+      per turn under Responses (2,763 -> 10,202) while output falls.
+      Turning it off isolates the API switch on its own.
+    - `convert_user_feedback_to_tool` re-frames verifier feedback as a
+      tool result so the KV cache can survive a user turn. It only
+      matters when the reasoning cache is on.
+
+    Both default to `True`, which is what `make_model` already did, so
+    every archived run keeps replaying byte-identically.
 
     `tag_user_feedback_messages` is gated on the API rather than always
     set. The flag marks verifier feedback so the Responses model can
-    present it as a tool result (without which the reasoning cache is
-    invalidated at each cycle), but it is part of the hashed
+    present it as a tool result, but it is part of the hashed
     `LLMRequest`, so setting it unconditionally would invalidate every
     archived cache and make the frozen benchmark runs unreplayable.
     """
     model = make_model(
-        model_name, api=api, reasoning_effort=reasoning_effort
+        model_name,
+        api=api,
+        reasoning_effort=reasoning_effort,
+        use_reasoning_cache=use_reasoning_cache,
+        convert_user_feedback_to_tool=convert_user_feedback_to_tool,
     )
     sp = dfs(max_depth=max_feedback_cycles + 1)
     if loop:
