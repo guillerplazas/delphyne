@@ -1,4 +1,4 @@
-.PHONY: test test-standard test-agentic test-probing
+.PHONY: test test-standard test-agentic test-probing test-luna
 .PHONY: sweep-train sweep-train-standard sweep-train-agentic
 .PHONY: sweep-validation sweep-test
 .PHONY: sweep-probing-validation sweep-probing-test
@@ -14,7 +14,7 @@
 
 # Single-problem smoke tests (cached; regenerate with
 # `make regen-command-caches` after a prompt / strategy change).
-test: test-standard test-agentic test-probing
+test: test-standard test-agentic test-probing test-luna
 
 test-standard:
 	delphyne run commands/prove_one_standard.exec.yaml --cache --no-header
@@ -24,6 +24,9 @@ test-agentic:
 
 test-probing:
 	delphyne run commands/prove_one_probing.exec.yaml --cache --no-header
+
+test-luna:
+	delphyne run commands/prove_one_luna.exec.yaml --cache --no-header
 
 # --- benchmark sweeps (real API calls) ---
 #
@@ -177,6 +180,7 @@ regen-command-caches:
 	delphyne run commands/prove_one_standard.exec.yaml --cache --update --no-header
 	delphyne run commands/prove_one_agentic.exec.yaml --cache --update --no-header
 	delphyne run commands/prove_one_probing.exec.yaml --cache --update --no-header
+	delphyne run commands/prove_one_luna.exec.yaml --cache --update --no-header
 
 # --- housekeeping ---
 

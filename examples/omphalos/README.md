@@ -28,8 +28,11 @@ Delphyne-guided proof search and human-in-the-loop proof development.
 
 ## Layout
 
+The benchmark itself lives under `miniF2F/` (paths below are relative
+to it; everything else in this directory is the Delphyne side):
+
 ```text
-.
+miniF2F/
 |-- _CoqProject            Rocq project file and tracked build source of truth
 |-- test/                  benchmark test split, categorized by topic
 |-- valid/                 miniF2F validation split, categorized by topic
@@ -51,9 +54,12 @@ numbertheory/
 
 ## Working Locally
 
-Generate the local Rocq make metadata, then build:
+Generate the local Rocq make metadata, then build (from `miniF2F/`,
+not from this directory — running these at this level would clobber
+the project `Makefile`):
 
 ```sh
+cd miniF2F
 rocq makefile -f _CoqProject -o Makefile
 make -j
 ```
@@ -71,12 +77,16 @@ Use this only when the upstream Rocq benchmark or the informal HuggingFace data
 needs to be refreshed.
 
 ```sh
+cd miniF2F
 rm -rf _upstream
 git clone --depth 1 https://github.com/LLM4Rocq/miniF2F-rocq _upstream
 python tools/build_layout.py
 rocq makefile -f _CoqProject -o Makefile
 make -j
 ```
+
+(Note `miniF2F/tools/`, the benchmark regeneration script, is distinct
+from the top-level `tools/`, which holds offline analysis scripts.)
 
 `_upstream/` is a temporary local checkout. It is ignored by Git and should be
 removed before preparing a PR unless you are actively regenerating the layout.
@@ -158,9 +168,11 @@ Prerequisites:
 ### Running the baselines
 
 ```sh
-make test                 # both single-problem smoke tests (cached)
+make test                 # all single-problem smoke tests (cached, no API calls)
 make test-standard        # single problem, standard baseline
 make test-agentic         # single problem, agentic "rich" baseline
+make test-probing         # single problem, agentic "probing" baseline
+make test-luna            # single problem, canonical luna config (lean/medium/$0.05)
 make regen-command-caches # refresh the smoke caches (real LLM calls)
 
 make sweep-train          # 20-problem sweep, both baselines (real API)
@@ -191,7 +203,7 @@ sketch from each `.v` header — both baselines are therefore
 *with-hints*. Further ablations (two-stage informal/formal Hilbert
 split, MathComp retrieval, multi-seed runs, full miniF2F sweep via
 `experiments/full_*_experiment.py`) are on the thesis roadmap (see
-`bachelor_arbeit_plan.md`).
+`master_arbeit_plan.md`).
 
 ## Benchmark partitions & results
 
