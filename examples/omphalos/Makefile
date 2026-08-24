@@ -9,6 +9,7 @@
 .PHONY: budget-ablation budget-replay probe-responses responses-report
 .PHONY: sweep-responses-train sweep-responses-validation sweep-responses-test
 .PHONY: report-data sweep-luna-train luna-cap
+.PHONY: sweep-luna-cvt cvt-report
 .PHONY: regen-command-caches
 .PHONY: clean clean-experiments
 
@@ -160,6 +161,17 @@ sweep-luna-train:
 luna-cap:
 	python tools/budget_ablation.py experiments/output/luna_train_agentic \
 	  --model gpt-5.6-luna
+
+# Does feedback-as-a-tool-message pay on the canonical agentic loop?
+# One arm per value of `convert_user_feedback_to_tool`, everything else
+# canonical. ~$0.32. `cvt-report` pairs the arms per problem-seed cell
+# -- read that, not the pooled totals.
+
+sweep-luna-cvt:
+	python experiments/luna_cvt_ablation.py run --max_workers=4
+
+cvt-report:
+	python tools/cvt_report.py
 
 responses-report:
 	python tools/responses_report.py \

@@ -1,5 +1,5 @@
 Archived single-problem commands from previous iterations:
-- prove_one_agentic_lean: the "lean" toolset (ReadSkill + SearchRocq),
+- prove_one_agentic_core: the "core" toolset (ReadSkill + SearchRocq),
   superseded by the canonical "rich" toolset.
 - prove_one_rich_induction: induction smoke test, redundant with the
   induction_sum_odd demonstration in demos/agentic.demo.yaml.

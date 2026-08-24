@@ -121,7 +121,7 @@ their output directories are a frozen record: repointing it would send
 luna configs into terra's directories and silently invalidate them.
 
 **For new work the best known configuration is different**, measured
-2026-08-13: `gpt-5.6-luna` with `toolset="lean"`,
+2026-08-13: `gpt-5.6-luna` with `toolset="core"`,
 `reasoning_effort="medium"` and `LUNA_DOLLAR_CAP`. On test it solves
 16/20 for $0.288 against terra's 16/20 for $1.852 — paired per problem
 they are *zero discordant*, i.e. the same sixteen solved and the same
@@ -219,7 +219,7 @@ class AgenticConfig:
 
     - `toolset`: `"rich"` (ReadSkill + InspectAt + TryAutomation;
       canonical), `"probing"` (rich + TryTactics candidate probing),
-      or `"lean"` (ReadSkill + SearchRocq; partial proposals cover
+      or `"core"` (ReadSkill + SearchRocq; partial proposals cover
       structural exploration).
     - `num_requests`: the *total* request budget — LLM proposal
       attempts and tool calls draw from this one pool. It is the

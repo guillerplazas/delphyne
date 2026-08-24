@@ -130,16 +130,20 @@ both single-stage Hilbert-style loops driven by `dp.interact`:
      attempts.
 
    The tool repertoire is selected by the `toolset` strategy argument:
-   `"lean"` advertises `ReadSkill` + `SearchRocq` and relies on
+   `"core"` advertises `ReadSkill` + `SearchRocq` and relies on
    **partial proposals** for structural exploration — `check_proof`
    reports the verified prefix and the exact remaining goals whenever
    a script applies cleanly without closing the goal, so a proposal
    doubles as a preview (and wins outright if it happens to close the
-   goal). `"rich"` (canonical) advertises `ReadSkill` + `InspectAt` +
+   goal). `"rich"` advertises `ReadSkill` + `InspectAt` +
    `TryAutomation` for state-level introspection and automation
-   probing on top of the same partial-proposal loop. The `"lean"`
-   toolset is kept as an ablation lever (its archived command lives
-   in `commands/previous/`).
+   probing on top of the same partial-proposal loop.
+
+   `"rich"` is the strategy default and the toolset every terra
+   benchmark was run on, but the **current canonical configuration**
+   (`gpt-5.6-luna`, see below) uses `"core"`: the two are
+   indistinguishable on solves and `"core"` is cheaper. An archived
+   `"core"` command lives in `commands/previous/`.
 
    **Assisted verification.** The agentic verifier
    (`check_proof_assisted`) probes every remaining goal of a failed /
@@ -172,7 +176,7 @@ make test                 # all single-problem smoke tests (cached, no API calls
 make test-standard        # single problem, standard baseline
 make test-agentic         # single problem, agentic "rich" baseline
 make test-probing         # single problem, agentic "probing" baseline
-make test-luna            # single problem, canonical luna config (lean/medium/$0.05)
+make test-luna            # single problem, canonical luna config (core/medium/$0.05)
 make regen-command-caches # refresh the smoke caches (real LLM calls)
 
 make sweep-train          # 20-problem sweep, both baselines (real API)
@@ -312,11 +316,40 @@ problems gained, none lost, p = 0.001.
   tokens, and spends fewer output tokens than before despite half of
   them being reasoning. It is not that reasoning justifies its cost — it
   is cheaper outright. `make responses-report`.
+- **Representing verifier feedback as a tool message does *not* help.**
+  Prover feedback is a `user` message by default; real tool results are
+  already `tool`-role. `convert_user_feedback_to_tool` rewrites each
+  feedback turn into a synthetic tool call plus tool result, so a user
+  turn cannot break the KV cache. Measured twice and it does not pay
+  here. On the agentic loop the flag is *marginally better off*: terra
+  gives 20/20 at $0.635 without it against 20/20 at $0.663 with it, and
+  a two-seed luna re-test on the canonical configuration
+  (`make sweep-luna-cvt`, 40 paired cells, $0.34) points the same way —
+  40/40 solved either way, spend $0.157 off against $0.185 on, off
+  cheaper on 26 of 40 cells (median cell ratio 0.742, two-sided
+  p = 0.081). Consistent in direction across two models, but **not
+  established**: the two luna seeds disagree about where the difference
+  even comes from (seed 0 is 16 cheaper / 4 dearer yet only −4% pooled;
+  seed 1 is 10 / 10 yet −25% pooled), which is the heavy tail talking
+  again. Read it as "the flag is not earning its default", not as a
+  measured saving. This loop's prefix cache is already 85–93%
+  saturated, so there is little left for it to protect.
+
+  On the standard loop a 4-arm factorial (478 configs) is
+  noise in both directions: pooled spend moves −15% on luna and +15% on
+  terra, but paired **per problem-seed cell** neither direction
+  survives a sign test (luna 31 cheaper / 43 dearer, p = 0.20; terra
+  20 / 16, p = 0.62), and the cached-input share is unchanged
+  (81.4% → 81.5%). The pooled figures are artifacts of a heavy-tailed
+  cost distribution, not an effect. Two caveats for anyone revisiting
+  this: the conversion also injects a ~30-token instruction, so
+  representation and prompt are confounded; and it is only available on
+  the Responses API.
 
 ### Migrating to gpt-5.6-luna (2026-08-13)
 
 Once reasoning was available, the cheap model tier became viable. On
-validation, `gpt-5.6-luna` with the `lean` toolset, `reasoning_effort=
+validation, `gpt-5.6-luna` with the `core` toolset, `reasoning_effort=
 "medium"` and a `$0.05` per-problem cap **matches terra's solve count
 exactly at roughly a seventh of the cost**:
 
@@ -355,7 +388,9 @@ Three things this measurement settled that are worth carrying:
   have left luna effectively uncapped.
 
 `make sweep-luna-train` runs the full effort × toolset grid;
-`make luna-cap` reads the cap off it.
+`make luna-cap` reads the cap off it. `make sweep-luna-cvt` re-asks the
+feedback-as-tool-message question above on this configuration, and
+`make cvt-report` pairs the two arms per problem-seed cell.
 
 Honesty line: the +2 solves is **not** statistically confirmed (2
 discordant problems, p = 0.50; see the note on sample size below). The

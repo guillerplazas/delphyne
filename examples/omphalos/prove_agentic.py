@@ -29,7 +29,7 @@ but the LLM has *exploration* tools available alongside proposing:
 
 Three toolsets are exposed behind the `toolset` strategy argument:
 
-  - `"lean"` — `ReadSkill` + `SearchRocq`. Structural exploration
+  - `"core"` — `ReadSkill` + `SearchRocq`. Structural exploration
     happens through *partial proposals*: `check_proof` reports the
     verified prefix and the remaining goals whenever a script applies
     cleanly without closing the goal, so a proposal doubles as a
@@ -71,9 +71,9 @@ from prove_standard import ProofScript
 # fmt: off
 
 
-type Toolset = Literal["lean", "rich", "probing"]
+type Toolset = Literal["core", "rich", "probing"]
 """
-Which exploration tools the LLM is offered: `"lean"` advertises
+Which exploration tools the LLM is offered: `"core"` advertises
 `ReadSkill` + `SearchRocq`; `"rich"` advertises `ReadSkill` +
 `InspectAt` + `TryAutomation` (state-level introspection and
 automation probing); `"probing"` extends `"rich"` with `TryTactics`
@@ -367,7 +367,7 @@ class ProposeProofScriptAgentic(
         # reply (no code block) raises instead of becoming feedback,
         # killing the whole run on the spot.
         parser = dp.last_code_block.wrap_errors
-        if self.toolset == "lean":
+        if self.toolset == "core":
             return parser.response_with(ReadSkill | SearchRocq)
         if self.toolset == "probing":
             return parser.response_with(
@@ -400,7 +400,7 @@ def _matching_toolset_examples() -> dp.ExampleSelector:
     (non-empty `prefix`, which renders as real tool-call/tool-result
     messages) are kept only when their pinned `toolset` matches the
     input query's. This lets `"probing"` carry a TryTactics workflow
-    example without perturbing the `"rich"`/`"lean"` prompts (which
+    example without perturbing the `"rich"`/`"core"` prompts (which
     must stay byte-identical to their frozen benchmark runs).
     """
     def select(
