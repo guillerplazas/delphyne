@@ -13,6 +13,7 @@ Usage (when ready):
 # pyright: strict
 
 import miniF2F_bench as mf
+import omphalos_launch as ol
 import delphyne as dp
 
 
@@ -37,7 +38,7 @@ configs = [
 
 
 if __name__ == "__main__":
-    dp.Experiment(
+    ol.OmphalosExperiment(
         config_class=mf.StandardConfig,
         context=dp.workspace_execution_context(__file__),
         configs=configs,

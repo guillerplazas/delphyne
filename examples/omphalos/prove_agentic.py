@@ -223,6 +223,7 @@ def check_proof_assisted(
     problem_file: str,
     theorem_name: str,
     script: ProofScript,
+    goal_caps: pt.GoalCaps | None = None,
 ) -> Strategy[Compute, object, ProofScript | dp.Error]:
     """
     Automation-assisted variant of `prove_standard.check_proof`: when
@@ -230,11 +231,21 @@ def check_proof_assisted(
     remaining goal with `pt.AUTOMATION_BATTERY` (probe results are
     rendered into the feedback), and if every goal closes it finishes
     the proof itself and succeeds with the assembled script.
+
+    `goal_caps` (the pre-registered runaway-goal treatment, see
+    `pt.GoalCaps`) is forwarded to the verifier only when set: the
+    compute request of every archived cell keeps its exact arguments,
+    hence its cache key.
     """
     tactics = yield from dp.compute(pt.split_into_tactics)(script)
-    feedback = yield from dp.compute(pt.check_assisted)(
-        problem_file, theorem_name, tactics
-    )
+    if goal_caps is None:
+        feedback = yield from dp.compute(pt.check_assisted)(
+            problem_file, theorem_name, tactics
+        )
+    else:
+        feedback = yield from dp.compute(pt.check_assisted)(
+            problem_file, theorem_name, tactics, goal_caps=goal_caps
+        )
     if feedback.success:
         if feedback.auto_finished:
             return "\n".join(feedback.proof_so_far)
@@ -300,8 +311,18 @@ def prove_theorem_agentic(
     theorem_name: str,
     toolset: Toolset = "rich",
     turn_budget: int = 16,
+    show_definitions: bool = False,
+    goal_caps: pt.GoalCaps | None = None,
 ) -> Strategy[Branch, dp.PromptingPolicy, ProofScript]:
-    spec = pt.parse_problem(problem_file)
+    # `goal_caps` is the runaway-goal treatment (`pt.GoalCaps`): off by
+    # default, and never part of a compute request unless set.
+    # `show_definitions` renders the problem file's pre-theorem
+    # declarations (`Definition`/`Fixpoint`/`Notation`/...) in their own
+    # prompt section. It defaults to False so every archived run keeps
+    # its exact prompt (and therefore its cache); see
+    # `pytanque_utils._preamble_definitions` for why the omission
+    # matters. New pipelines (`experiments/minif2f_x.py`) turn it on.
+    spec = pt.parse_problem(problem_file, show_definitions)
     available = sk.list_skills()
     script = yield from dp.interact(
         step=lambda prefix, _:
@@ -309,7 +330,7 @@ def prove_theorem_agentic(
                 spec, available, toolset, turn_budget, prefix
             ).using(dp.ambient_pp),
         process=lambda s, _:
-            check_proof_assisted(problem_file, theorem_name, s)
+            check_proof_assisted(problem_file, theorem_name, s, goal_caps)
               .using(dp.just_compute),
         # Only the tools advertised by the query's `parser` (which
         # depends on `toolset`) can ever be called; the rest of this

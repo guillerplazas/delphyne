@@ -7,17 +7,18 @@ Pure Python: no Delphyne imports, so this module can be called from
 
 from __future__ import annotations
 
-import os
 import re
-import secrets
-import tempfile
+from collections import OrderedDict
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from pytanque import PetanqueError, Pytanque, PytanqueMode, State
+from pytanque import PetanqueError, Pytanque, State
+
+import rocq_server
+from rocq_server import MANAGER, BoundedPytanque, ReplyTooLarge
 
 
 # Extra `Require Import` lines we silently prepend before invoking
@@ -45,32 +46,154 @@ DEFAULT_QUERY_OUTPUT_CHAR_CAP = 4000
 _WORKSPACE_ROOT = Path(__file__).resolve().parent
 
 # Rocq's micromega tactics (lia/nia/nra/psatz) write `.lia.cache` etc.
-# into the *cwd of the Rocq process*. The `pet` subprocess inherits the
-# cwd it is spawned with, so `_pytanque_session` chdirs here just for
-# the spawn — keeping the cache files out of the workspace root.
-_ROCQ_CACHE_DIR = _WORKSPACE_ROOT / ".rocq_cache"
+# into the *cwd of the Rocq process*; every Rocq process is spawned
+# with this cwd (see `rocq_server`).
+_ROCQ_CACHE_DIR = rocq_server.ROCQ_CACHE_DIR
 
 
 @contextmanager
-def _pytanque_session() -> Generator[Pytanque]:
+def _pytanque_session(abs_file: str) -> Generator[Pytanque]:
     """
-    Open a fresh STDIO pytanque session whose `pet` subprocess runs
-    with cwd `.rocq_cache/`, so Rocq's tactic cache files accumulate
-    there instead of in the workspace root. The original cwd is
-    restored as soon as the subprocess is spawned.
+    A petanque session for `abs_file` (the augmented path). Transport
+    and server lifecycle — private warm `pet-server` per process with
+    deadlines, reply caps, memory bounds and recycling, or the archived
+    STDIO transport under `OMPHALOS_PET_MODE=stdio` — live in
+    `rocq_server`; this module only asks questions through the client.
     """
-    _ROCQ_CACHE_DIR.mkdir(exist_ok=True)
-    cwd = os.getcwd()
-    os.chdir(_ROCQ_CACHE_DIR)
-    try:
-        client = Pytanque(mode=PytanqueMode.STDIO)
-        client.__enter__()
-    finally:
-        os.chdir(cwd)
-    try:
+    with MANAGER.session(abs_file) as client:
         yield client
-    finally:
-        client.__exit__(None, None, None)
+
+
+#####
+##### Prefix-state memo
+#####
+
+# Rocq proof states are functional and stay valid in the server for
+# its whole life, so the state reached by a tactic prefix can be reused
+# by the next tool call that replays the same prefix (every tool call
+# does: the agent's script grows turn by turn). Keyed by the server
+# generation, so a recycle invalidates every entry implicitly. Only
+# verified successes are memoised — verdicts are unchanged; what is
+# saved is the re-execution (and re-payment of slow tactics).
+_PREFIX_MEMO: OrderedDict[tuple[int, str, str, tuple[str, ...]], State] = (
+    OrderedDict()
+)
+PREFIX_MEMO_CAP = 1024
+
+
+def _memo_enabled(client: Pytanque) -> bool:
+    # STDIO sessions die with their process: nothing to reuse.
+    return isinstance(client, BoundedPytanque)
+
+
+def _memo_key(
+    abs_file: str, theorem_name: str, prefix: tuple[str, ...]
+) -> tuple[int, str, str, tuple[str, ...]]:
+    return (MANAGER.generation, abs_file, theorem_name, prefix)
+
+
+def _memo_put(
+    abs_file: str, theorem_name: str, prefix: tuple[str, ...], state: State
+) -> None:
+    key = _memo_key(abs_file, theorem_name, prefix)
+    _PREFIX_MEMO[key] = state
+    _PREFIX_MEMO.move_to_end(key)
+    while len(_PREFIX_MEMO) > PREFIX_MEMO_CAP:
+        _PREFIX_MEMO.popitem(last=False)
+
+
+def _memo_longest_prefix(
+    abs_file: str, theorem_name: str, tactics: list[str]
+) -> tuple[int, State | None]:
+    """`(k, state)` for the longest memoised prefix `tactics[:k]`, else `(0, None)`."""
+    for k in range(len(tactics), -1, -1):
+        key = _memo_key(abs_file, theorem_name, tuple(tactics[:k]))
+        state = _PREFIX_MEMO.get(key)
+        if state is not None:
+            _PREFIX_MEMO.move_to_end(key)
+            return k, state
+    return 0, None
+
+
+def prefix_memo_size() -> int:
+    """Entries currently memoised (for tests and the timing harness)."""
+    return len(_PREFIX_MEMO)
+
+
+@dataclass
+class _Replay:
+    """
+    Outcome of opening a theorem and replaying a tactic prefix — the
+    shared core of `_replay_prefix` (previews) and `_check_against`
+    (verification), which used to duplicate the loop.
+
+    Exactly one of these holds: `start_error` (the session could not be
+    opened), `failing_index` (a tactic was rejected; `state` is the last
+    good state), `finished_at` (previews only: the proof closed after
+    that tactic index), or none of them (`state` is the state after the
+    whole prefix).
+    """
+
+    state: State | None
+    succeeded: list[str]
+    start_error: str | None = None
+    failing_index: int | None = None
+    failing_tactic: str | None = None
+    error_message: str | None = None
+    finished_at: int | None = None
+
+
+def _open_and_replay(
+    client: Pytanque,
+    abs_file: str,
+    theorem_name: str,
+    tactics: list[str],
+    *,
+    stop_when_finished: bool,
+    timeout: int,
+) -> _Replay:
+    """
+    Open `theorem_name` in `abs_file` and run `tactics` in order from
+    the longest memoised prefix. With `stop_when_finished` (previews),
+    stop as soon as the proof is closed — verification instead runs
+    every tactic and lets Rocq reject tactics after the goal is gone,
+    exactly as before.
+    """
+    memo = _memo_enabled(client)
+    k, state = (
+        _memo_longest_prefix(abs_file, theorem_name, tactics)
+        if memo
+        else (0, None)
+    )
+    if state is None:
+        try:
+            state = client.start(abs_file, theorem_name)
+        except PetanqueError as e:
+            return _Replay(state=None, succeeded=[], start_error=str(e))
+        if memo:
+            _memo_put(abs_file, theorem_name, (), state)
+        k = 0
+    succeeded = list(tactics[:k])
+    if stop_when_finished and k > 0 and state.proof_finished:
+        return _Replay(state=state, succeeded=succeeded, finished_at=k - 1)
+    for i in range(k, len(tactics)):
+        tac = tactics[i]
+        try:
+            state = _run_guarded(client, state, tac, timeout)
+        except PetanqueError as e:
+            return _Replay(
+                state=state,
+                succeeded=succeeded,
+                failing_index=i,
+                failing_tactic=tac,
+                error_message=str(e),
+            )
+        succeeded.append(tac)
+        if memo:
+            _memo_put(abs_file, theorem_name, tuple(tactics[: i + 1]), state)
+        if stop_when_finished and state.proof_finished:
+            return _Replay(state=state, succeeded=succeeded, finished_at=i)
+    return _Replay(state=state, succeeded=succeeded)
 
 
 def _resolve(path: str) -> str:
@@ -89,6 +212,16 @@ class ProblemSpec:
     informal_statement: str
     informal_proof: str
     imports: str
+    definitions: str = ""
+    """
+    The declarations the problem file makes *before* its theorem, other
+    than imports and scope openings — `Definition`, `Fixpoint`,
+    `Notation`, `Module`, ... — exactly as written, comments stripped.
+    Empty for the ~90% of miniF2F files that have none, and empty
+    whenever `parse_problem` is called with `show_definitions=False`
+    (the historical prompt). Defaulted so the materialised demos, whose
+    `spec` mappings predate the field, keep parsing.
+    """
 
 
 @dataclass
@@ -126,6 +259,45 @@ _IMPORT_LINE_RE = re.compile(
 )
 
 
+def _strip_comments(text: str) -> str:
+    """Remove `(* ... *)` comments, honouring Rocq's nesting."""
+    out: list[str] = []
+    depth = 0
+    i = 0
+    n = len(text)
+    while i < n:
+        if text.startswith("(*", i):
+            depth += 1
+            i += 2
+        elif depth and text.startswith("*)", i):
+            depth -= 1
+            i += 2
+        else:
+            if not depth:
+                out.append(text[i])
+            i += 1
+    return "".join(out)
+
+
+def _preamble_definitions(preamble: str) -> str:
+    """
+    Everything a problem file declares before its theorem, minus the
+    import/scope lines that `ProblemSpec.imports` already carries.
+
+    Deliberately *not* an allow-list of declaration keywords: an earlier
+    version matched `Definition|Fixpoint|Notation|...` and silently
+    dropped `Module NS := FSetWeakList.Make(Nat_as_OT).` on
+    `amc12a_2003_p23`. Whatever precedes the theorem is in scope when
+    the proof is checked, so the model should see all of it.
+    """
+    text = _IMPORT_LINE_RE.sub("", _strip_comments(preamble))
+    paragraphs = [
+        "\n".join(line.rstrip() for line in chunk.splitlines()).strip("\n")
+        for chunk in re.split(r"\n\s*\n", text)
+    ]
+    return "\n\n".join(p for p in paragraphs if p.strip())
+
+
 def _extract_section(header: str, label: str) -> str:
     pattern = re.compile(
         rf"{label}\s*:\s*\n(.*?)(?=\n\s*(?:Informal\s+(?:statement|proof)\s*:|Source\s*:|Split\s*:|$))",
@@ -137,7 +309,19 @@ def _extract_section(header: str, label: str) -> str:
     return m.group(1).strip()
 
 
-def parse_problem(path: str) -> ProblemSpec:
+def parse_problem(path: str, show_definitions: bool = False) -> ProblemSpec:
+    """
+    Parse a miniF2F problem file into a `ProblemSpec`.
+
+    `show_definitions` fills `ProblemSpec.definitions` with the file's
+    pre-theorem declarations (see `_preamble_definitions`), which the
+    prompt template then renders in its own section. It defaults to
+    `False` — the historical behaviour, under which 42 of the 488
+    miniF2F files asked for a proof about a symbol the model was never
+    shown — because the rendered prompt keys every LLM cache: the frozen
+    strategies keep the default and the new pipelines turn it on.
+    Verification never depended on it: pytanque loads the real file.
+    """
     path = _resolve(path)
     text = Path(path).read_text()
 
@@ -158,6 +342,11 @@ def parse_problem(path: str) -> ProblemSpec:
     imports = "\n".join(
         m.group(0).strip() for m in _IMPORT_LINE_RE.finditer(text)
     )
+    definitions = ""
+    if show_definitions:
+        # Only the preamble: a declaration appearing after the theorem
+        # belongs to a later theorem in the same file, not to this one.
+        definitions = _preamble_definitions(text[: thm_match.start()])
 
     return ProblemSpec(
         file=path,
@@ -166,6 +355,7 @@ def parse_problem(path: str) -> ProblemSpec:
         informal_statement=informal_statement,
         informal_proof=informal_proof,
         imports=imports,
+        definitions=definitions,
     )
 
 
@@ -216,9 +406,18 @@ def split_into_tactics(script: str) -> list[str]:
     return tactics
 
 
+GOALS_OVERFLOW_MARKER = (
+    "<goal state too large to transfer: the prover's reply exceeded the "
+    "size cap and the server was restarted; simplify the proof state>"
+)
+
+
 def _safe_goals(client: Pytanque, state: State) -> list[str]:
     try:
         goals = client.goals(state)
+    except ReplyTooLarge:
+        # A silent `[]` would read as "no goals"; say what happened.
+        return [GOALS_OVERFLOW_MARKER]
     except Exception:
         return []
     out: list[str] = []
@@ -232,53 +431,47 @@ def _safe_goals(client: Pytanque, state: State) -> list[str]:
     return out
 
 
-def _materialize_with_extra_imports(
-    file: str, extra_imports: tuple[str, ...]
-) -> str:
-    """
-    Write a temp copy of `file` to a fresh directory under the system
-    tempdir, with the extra `Require Import` lines prepended. Returns
-    the temp path; the caller is responsible for unlinking the file and
-    its parent directory.
-
-    The temp file lives *outside* the miniF2F tree to escape the
-    `_CoqProject` whitelist: petanque restricts theorem lookup to files
-    listed in `_CoqProject`, so a sibling temp file inside the tree
-    cannot be opened. The miniF2F problems we run only use stdlib
-    imports, so there is no cross-file reference to break.
-    """
-    src = Path(file).resolve()
-    body = src.read_text()
-    preamble = "\n".join(extra_imports) + "\n"
-    tag = secrets.token_hex(4)
-    tmp_dir = Path(tempfile.gettempdir()) / f"omphalos_aug_{tag}"
-    tmp_dir.mkdir(parents=True, exist_ok=False)
-    dst = tmp_dir / src.name
-    dst.write_text(preamble + body)
-    return str(dst)
-
-
 @contextmanager
 def _augmented_file(
     file: str, extra_imports: tuple[str, ...]
 ) -> Generator[str]:
     """
-    Yield the path pytanque should be pointed at: a temp copy of `file`
-    with `extra_imports` prepended (cleaned up on exit), or `file`
-    itself if there is nothing to prepend.
+    Yield the path pytanque should be pointed at: the stable copy of
+    `file` with `extra_imports` prepended (`rocq_server.augmented_path`
+    — outside the miniF2F `_CoqProject` whitelist, byte-identical to
+    the temp copies of the archived runs, and stable so the warm server
+    reuses its document), or `file` itself if there is nothing to
+    prepend.
     """
-    if not extra_imports:
-        yield file
-        return
-    run_file = _materialize_with_extra_imports(file, extra_imports)
-    try:
-        yield run_file
-    finally:
-        try:
-            os.unlink(run_file)
-            os.rmdir(Path(run_file).parent)
-        except OSError:
-            pass
+    yield rocq_server.augmented_path(file, extra_imports)
+
+
+@dataclass(frozen=True)
+class GoalCaps:
+    """
+    Runaway-goal guard (a *treatment*, pre-registered separately; the
+    default everywhere is `None` = the archived behaviour). A failed
+    script can leave hundreds of open goals (`repeat constructor` on a
+    long `NoDup` left 1128 in one validationX cell); the battery then
+    probes every goal (17 tactics × up to 4 s each) and the feedback
+    renders every goal (82 KB in one message). With caps, the battery
+    probes the first `probe` goals, the feedback lists the first
+    `render` goals (each cut at `render_chars` characters) followed by a
+    marker line saying how many were hidden and how many were probed.
+    Encoded inside the existing `Feedback` fields, so the cached output
+    shape is unchanged.
+    """
+
+    probe: int = 24
+    render: int = 12
+    render_chars: int = 2000
+
+
+GOALS_TRUNCATED_MARKER = (
+    "... {hidden} more goal(s) not shown ({shown} of {total} listed); the "
+    "automation battery probed the first {probed}. Too many open goals: "
+    "prefer tactics that close or merge goals before proceeding."
+)
 
 
 def check(
@@ -287,16 +480,17 @@ def check(
     tactics: list[str],
     extra_imports: tuple[str, ...] = DEFAULT_EXTRA_IMPORTS,
     probe_automation: bool = False,
+    goal_caps: GoalCaps | None = None,
 ) -> Feedback:
     """
-    Open a fresh Pytanque STDIO session, replay `tactics` against the
-    theorem, attempt a final `Qed.`, and return structured feedback.
+    Open a Pytanque session, replay `tactics` against the theorem,
+    attempt a final `Qed.`, and return structured feedback.
 
     One session per call: keeps lifetime obvious and side-effect free.
 
-    If `extra_imports` is non-empty, a temp copy of `file` is created
-    outside the miniF2F tree with those imports prepended (the original
-    is not modified); pytanque is pointed at the temp copy.
+    If `extra_imports` is non-empty, pytanque is pointed at a stable
+    copy of `file` outside the miniF2F tree with those imports
+    prepended (the original is not modified).
 
     With `probe_automation=True`, verification is *automation-assisted*:
     whenever the script fails or leaves goals open, each remaining goal
@@ -304,11 +498,14 @@ def check(
     `Feedback.probe`), and if every goal closes, the verifier finishes
     the proof itself — returning success with `auto_finished=True` and
     the complete assembled script in `proof_so_far`.
+
+    `goal_caps` (treatment, off by default — see `GoalCaps`) bounds how
+    many goals the battery probes and how many are reported.
     """
     file = _resolve(file)
     with _augmented_file(file, extra_imports) as run_file:
         return _check_against(
-            run_file, theorem_name, tactics, probe_automation
+            run_file, theorem_name, tactics, probe_automation, goal_caps
         )
 
 
@@ -316,13 +513,17 @@ def check_assisted(
     file: str,
     theorem_name: str,
     tactics: list[str],
+    goal_caps: GoalCaps | None = None,
 ) -> Feedback:
     """
     `check` with automation-assisted verification enabled. Kept as a
     named top-level entry point so strategies can pass it to
-    `dp.compute(...)` directly.
+    `dp.compute(...)` directly. Strategies pass `goal_caps` only when
+    set, so the compute cache keys of archived runs are untouched.
     """
-    return check(file, theorem_name, tactics, probe_automation=True)
+    return check(
+        file, theorem_name, tactics, probe_automation=True, goal_caps=goal_caps
+    )
 
 
 def inspect_at(
@@ -407,10 +608,66 @@ AUTOMATION_TACTIC_TIMEOUT = 4
 # legitimate proposal tactics may be slow, but without any cap a
 # single diverging tactic in a sampled proposal parks the pet process
 # forever (observed 2026-07-22: one experiment config spun Rocq at
-# 100% CPU for 13+ hours). Residual hole: pytanque only wraps
-# `Timeout` around sentences that end with `.` and do not start with
-# a bullet, so bullet-led tactics (`- nia.`) still run unguarded.
+# 100% CPU for 13+ hours; again 2026-08-25 on a bullet-led sentence,
+# 40 min before the watchdog). pytanque only wraps `Timeout` around
+# sentences that end with `.` and do not start with a bullet, so
+# `_run_guarded` splits the leading bullets/braces off — they are pure
+# goal-focusing steps that cannot diverge — and runs the remainder
+# under the wrapper. Model-authored sentences must go through
+# `_run_guarded`, never bare `client.run`.
 PROOF_TACTIC_TIMEOUT = 120
+
+_FOCUS_RE = re.compile(r"^\s*([-+*]+|\{|\})\s*(.*)$", re.DOTALL)
+
+
+def _split_focus(sentence: str) -> tuple[list[str], str]:
+    """
+    `([focus tokens], remainder)` — the leading bullet/brace tokens of
+    a sentence, each a complete Rocq proof step of its own, and what
+    is left (possibly empty). `"- { nia. }"` -> `(["-", "{"], "nia. }")`;
+    the trailing `}` stays with the remainder, where it is harmless
+    (closing a brace cannot diverge).
+    """
+    focus: list[str] = []
+    rest = sentence
+    while True:
+        m = _FOCUS_RE.match(rest)
+        if (
+            m is None
+            or not m.group(2).strip()
+            and m.group(1) not in ("{", "}")
+        ):
+            break
+        if m.group(1) == "}":
+            break
+        focus.append(m.group(1))
+        rest = m.group(2)
+        if not rest.strip():
+            break
+    return focus, rest
+
+
+def _run_guarded(
+    client: "Pytanque", state: "State", sentence: str, timeout: int
+) -> "State":
+    """
+    `client.run` with the timeout actually enforced.
+
+    pytanque turns `timeout=` into a `Timeout {t} {cmd}` wrapper only
+    for sentences that end with `.` and do not open with a bullet, so
+    a sampled `- nia.` used to run unguarded (and could spin Rocq
+    forever). Here the focusing prefix runs on its own — instant by
+    construction — and the remaining tactic gets the wrapper.
+    """
+    focus, rest = _split_focus(sentence)
+    if not focus:
+        return client.run(state, sentence, timeout=timeout)
+    for token in focus:
+        state = client.run(state, token, timeout=timeout)
+    if rest.strip():
+        state = client.run(state, rest, timeout=timeout)
+    return state
+
 
 # Cap on the number of candidates one `try_tactics` call evaluates
 # (parity with the 20-tactic batch limit of comparable stepping APIs);
@@ -553,33 +810,34 @@ def _replay_prefix(
     non-`None` report is a preformatted error / "PROOF FINISHED"
     string that should be returned to the agent as-is.
     """
-    try:
-        state = client.start(abs_file, theorem_name)
-    except PetanqueError as e:
-        return None, f"Failed to open session: {e}"
-
-    succeeded: list[str] = []
-    for i, tac in enumerate(tactics):
-        try:
-            state = client.run(state, tac, timeout=PROOF_TACTIC_TIMEOUT)
-        except PetanqueError as e:
-            return None, _format_try_failure(
-                failing_index=i,
-                failing_tactic=tac,
-                error_message=str(e),
-                succeeded=succeeded,
-                remaining_goals=_safe_goals(client, state),
-                char_cap=char_cap,
-            )
-        succeeded.append(tac)
-
-        if state.proof_finished:
-            return None, _format_try_proof_finished(
-                succeeded=succeeded,
-                leftover=tactics[i + 1 :],
-            )
-
-    return state, None
+    r = _open_and_replay(
+        client,
+        abs_file,
+        theorem_name,
+        tactics,
+        stop_when_finished=True,
+        timeout=PROOF_TACTIC_TIMEOUT,
+    )
+    if r.start_error is not None:
+        return None, f"Failed to open session: {r.start_error}"
+    if r.failing_index is not None:
+        assert r.state is not None
+        assert r.failing_tactic is not None and r.error_message is not None
+        return None, _format_try_failure(
+            failing_index=r.failing_index,
+            failing_tactic=r.failing_tactic,
+            error_message=r.error_message,
+            succeeded=r.succeeded,
+            remaining_goals=_safe_goals(client, r.state),
+            char_cap=char_cap,
+        )
+    if r.finished_at is not None:
+        return None, _format_try_proof_finished(
+            succeeded=r.succeeded,
+            leftover=tactics[r.finished_at + 1 :],
+        )
+    assert r.state is not None
+    return r.state, None
 
 
 def _inspect_against(
@@ -594,7 +852,7 @@ def _inspect_against(
     the introspection command at the resulting state (if provided) and
     report its output together with the goals at that state.
     """
-    with _pytanque_session() as client:
+    with _pytanque_session(abs_file) as client:
         state, report = _replay_prefix(
             client, abs_file, theorem_name, tactics, char_cap
         )
@@ -653,7 +911,7 @@ def _automation_against(
     probe each remaining subgoal with the automation battery using goal
     selectors (`2: lia.`), recording the first closing tactic per goal.
     """
-    with _pytanque_session() as client:
+    with _pytanque_session(abs_file) as client:
         state, report = _replay_prefix(
             client, abs_file, theorem_name, tactics, char_cap
         )
@@ -698,7 +956,7 @@ def _try_tactics_against(
     functional, so candidates never see each other's effects) and
     collect a `_CandidateOutcome` per candidate.
     """
-    with _pytanque_session() as client:
+    with _pytanque_session(abs_file) as client:
         state, report = _replay_prefix(
             client, abs_file, theorem_name, prefix, char_cap
         )
@@ -768,8 +1026,16 @@ def _run_candidate(
     """
     cur = state
     for j, sentence in enumerate(sentences):
+        if getattr(client, "poisoned", False):
+            return _CandidateOutcome(
+                candidate=candidate,
+                status="error",
+                detail=rocq_server.TRANSPORT_FAILURE_TEXT.format(
+                    kind="earlier failure in this session"
+                ),
+            )
         try:
-            cur = client.run(cur, sentence, timeout=tactic_timeout)
+            cur = _run_guarded(client, cur, sentence, tactic_timeout)
         except Exception as e:
             detail = str(e)
             if len(sentences) > 1:
@@ -865,19 +1131,41 @@ def _format_try_tactics_report(
     return text
 
 
+# Every successful battery probe leaves a proof state in the server,
+# which petanque never frees: probing a goal flood (1128 goals in one
+# archived cell) grew the server by ~2 GB. The battery therefore checks
+# the server's memory budget every few goals and stops probing when it
+# is exceeded (the remaining goals count as "not closed", the server is
+# recycled before the next session) — a bounded outcome where the old
+# regime ended in a watchdog kill or a kernel OOM.
+PROBE_RSS_CHECK_EVERY = 8
+
+
 def _probe_goals(
     client: Pytanque,
     state: State,
     n: int,
     tactic_timeout: int,
+    goal_cap: int | None = None,
 ) -> list[str | None]:
     """
     Try the automation battery on each of the `n` goals of `state`
     (via goal selectors), returning the first closing tactic per goal,
-    or `None` for goals the battery cannot close.
+    or `None` for goals the battery cannot close. With `goal_cap`, only
+    the first `goal_cap` goals are probed and the list is that short.
     """
+    limit = n if goal_cap is None else min(n, goal_cap)
     closers: list[str | None] = []
-    for i in range(1, n + 1):
+    for i in range(1, limit + 1):
+        if getattr(client, "poisoned", False):
+            break
+        if (
+            i > 1
+            and (i - 1) % PROBE_RSS_CHECK_EVERY == 0
+            and MANAGER.over_budget()
+        ):
+            MANAGER.request_recycle("rss during battery")
+            break
         found: str | None = None
         for tac in AUTOMATION_BATTERY:
             probe = f"{i}: {tac}" if n > 1 else tac
@@ -889,6 +1177,11 @@ def _probe_goals(
                 found = tac
                 break
         closers.append(found)
+    # Goals the battery never reached (memory stop, poisoned session)
+    # count as "not closed"; an explicit `goal_cap` keeps the list short
+    # so the feedback can say how many were probed.
+    while len(closers) < limit:
+        closers.append(None)
     return closers
 
 
@@ -909,7 +1202,7 @@ def _apply_closers(
     for i in range(n, 0, -1):
         sentence = f"{i}: {closers[i - 1]}" if n > 1 else closers[0]
         try:
-            state = client.run(state, sentence, timeout=tactic_timeout)
+            state = _run_guarded(client, state, sentence, tactic_timeout)
         except Exception:
             return None
         applied.append(sentence)
@@ -1077,13 +1370,20 @@ def _query_against(
     command: str,
     char_cap: int,
 ) -> str:
-    with _pytanque_session() as client:
+    with _pytanque_session(abs_file) as client:
+        r = _open_and_replay(
+            client,
+            abs_file,
+            theorem_name,
+            [],
+            stop_when_finished=False,
+            timeout=PROOF_TACTIC_TIMEOUT,
+        )
+        if r.start_error is not None:
+            return f"Failed to open session: {r.start_error}"
+        assert r.state is not None
         try:
-            state = client.start(abs_file, theorem_name)
-        except PetanqueError as e:
-            return f"Failed to open session: {e}"
-        try:
-            state = client.run(state, command, timeout=PROOF_TACTIC_TIMEOUT)
+            state = client.run(r.state, command, timeout=PROOF_TACTIC_TIMEOUT)
         except PetanqueError as e:
             return f"Rocq rejected the command: {e}"
         return _format_feedback(state, char_cap)
@@ -1107,33 +1407,39 @@ def _check_against(
     theorem_name: str,
     tactics: list[str],
     probe_automation: bool,
+    goal_caps: GoalCaps | None = None,
 ) -> Feedback:
-    proof_so_far: list[str] = []
-    with _pytanque_session() as client:
-        try:
-            state = client.start(abs_file, theorem_name)
-        except PetanqueError as e:
+    with _pytanque_session(abs_file) as client:
+        r = _open_and_replay(
+            client,
+            abs_file,
+            theorem_name,
+            tactics,
+            stop_when_finished=False,
+            timeout=PROOF_TACTIC_TIMEOUT,
+        )
+        if r.start_error is not None:
             return Feedback(
                 success=False,
                 failing_index=None,
                 failing_tactic=None,
-                error_message=f"Failed to start session: {e}",
+                error_message=f"Failed to start session: {r.start_error}",
             )
-
-        for i, tac in enumerate(tactics):
-            try:
-                state = client.run(state, tac, timeout=PROOF_TACTIC_TIMEOUT)
-            except PetanqueError as e:
-                return _failure_feedback(
-                    client,
-                    state,
-                    failing_index=i,
-                    failing_tactic=tac,
-                    error_message=str(e),
-                    proof_so_far=proof_so_far,
-                    probe_automation=probe_automation,
-                )
-            proof_so_far.append(tac)
+        assert r.state is not None
+        if r.failing_index is not None:
+            assert r.failing_tactic is not None and r.error_message is not None
+            return _failure_feedback(
+                client,
+                r.state,
+                failing_index=r.failing_index,
+                failing_tactic=r.failing_tactic,
+                error_message=r.error_message,
+                proof_so_far=r.succeeded,
+                probe_automation=probe_automation,
+                goal_caps=goal_caps,
+            )
+        state = r.state
+        proof_so_far = r.succeeded
 
         try:
             state = client.run(state, "Qed.", timeout=PROOF_TACTIC_TIMEOUT)
@@ -1146,6 +1452,7 @@ def _check_against(
                 error_message=str(e),
                 proof_so_far=proof_so_far,
                 probe_automation=probe_automation,
+                goal_caps=goal_caps,
             )
 
         return Feedback(
@@ -1153,6 +1460,32 @@ def _check_against(
             proof_so_far=list(proof_so_far),
             finished=True,
         )
+
+
+def _cap_goals(
+    goals: list[str], probe: list[str | None] | None, caps: GoalCaps
+) -> list[str]:
+    """
+    The `remaining_goals` a capped `Feedback` reports: the first
+    `caps.render` goals (each cut at `caps.render_chars`) and, when any
+    was hidden, the `GOALS_TRUNCATED_MARKER` as a final entry.
+    """
+    shown = goals[: caps.render]
+    out: list[str] = []
+    for g in shown:
+        if len(g) > caps.render_chars:
+            g = g[: caps.render_chars].rstrip() + "\n[goal truncated]"
+        out.append(g)
+    if len(goals) > len(shown):
+        out.append(
+            GOALS_TRUNCATED_MARKER.format(
+                hidden=len(goals) - len(shown),
+                shown=len(shown),
+                total=len(goals),
+                probed=len(probe) if probe is not None else 0,
+            )
+        )
+    return out
 
 
 def _failure_feedback(
@@ -1163,6 +1496,7 @@ def _failure_feedback(
     error_message: str,
     proof_so_far: list[str],
     probe_automation: bool,
+    goal_caps: GoalCaps | None = None,
 ) -> Feedback:
     """
     Build the feedback for a failed / incomplete check. `state` is the
@@ -1171,15 +1505,34 @@ def _failure_feedback(
     if every goal closes, the closers are applied (descending goal
     order) and `Qed.` is attempted — turning the failure into an
     `auto_finished` success.
+
+    A transport failure while collecting goals or probing (deadline,
+    reply cap, server death) is reported in `error_message` instead of
+    the Rocq error: the attempt has no verdict, and the cell continues.
     """
+    if isinstance(client, BoundedPytanque) and client.poisoned:
+        return Feedback(
+            success=False,
+            failing_index=failing_index,
+            failing_tactic=failing_tactic,
+            error_message=rocq_server.TRANSPORT_FAILURE_TEXT.format(
+                kind=error_message
+            ),
+            proof_so_far=list(proof_so_far),
+        )
     goals = _safe_goals(client, state)
     probe: list[str | None] | None = None
     if probe_automation and goals and not state.proof_finished:
         probe = _probe_goals(
-            client, state, len(goals), AUTOMATION_TACTIC_TIMEOUT
+            client,
+            state,
+            len(goals),
+            AUTOMATION_TACTIC_TIMEOUT,
+            goal_cap=goal_caps.probe if goal_caps is not None else None,
         )
         closers = [c for c in probe if c is not None]
-        if len(closers) == len(probe):
+        # Only a complete, all-closing probe may finish the proof.
+        if len(closers) == len(probe) == len(goals):
             finished = _apply_closers(
                 client, state, closers, AUTOMATION_TACTIC_TIMEOUT
             )
@@ -1197,6 +1550,8 @@ def _failure_feedback(
                     )
                 except PetanqueError:
                     pass  # fall through to ordinary failure feedback
+    if goal_caps is not None:
+        goals = _cap_goals(goals, probe, goal_caps)
     return Feedback(
         success=False,
         failing_index=failing_index,

@@ -244,8 +244,17 @@ class AgenticConfig:
     # comparison. Sized ~3x the worst per-problem spend at sol rates.
     max_dollar_budget: float | None = 2.0
 
+    def _problem(self) -> tuple[str, str]:
+        """
+        `(problem_file, theorem_name)` for `bench_name`. A method so a
+        subclass registered on another problem set (the X partitions in
+        `experiments/minif2f_x.py`) can resolve it without this module
+        having to load that set at import time.
+        """
+        return ALL_PROBLEMS[self.bench_name]
+
     def instantiate(self, context: object) -> dp.RunStrategyArgs:
-        problem_file, theorem_name = ALL_PROBLEMS[self.bench_name]
+        problem_file, theorem_name = self._problem()
         budget: dict[str, float] = {dp.NUM_REQUESTS: float(self.num_requests)}
         if self.max_dollar_budget is not None:
             budget[dp.DOLLAR_PRICE] = self.max_dollar_budget
