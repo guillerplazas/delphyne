@@ -58,6 +58,7 @@ Usage:
 import hashlib
 import random
 import re
+import shutil
 import sys
 import uuid
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -89,10 +90,20 @@ from ace_dedup import (  # noqa: E402
     LexicalDeduper,
 )
 import omphalos_launch as ol  # noqa: E402
+from ace_evidence import (  # noqa: E402
+    FailedVerdict,
+    checkable_references,
+    collect_failures,
+    known_guidance,
+    render_digest,
+    representative_files,
+)
 from ace_playbook import (  # noqa: E402
+    AddOp,
     BulletTag,
     Deduper,
     Playbook,
+    apply_audit,
     merge,
     rebuild,
     refine,
@@ -105,6 +116,8 @@ from ace_store import (  # noqa: E402
 )
 from prove_ace import (  # noqa: E402
     CurationDelta,
+    GroundingResult,
+    PlaybookAudit,
     PlaybookRewrite,
     Reflection,
 )
@@ -131,6 +144,37 @@ ALL_PROBLEMS: Mapping[str, tuple[str, str]] = {
 
 Mode = Literal["offline", "online"]
 DedupKind = Literal["lexical", "jaccard", "embedding"]
+
+
+ADAPT_MODEL = "gpt-5.6-luna"
+ADAPT_TOOLSET = "core"
+ADAPT_EFFORT = "medium"
+CURATION_ROLES: frozenset[str] = frozenset(
+    {"curator", "reducer", "grounder", "auditor"}
+)
+"""The roles a variant's `curator_model` / `curator_effort` govern."""
+GENERATOR_NUM_REQUESTS = 32
+ROLE_NUM_REQUESTS = 3
+"""Reflector/Curator: 1 shot + up to 2 parse-retries."""
+REWRITE_DOLLAR_CAP = 0.04
+"""
+Cap for the monolithic curator, which emits the WHOLE playbook rather
+than a delta: ~12k input + ~3k output is ~$0.006 at luna rates, so
+three parse-retries worst-case is ~$0.018. `ROLE_DOLLAR_CAP` would
+therefore *bind* on this arm rather than act as a safety net, which
+would silently truncate the ablation it exists to measure.
+"""
+ROLE_DOLLAR_CAP = 0.02
+"""
+Safety net for one-shot roles. A reflector call is ~10-25k input +
+~2k output tokens ≈ $0.005-0.008 at luna rates, so $0.02 is ~3x the
+worst expected call, per the sizing convention of the other caps.
+"""
+TRAJECTORY_MAX_CHARS = 80_000
+"""~20k tokens; longer trajectories are cut head+tail with a marker."""
+MAX_RETRIES = 2
+"""Transient failures (a dropped connection, a Rocq timeout) are
+retried this many times before a role is declared failed."""
 
 
 @dataclass(frozen=True)
@@ -190,6 +234,38 @@ class AdaptVariant:
     those bullets (other tags are dropped and counted in
     `tags_dropped`). A Generator that cites nothing moves no counter.
     """
+    reflector_effort: str | None = None
+    curator_effort: str | None = None
+    """
+    Per-role overrides of `ADAPT_EFFORT`. Like `reflector_model` /
+    `curator_model`, the curator setting covers the whole curation side
+    (curator, reducer, grounder, auditor): the reducer *is* a curator
+    and the 2026-08 hook silently left it on the default model.
+    """
+    role_cap: float = ROLE_DOLLAR_CAP
+    """
+    Per-call dollar cap for the one-shot roles. `ROLE_DOLLAR_CAP` is
+    sized for luna; a variant that puts a dearer model on a role must
+    scale it, or the safety net binds and truncates the very thing the
+    arm measures (the lesson of `REWRITE_DOLLAR_CAP`).
+    """
+    reducer_contract: int = 1
+    grounding: bool = False
+    skip_trivial: bool = False
+    audit: bool = False
+    audit_max_additions: int = 6
+    preaudit_playbook: str | None = None
+    """
+    v5 (2026-09-02). `reducer_contract=2` shows the reducer the pool's
+    failure digest (needs `curator_contract >= 4`, which computes it).
+    `grounding` runs the Rocq gate on every ADD's `references` and
+    refuses bullets naming objects Rocq does not know. `skip_trivial`
+    spends no Reflector/Curator call on a first-proposal solve.
+    `audit` runs `AuditPlaybook` once after the last step, freezing the
+    pre-audit playbook under `preaudit_playbook` first so the audit's
+    own effect stays measurable. All default off: every recorded
+    variant is unchanged.
+    """
 
     def __post_init__(self) -> None:
         assert self.pool in POOLS, (
@@ -209,6 +285,14 @@ class AdaptVariant:
             )
         else:
             assert self.final_playbook is not None
+        if self.grounding or self.audit or self.reducer_contract >= 2:
+            assert self.mode == "offline" and self.curator_contract >= 4, (
+                "the v5 mechanisms (grounding, audit, reducer contract 2)"
+                " need the contract-4 curator and offline mode"
+            )
+        assert (self.preaudit_playbook is not None) == self.audit, (
+            "`preaudit_playbook` is named exactly when `audit` is on"
+        )
 
     def warmup(self) -> Playbook:
         """The frozen playbook an online chain starts from, or empty."""
@@ -224,9 +308,16 @@ class AdaptVariant:
     def role_model(self, role: str) -> str:
         if role == "reflector" and self.reflector_model is not None:
             return self.reflector_model
-        if role == "curator" and self.curator_model is not None:
+        if role in CURATION_ROLES and self.curator_model is not None:
             return self.curator_model
         return ADAPT_MODEL
+
+    def role_effort(self, role: str) -> str:
+        if role == "reflector" and self.reflector_effort is not None:
+            return self.reflector_effort
+        if role in CURATION_ROLES and self.curator_effort is not None:
+            return self.curator_effort
+        return ADAPT_EFFORT
 
 
 _X_COMMON: dict[str, Any] = dict(
@@ -257,6 +348,25 @@ _X3_COMMON: dict[str, Any] = dict(
     generator_cap=x.X_DOLLAR_CAP,
 )
 """v3 = v2 machinery + the 2026-08-25 reference-audit polish."""
+
+
+_X5_COMMON: dict[str, Any] = dict(
+    _X3_COMMON,
+    curator_contract=4,
+    reducer_contract=2,
+    grounding=True,
+    skip_trivial=True,
+    audit=True,
+)
+"""
+v5 (2026-09-02) = v3 machinery + evidence-first curation: the pool's
+verifier-failure digest and the prover's own pitfalls in the Curator
+and Reducer prompts (contracts 4 / 2), the Rocq grounding gate on every
+ADD, no role calls on trivial solves, and one terminal audit pass.
+Built from the diagnosis in PROGRESS 2026-09-02 (causes C1-C4); the
+Generator prompt is untouched (render_version 3), so an evaluation cell
+differs from an x3 cell in playbook content only.
+"""
 
 
 def _online3(
@@ -419,6 +529,58 @@ VARIANTS: Mapping[str, AdaptVariant] = {
     "x4-online-s0": _online3(
         "x4-online-s0", "validationX", 0, None, scope="cited"
     ),
+    # ---- 2026-09-02: role strength as its own arm (HINTS #49). ----
+    # x3-strong = x3-offline with gpt-5.6-terra as Reflector and as
+    # every curation role (curator, reducer), at the same medium effort;
+    # the Generator stays luna, so evaluation cells are byte-identical
+    # in everything but playbook content. `role_cap` scales the one-shot
+    # safety net for terra's ~10x rates (a reflector call is ~$0.05-0.08
+    # there; 0.25 ≈ 3x the worst expected call, the standing sizing
+    # rule). Pre-registered before the run: primary = paired solves of
+    # the frozen playbook on validationX (seeds 0, 1) against the
+    # baseline and against `ace_x3_offline`'s rv3 evaluation, exact
+    # sign test, six-cell power floor; secondary = spend on jointly
+    # solved cells, the error taxonomy (unknown-reference, syntax-error,
+    # prover-crash) and the playbook statistics (bullets, tokens, share
+    # never tagged); testX only by the standing selection rule. Expected
+    # adaptation spend ≈ $3; the 2026-09-02 study stops above $15 total.
+    "x3-strong": AdaptVariant(
+        "x3-strong",
+        "trainX",
+        "ace_x3_strong.yaml",
+        shuffle_seed=0,
+        batch_size=4,
+        reduce_batch=True,
+        reflector_model="gpt-5.6-terra",
+        curator_model="gpt-5.6-terra",
+        role_cap=0.25,
+        **_X3_COMMON,
+    ),
+    # ---- 2026-09-02: v5, evidence-first curation (the method arm). ----
+    # x5-offline = x3-offline's pool, order, batching, guard, dedup and
+    # refine cadence, plus the v5 mechanisms (`_X5_COMMON`). Not a
+    # minimal pair — disclosed: it bundles the digest, the grounding
+    # gate, trivial-solve skipping and the terminal audit, because the
+    # study buys one method arm; the pre-audit playbook is frozen so
+    # the audit can be ablated later for one evaluation. Pre-registered
+    # before the run, same rules as x3-strong: primary = paired solves
+    # of `ace_x5_offline.yaml` on validationX (seeds 0, 1) against the
+    # baseline and against `ace_x3_offline`'s rv3 evaluation, exact
+    # sign test, six-cell floor; secondary = spend on jointly solved
+    # cells, the taxonomy (unknown-reference, syntax-error,
+    # prover-crash), the playbook statistics (bullets, tokens, share
+    # never tagged, `ungrounded` refusals, audit drops); testX only by
+    # the standing selection rule. Expected adaptation spend ≈ $1.5.
+    "x5-offline": AdaptVariant(
+        "x5-offline",
+        "trainX",
+        "ace_x5_offline.yaml",
+        shuffle_seed=0,
+        batch_size=4,
+        reduce_batch=True,
+        preaudit_playbook="ace_x5_offline_preaudit.yaml",
+        **_X5_COMMON,
+    ),
     # testX look of the online arm, one chain, cold start — launched
     # only because x3-online-s0 met the pre-registered selection rule
     # on validationX (28 vs 27 paired solves, 2026-08-27). Never re-run.
@@ -457,33 +619,6 @@ def _output_dir(variant: str) -> str:
 
 def _online_output_dir(variant: str) -> str:
     return f"experiments/output/ace_online_{variant}_agentic"
-
-
-ADAPT_MODEL = "gpt-5.6-luna"
-ADAPT_TOOLSET = "core"
-ADAPT_EFFORT = "medium"
-GENERATOR_NUM_REQUESTS = 32
-ROLE_NUM_REQUESTS = 3
-"""Reflector/Curator: 1 shot + up to 2 parse-retries."""
-REWRITE_DOLLAR_CAP = 0.04
-"""
-Cap for the monolithic curator, which emits the WHOLE playbook rather
-than a delta: ~12k input + ~3k output is ~$0.006 at luna rates, so
-three parse-retries worst-case is ~$0.018. `ROLE_DOLLAR_CAP` would
-therefore *bind* on this arm rather than act as a safety net, which
-would silently truncate the ablation it exists to measure.
-"""
-ROLE_DOLLAR_CAP = 0.02
-"""
-Safety net for one-shot roles. A reflector call is ~10-25k input +
-~2k output tokens ≈ $0.005-0.008 at luna rates, so $0.02 is ~3x the
-worst expected call, per the sizing convention of the other caps.
-"""
-TRAJECTORY_MAX_CHARS = 80_000
-"""~20k tokens; longer trajectories are cut head+tail with a marker."""
-MAX_RETRIES = 2
-"""Transient failures (a dropped connection, a Rocq timeout) are
-retried this many times before a role is declared failed."""
 
 
 def _sha256(text: str) -> str:
@@ -672,6 +807,19 @@ def read_outcome(config_dir: Path) -> str:
     return read_result(config_dir)[1]
 
 
+def read_requests(config_dir: Path) -> int:
+    """Requests the generator spent, from `result.yaml`."""
+    raw: Any = _yaml_load(config_dir / "result.yaml")
+    result = cast(dict[str, Any], raw["outcome"]["result"])
+    spent = cast(dict[str, Any], result["spent_budget"])
+    return int(spent.get("num_requests", 0))
+
+
+AUDIT_BENCH = "final"
+"""`bench_name` of the terminal auditor and its grounder: they belong
+to no problem (`_problem()` is never called on them)."""
+
+
 #####
 ##### Configurations
 #####
@@ -748,6 +896,26 @@ class ACEAdaptStepConfig:
     """
     reflector_scope: str = "all"
     """`AdaptVariant.reflector_scope`; part of the reflector's identity."""
+    reducer_contract: int = 1
+    evidence: str = ""
+    known_guidance: str = ""
+    """
+    v5 curation evidence (pinned like `progress`, so a config can never
+    run against a different digest than it was created for): the
+    rendered pool-level failure digest and the prover's own pitfalls.
+    """
+    references: str = ""
+    environments: str = ""
+    """
+    Grounder input: the names to `Locate`, newline-joined, and the
+    `problem_file@theorem_name` environments to try, `|`-joined. Both
+    are the whole input — nothing is re-derived from another config —
+    so identity pins exactly what was checked.
+    """
+    provenance: str = ""
+    audit_max_additions: int = 0
+    """Auditor input: the rendered per-bullet provenance block and the
+    additions cap."""
 
     # --- inputs ---------------------------------------------------
 
@@ -953,6 +1121,9 @@ class ACEAdaptStepConfig:
                 "outcome": read_outcome(self._gen_dir()),
                 "progress": self.progress,
             }
+        if self.curator_contract >= 4:
+            v3["evidence"] = self.evidence
+            v3["known_guidance"] = self.known_guidance
         return dp.RunStrategyArgs(
             strategy="curate_playbook",
             args={
@@ -982,12 +1153,19 @@ class ACEAdaptStepConfig:
                 _OMPHALOS_DIR / rel
                 for rel in self.generator_dir.split("|")
                 if rel
-            ]
+            ],
+            with_references=self.reducer_contract >= 2,
         )
         assert _sha256(proposals) == self.upstream_sha256, (
             f"reducer proposals for step {self.step} drifted from the"
             " hash recorded at config-creation time"
         )
+        v2: dict[str, Any] = {}
+        if self.reducer_contract >= 2:
+            v2 = {
+                "contract_version": self.reducer_contract,
+                "evidence": self.evidence,
+            }
         return dp.RunStrategyArgs(
             strategy="aggregate_curation_deltas",
             args={
@@ -995,8 +1173,51 @@ class ACEAdaptStepConfig:
                 "proposals": proposals,
                 "max_new_bullets": self.max_new_bullets,
                 "progress": self.progress,
+                **v2,
             },
             policy="aggregate_curation_deltas_policy",
+            policy_args=self._policy_args(self.num_requests),
+            budget=self._budget(),
+        )
+
+    def _grounder_args(self) -> dp.RunStrategyArgs:
+        """
+        The grounding gate's Rocq half (`prove_ace.ground_references`):
+        no LLM, `Compute` only, one `Locate` per (name, environment)
+        until a name resolves. The budget is nominal — nothing is
+        spent — and `needs_rocq` is decided by the driver.
+        """
+        names = [n for n in self.references.split("\n") if n]
+        environments = [
+            (file, theorem)
+            for file, _, theorem in (
+                spec.partition("@")
+                for spec in self.environments.split("|")
+                if spec
+            )
+        ]
+        assert names and environments, (
+            "grounder scheduled with nothing to check"
+        )
+        return dp.RunStrategyArgs(
+            strategy="ground_references",
+            args={"names": names, "environments": environments},
+            policy="ground_references_policy",
+            policy_args={},
+            budget=self._budget(),
+        )
+
+    def _auditor_args(self) -> dp.RunStrategyArgs:
+        return dp.RunStrategyArgs(
+            strategy="audit_playbook",
+            args={
+                "playbook": self._load_playbook().render_markdown(),
+                "provenance": self.provenance,
+                "evidence": self.evidence,
+                "known_guidance": self.known_guidance,
+                "max_additions": self.audit_max_additions,
+            },
+            policy="audit_playbook_policy",
             policy_args=self._policy_args(self.num_requests),
             budget=self._budget(),
         )
@@ -1008,22 +1229,38 @@ class ACEAdaptStepConfig:
             return self._reflector_args()
         if self.role == "reducer":
             return self._reducer_args()
+        if self.role == "grounder":
+            return self._grounder_args()
+        if self.role == "auditor":
+            return self._auditor_args()
         assert self.role == "curator", f"unknown role {self.role!r}"
         return self._curator_args()
 
 
-def _render_proposals(cur_dirs: "list[Path]") -> str:
-    """One `[Sample k]` block per batch member's curator delta."""
+def _render_proposals(
+    cur_dirs: "list[Path]", with_references: bool = False
+) -> str:
+    """
+    One `[Sample k]` block per batch member's curator delta. Under
+    reducer contract 2 (`with_references`) each proposal also lists its
+    `references`, so the reducer can carry them into the final ADDs
+    (the x5 smoke run showed it emitting `references: []` for every
+    ADD because it had never seen them). The contract-1 rendering is
+    byte-identical to the recorded one: it is pinned by every recorded
+    reducer's `upstream_sha256`.
+    """
     blocks: list[str] = []
     for k, cur_dir in enumerate(cur_dirs):
         delta = load_delta(cur_dir)
         if delta is None or not delta.operations:
             continue
-        ops = "\n".join(
-            f"- section: {op.section}\n  content: {op.content}"
-            for op in delta.operations
-        )
-        blocks.append(f"[Sample {k}]\n{ops}")
+        lines: list[str] = []
+        for op in delta.operations:
+            lines.append(f"- section: {op.section}\n  content: {op.content}")
+            if with_references:
+                refs = ", ".join(op.references) if op.references else "[]"
+                lines.append(f"  references: {refs}")
+        blocks.append(f"[Sample {k}]\n" + "\n".join(lines))
     return "\n\n---\n\n".join(blocks) if blocks else "(no proposals)"
 
 
@@ -1085,6 +1322,26 @@ def load_delta(cur_dir: Path) -> CurationDelta | None:
     if not values:
         return None
     return cast(CurationDelta, values[0])
+
+
+def load_audit(audit_dir: Path) -> PlaybookAudit | None:
+    """The Auditor's parsed output, or `None` if nothing parsed."""
+    values = al.load_success_values_from_command_file(
+        audit_dir / "result.yaml", PlaybookAudit
+    )
+    if not values:
+        return None
+    return cast(PlaybookAudit, values[0])
+
+
+def load_grounding(ground_dir: Path) -> list[GroundingResult] | None:
+    """The grounder's verdicts, or `None` if the run produced none."""
+    values = al.load_success_values_from_command_file(
+        ground_dir / "result.yaml", list[GroundingResult]
+    )
+    if not values:
+        return None
+    return list(cast(list[GroundingResult], values[0]))
 
 
 def load_rewrite(cur_dir: Path) -> PlaybookRewrite | None:
@@ -1159,6 +1416,49 @@ class RoleRunner[C: dp.ExperimentConfig]:
         configs = cast(dict[str, dict[str, Any]], raw["configs"])
         return {n: str(configs[n]["status"]) for n in names}
 
+    def _evict_stale(self, configs: Sequence[C]) -> list[str]:
+        """
+        Remove the directory of every config that is about to be
+        re-registered under an existing name with *different* params.
+
+        The stdlib launcher keys a directory by name and its status
+        rebuild trusts a `result.yaml` by name, so when an upstream
+        cell is re-run and a downstream config's pinned input hash
+        changes, the new config would silently reuse the stale output
+        (2026-09-02: this bit three times in one afternoon — the
+        x3-strong batch-1 generators, the x5 batch-0 curators and its
+        reducer; HINTS #65). Identity is compared the way `Experiment`
+        compares it, through `_config_unique_repr`.
+        """
+        state_file = _OMPHALOS_DIR / self.output_dir / "experiment.yaml"
+        if not state_file.exists():
+            return []
+        from delphyne.stdlib.experiments.experiment_launcher import (
+            _config_unique_repr,  # pyright: ignore[reportPrivateUsage]
+        )
+        from delphyne.utils.typing import pydantic_load
+
+        raw: Any = _yaml_load(state_file)
+        stored = cast(dict[str, dict[str, Any]], raw.get("configs") or {})
+        evicted: list[str] = []
+        for c in configs:
+            name = self.naming(c, _NO_UID)
+            info = stored.get(name)
+            if info is None:
+                continue
+            old = pydantic_load(self.config_class, info["params"])
+            if _config_unique_repr(old) == _config_unique_repr(c):
+                continue
+            target = self.config_dir(name)
+            if target.exists():
+                shutil.rmtree(target)
+            evicted.append(name)
+            print(
+                f"  evicted stale cell {name}: re-registered with different"
+                " params (its inputs changed upstream)"
+            )
+        return evicted
+
     def run(
         self,
         configs: Sequence[C],
@@ -1171,6 +1471,7 @@ class RoleRunner[C: dp.ExperimentConfig]:
         Reducer): they take no Rocq stream slot.
         """
         names = [self.naming(c, _NO_UID) for c in configs]
+        self._evict_stale(configs)
         exp = self._experiment(configs, needs_rocq).load()
         statuses: dict[str, str] = {}
         for attempt in range(MAX_RETRIES + 1):
@@ -1300,6 +1601,12 @@ def _make_step_config(
     generator_dir: str = "",
     reflector_override: str | None = None,
     progress: str = "",
+    evidence: str = "",
+    guidance: str = "",
+    references: str = "",
+    environments: str = "",
+    provenance: str = "",
+    audit_max_additions: int = 0,
 ) -> ACEAdaptStepConfig:
     generator = role == "generator"
     rewrite = role == "curator" and v.curator_mode == "monolithic"
@@ -1310,7 +1617,7 @@ def _make_step_config(
         seed=v.seed,
         model_name=v.role_model(role),
         toolset=ADAPT_TOOLSET,
-        reasoning_effort=ADAPT_EFFORT,
+        reasoning_effort=v.role_effort(role),
         num_requests=GENERATOR_NUM_REQUESTS
         if generator
         else ROLE_NUM_REQUESTS,
@@ -1319,7 +1626,7 @@ def _make_step_config(
             if generator
             else REWRITE_DOLLAR_CAP
             if rewrite
-            else ROLE_DOLLAR_CAP
+            else v.role_cap
         ),
         playbook_sha256=sha,
         upstream_sha256=upstream,
@@ -1337,6 +1644,13 @@ def _make_step_config(
         progress=progress,
         generator_dir=generator_dir,
         reflector_scope=v.reflector_scope,
+        reducer_contract=v.reducer_contract,
+        evidence=evidence,
+        known_guidance=guidance,
+        references=references,
+        environments=environments,
+        provenance=provenance,
+        audit_max_additions=audit_max_additions,
     )
 
 
@@ -1414,6 +1728,233 @@ def _check_resume_consistency(
         )
 
 
+#####
+##### v5 helpers: evidence, the grounding gate, provenance
+#####
+
+
+def _generator_dir(roles: _Roles, step: int, bench: str) -> Path:
+    return roles.adapt.config_dir(f"step{step:02d}_generator_{bench}")
+
+
+class _Evidence:
+    """
+    The pool-level failure digest, memoized per generator cell: the
+    caches are parsed once per run, not once per batch. Rendering is a
+    pure function of the cells handed in (`ace_evidence.render_digest`),
+    so a resumed run pins the same text into the same configs.
+    """
+
+    def __init__(self) -> None:
+        self._failures: dict[Path, list[FailedVerdict]] = {}
+
+    def render(self, cells: Sequence[tuple[str, Path]]) -> str:
+        verdicts: list[FailedVerdict] = []
+        for bench, gen_dir in cells:
+            if gen_dir not in self._failures:
+                self._failures[gen_dir] = collect_failures({bench: gen_dir})
+            verdicts.extend(self._failures[gen_dir])
+        return render_digest(verdicts, attempts=len(cells))
+
+
+def _evidence_cells(
+    roles: _Roles,
+    rows: Sequence[Mapping[str, object]],
+    batch: Sequence[StepPlan],
+    gen_dirs: Sequence[Path | None],
+) -> list[tuple[str, Path]]:
+    """
+    The generator cells the digest is computed from: every recorded
+    step whose generator ran, in step order, then the current batch's
+    non-skipped members. Offline mode only (online generator cells
+    live in another experiment and v5 is offline by construction).
+    """
+    cells: list[tuple[str, Path]] = []
+    for row in rows:
+        if int(cast(int | str, row.get("generator_failed") or 0)):
+            continue
+        step = int(cast(int | str, row["step"]))
+        bench = str(row["bench"])
+        cells.append((bench, _generator_dir(roles, step, bench)))
+    for s, d in zip(batch, gen_dirs):
+        if d is not None:
+            cells.append((s.bench, d))
+    return cells
+
+
+def _render_environments(envs: Sequence[tuple[str, str]]) -> str:
+    return "|".join(f"{file}@{theorem}" for file, theorem in envs)
+
+
+def _batch_environments(
+    batch: Sequence[StepPlan], gen_dirs: Sequence[Path | None]
+) -> list[tuple[str, str]]:
+    """The problems of the batch members that produced a trajectory —
+    the environments a batch's bullets are grounded against."""
+    return [
+        ALL_PROBLEMS[s.bench] for s, d in zip(batch, gen_dirs) if d is not None
+    ]
+
+
+@dataclass
+class _GateOutcome:
+    """
+    What the grounding gate did with a set of ADDs. Ops are addressed
+    by `id()` because a batch's deltas are held in memory for exactly
+    one merge; `refused` maps an op to the names Rocq did not know,
+    `errors` holds ops kept although a reference could not be checked.
+    """
+
+    refused: dict[int, list[str]]
+    errors: set[int]
+    checked: list[GroundingResult]
+
+    def keep(self, ops: Sequence[AddOp]) -> list[AddOp]:
+        return [op for op in ops if id(op) not in self.refused]
+
+
+def _ground(
+    v: AdaptVariant,
+    roles: _Roles,
+    s: StepPlan,
+    sha: str,
+    ops: Sequence[AddOp],
+    environments: Sequence[tuple[str, str]],
+) -> list[GroundingResult] | None:
+    """
+    Run the grounder config for `ops` (one per batch, named by the
+    batch's first step). Returns `None` when the grounder failed all
+    retries — the gate then keeps everything and records the failure —
+    and `[]` when there was nothing to check.
+    """
+    names = checkable_references(name for op in ops for name in op.references)
+    if not names or not environments:
+        return []
+    references = "\n".join(names)
+    rendered_envs = _render_environments(environments)
+    cfg = _make_step_config(
+        v,
+        "grounder",
+        s,
+        sha,
+        upstream=_sha256(references + "\n" + rendered_envs),
+        references=references,
+        environments=rendered_envs,
+    )
+    st = roles.adapt.run([cfg], max_workers=1, needs_rocq=True)
+    name = _config_name(cfg, _NO_UID)
+    if st.get(name) != "done":
+        return None
+    return load_grounding(roles.adapt.config_dir(name))
+
+
+def _apply_gate(
+    ops: Sequence[AddOp], results: Sequence[GroundingResult] | None
+) -> _GateOutcome:
+    """
+    Refuse every op with a reference Rocq answered `missing`; keep an
+    op whose references could not all be checked (a bridge failure is
+    not evidence about the name) and count it under `errors`. With
+    `results is None` (no grounder output) every op is kept and
+    counted as an error if it had anything to check.
+    """
+    by_name = {r.name: r for r in results or []}
+    refused: dict[int, list[str]] = {}
+    errors: set[int] = set()
+    for op in ops:
+        names = checkable_references(op.references)
+        missing = [
+            n
+            for n in names
+            if n in by_name and by_name[n].verdict == "missing"
+        ]
+        if missing:
+            refused[id(op)] = missing
+            continue
+        unchecked = [
+            n
+            for n in names
+            if n not in by_name or by_name[n].verdict == "error"
+        ]
+        if unchecked:
+            errors.add(id(op))
+    return _GateOutcome(
+        refused=refused, errors=errors, checked=list(results or [])
+    )
+
+
+def _attribute(
+    ops: Sequence[AddOp],
+    added: Sequence[str],
+    not_created: Sequence[str],
+) -> list[tuple[str, AddOp]]:
+    """
+    Pair each id a merge created with the op that created it. `merge`
+    creates ids in op order for every op it neither folded (dedup) nor
+    refused (size guard); `not_created` lists those ops' contents.
+    """
+    leftovers = list(not_created)
+    ids = iter(added)
+    pairs: list[tuple[str, AddOp]] = []
+    for op in ops:
+        if op.content in leftovers:
+            leftovers.remove(op.content)
+            continue
+        new_id = next(ids, None)
+        if new_id is None:
+            break
+        pairs.append((new_id, op))
+    return pairs
+
+
+def _provenance_record(
+    op: AddOp,
+    step: int,
+    benches: Sequence[str],
+    solved: Sequence[bool],
+    source: str,
+) -> dict[str, Any]:
+    return {
+        "step": step,
+        "benches": list(benches),
+        "solved": [bool(x) for x in solved],
+        "section": op.section,
+        "references": list(op.references),
+        "source": source,
+    }
+
+
+def _provenance_block(
+    pb: Playbook, prov: Mapping[str, Mapping[str, Any]]
+) -> str:
+    """One line per bullet for the Auditor: origin, outcome, counters."""
+    lines: list[str] = []
+    for b in pb.bullets:
+        rec = prov.get(b.id)
+        if rec is None:
+            lines.append(
+                f"- [{b.id}] origin not recorded; helpful={b.helpful},"
+                f" harmful={b.harmful}"
+            )
+            continue
+        benches = cast(Sequence[str], rec.get("benches") or [])
+        solved = cast(Sequence[bool], rec.get("solved") or [])
+        origins = (
+            ", ".join(
+                f"{bn} ({'solved' if sv else 'NOT solved'})"
+                for bn, sv in zip(benches, solved)
+            )
+            or "the whole pool"
+        )
+        refs = ", ".join(cast(Sequence[str], rec.get("references") or []))
+        lines.append(
+            f"- [{b.id}] step {rec.get('step')} ({rec.get('source')}), from"
+            f" {origins}; helpful={b.helpful}, harmful={b.harmful};"
+            f" references: {refs or 'none listed'}"
+        )
+    return "\n".join(lines)
+
+
 def execute(
     v: AdaptVariant,
     batches: Sequence[Sequence[StepPlan]],
@@ -1430,11 +1971,14 @@ def execute(
     store.materialize_legacy_steps()
     _check_resume_consistency(store, batches)
     store.reset_refine_log()
+    store.reset_logs()
 
     pb = v.warmup()
     rows: list[dict[str, object]] = []
     shas_before: list[str] = []
     merged_steps = 0
+    evidence_digest = _Evidence()
+    prov: dict[str, dict[str, Any]] = {}
 
     for batch in batches:
         sha = store.put(pb)
@@ -1488,6 +2032,17 @@ def execute(
             for d, s in zip(gen_dirs, batch)
         ]
         solved = [False if d is None else read_result(d)[0] for d in gen_dirs]
+        requests = [0 if d is None else read_requests(d) for d in gen_dirs]
+        trivial = [
+            v.skip_trivial and d is not None and solved[i] and requests[i] <= 1
+            for i, d in enumerate(gen_dirs)
+        ]
+        for s, is_trivial in zip(batch, trivial):
+            if is_trivial:
+                print(
+                    f"  step {s.step:02d} {s.bench}: solved on the first"
+                    " proposal; no Reflector/Curator call (skip_trivial)"
+                )
         known_ids = {b.id for b in pb.bullets}
         cited: list[list[str] | None] = [
             None
@@ -1505,14 +2060,14 @@ def execute(
                     v, "reflector", s, sha, _sha256(t), generator_dir[i]
                 )
                 for i, (s, t) in enumerate(zip(batch, trajectories))
-                if t is not None
+                if t is not None and not trivial[i]
             ]
             st = roles.adapt.run(
                 cfgs_r, max_workers=max_workers, needs_rocq=False
             )
             by_bench = {c.bench_name: c for c in cfgs_r}
             for i, s in enumerate(batch):
-                if gen_skipped[i]:
+                if gen_skipped[i] or trivial[i]:
                     continue
                 c = by_bench[s.bench]
                 name = _config_name(c, _NO_UID)
@@ -1526,11 +2081,19 @@ def execute(
                         f"  {batch[i].bench}: reflector produced nothing usable"
                     )
 
+        # --- v5 evidence (curator contract 4) ----------------------
+        evidence = guidance = ""
+        if v.curator_contract >= 4:
+            evidence = evidence_digest.render(
+                _evidence_cells(roles, rows, batch, gen_dirs)
+            )
+            guidance = known_guidance()
+
         # --- curator ---------------------------------------------
         cfgs_c: list[ACEAdaptStepConfig | None] = []
         curator_fallback = [False] * len(batch)
         for i, s in enumerate(batch):
-            if gen_skipped[i]:
+            if gen_skipped[i] or trivial[i]:
                 cfgs_c.append(None)
                 continue
             refl = reflections[i]
@@ -1560,6 +2123,8 @@ def execute(
                         if v.curator_contract >= 3
                         else ""
                     ),
+                    evidence=evidence,
+                    guidance=guidance,
                 )
             )
         live = [c for c in cfgs_c if c is not None]
@@ -1582,7 +2147,9 @@ def execute(
                 for c in live
                 if st.get(_config_name(c, _NO_UID)) == "done"
             ]
-            proposals = _render_proposals(live_dirs)
+            proposals = _render_proposals(
+                live_dirs, with_references=v.reducer_contract >= 2
+            )
             red_cfg = _make_step_config(
                 v,
                 "reducer",
@@ -1599,11 +2166,79 @@ def execute(
                     if v.curator_contract >= 3
                     else ""
                 ),
+                evidence=evidence,
             )
             st_r = roles.adapt.run([red_cfg], max_workers=1, needs_rocq=False)
             name_r = _config_name(red_cfg, _NO_UID)
             if st_r.get(name_r) == "done":
                 reduced_delta = load_delta(roles.adapt.config_dir(name_r))
+
+        # --- v5 grounding gate (after the reducer, before any merge) --
+        member_deltas: list[CurationDelta | None] = [
+            load_delta(roles.adapt.config_dir(_config_name(c, _NO_UID)))
+            if c is not None and st.get(_config_name(c, _NO_UID)) == "done"
+            else None
+            for c in cfgs_c
+        ]
+        proposed = [
+            0 if d is None else len(d.operations) for d in member_deltas
+        ]
+        if use_reducer:
+            gate_ops: list[AddOp] = (
+                list(reduced_delta.operations)
+                if reduced_delta is not None
+                else []
+            )
+        else:
+            gate_ops = [
+                op
+                for d in member_deltas
+                if d is not None
+                for op in d.operations
+            ]
+        gate = _GateOutcome(refused={}, errors=set(), checked=[])
+        if v.grounding and gate_ops:
+            results = _ground(
+                v,
+                roles,
+                batch[0],
+                sha,
+                gate_ops,
+                _batch_environments(batch, gen_dirs),
+            )
+            gate = _apply_gate(gate_ops, results)
+            store.append_log(
+                store.grounding_log,
+                {
+                    "batch": batch[0].batch_id,
+                    "step": batch[0].step,
+                    "grounder_failed": results is None,
+                    "checked": [
+                        {
+                            "name": r.name,
+                            "verdict": r.verdict,
+                            "environment": r.environment,
+                            "answer": " ".join(r.answer.split())[:160],
+                        }
+                        for r in gate.checked
+                    ],
+                    "refused": [
+                        {
+                            "content": op.content,
+                            "missing": gate.refused[id(op)],
+                        }
+                        for op in gate_ops
+                        if id(op) in gate.refused
+                    ],
+                    "kept_unchecked": len(gate.errors),
+                },
+            )
+            print(
+                f"  batch {batch[0].batch_id}: grounding checked"
+                f" {len(gate.checked)} name(s), refused {len(gate.refused)}"
+                f" ADD(s), {len(gate.errors)} kept unchecked"
+                + (" (grounder failed)" if results is None else "")
+            )
 
         # --- merge (sequential, deterministic) -------------------
         for i, s in enumerate(batch):
@@ -1644,6 +2279,11 @@ def execute(
                         "reflector_failed": 0,
                         "cited_count": "",
                         "tags_dropped": 0,
+                        "skipped_trivial": 0,
+                        "proposed": 0,
+                        "reduced_out": 0,
+                        "ungrounded": 0,
+                        "grounding_error": 0,
                     }
                 )
                 merged_steps += 1
@@ -1686,19 +2326,41 @@ def execute(
                     else False
                 )
             else:
-                delta = load_delta(cur_dir) if cur_dir else None
+                delta = member_deltas[i]
                 if delta is None:
-                    curator_failed = True
+                    # A scheduled curator that produced nothing usable;
+                    # a member without a curator (skipped, trivial) is
+                    # not a failure.
+                    curator_failed = cfg is not None
                     out = merge(pb, [], tags, deduper=deduper)
                 else:
+                    kept_ops = gate.keep(delta.operations)
                     out = merge(
                         pb,
-                        delta.operations,
+                        kept_ops,
                         tags,
                         deduper=deduper,
                         dedup_counts_helpful=v.count_dedup_as_helpful,
                         max_tokens=v.playbook_max_tokens,
                     )
+                    for new_id, op in _attribute(
+                        kept_ops,
+                        out.added,
+                        [c for _, c in out.deduped] + list(out.dropped),
+                    ):
+                        prov[new_id] = _provenance_record(
+                            op, s.step, [s.bench], [solved[i]], "curator"
+                        )
+            member_delta = member_deltas[i]
+            member_ops: Sequence[AddOp] = (
+                [] if member_delta is None else member_delta.operations
+            )
+            member_refused = sum(
+                1 for op in member_ops if id(op) in gate.refused
+            )
+            member_errors = sum(
+                1 for op in member_ops if id(op) in gate.errors
+            )
             for w in out.warnings:
                 print(f"  merge warning: {w}")
             pb = out.playbook
@@ -1791,12 +2453,18 @@ def execute(
                         "" if cited[i] is None else len(cited[i] or [])
                     ),
                     "tags_dropped": tags_dropped,
+                    "skipped_trivial": int(trivial[i]),
+                    "proposed": proposed[i],
+                    "reduced_out": 0,
+                    "ungrounded": 0 if use_reducer else member_refused,
+                    "grounding_error": 0 if use_reducer else member_errors,
                 }
             )
         if use_reducer and reduced_delta is not None:
+            reduced_ops = gate.keep(reduced_delta.operations)
             out_r = merge(
                 pb,
-                reduced_delta.operations,
+                reduced_ops,
                 [],
                 deduper=deduper,
                 dedup_counts_helpful=v.count_dedup_as_helpful,
@@ -1808,8 +2476,26 @@ def execute(
                 f"  batch {batch[0].batch_id}: reducer +{len(out_r.added)}"
                 f" bullets, {len(out_r.deduped)} deduped,"
                 f" {len(out_r.dropped)} dropped"
+                + (f", {len(gate.refused)} ungrounded" if gate.refused else "")
             )
             pb = out_r.playbook
+            live_members = [
+                (s.bench, solved[i])
+                for i, s in enumerate(batch)
+                if gen_dirs[i] is not None
+            ]
+            for new_id, op in _attribute(
+                reduced_ops,
+                out_r.added,
+                [c for _, c in out_r.deduped] + list(out_r.dropped),
+            ):
+                prov[new_id] = _provenance_record(
+                    op,
+                    batch[0].step,
+                    [bn for bn, _ in live_members],
+                    [sv for _, sv in live_members],
+                    "reducer",
+                )
             if rows:
                 prev_added = rows[-1]["added"]
                 assert isinstance(prev_added, int)
@@ -1817,6 +2503,9 @@ def execute(
                 rows[-1]["bullets_after"] = len(pb.bullets)
                 rows[-1]["tokens_after"] = pb.token_estimate()
                 rows[-1]["sha256_after"] = pb.sha256()
+                rows[-1]["reduced_out"] = len(reduced_delta.operations)
+                rows[-1]["ungrounded"] = len(gate.refused)
+                rows[-1]["grounding_error"] = len(gate.errors)
 
         # Persist after every batch: an interrupted run leaves a short
         # but accurate record, and the step index is pruned of files
@@ -1824,7 +2513,117 @@ def execute(
         store.put(pb)
         store.write_step_index([*shas_before, pb.sha256()])
         store.write_steps_csv(rows)
+        if v.curator_contract >= 4:
+            store.write_provenance(prov)
     return pb, shas_before
+
+
+def _run_audit(
+    v: AdaptVariant,
+    pb: Playbook,
+    store: PlaybookStore,
+    roles: _Roles,
+    n_steps: int,
+) -> tuple[Playbook, dict[str, Any]]:
+    """
+    The terminal audit (v5): one `AuditPlaybook` call over the finished
+    playbook, its provenance, the whole pool's failure digest and the
+    prover's pitfalls; the Auditor's additions pass the grounding gate
+    against one environment per distinct import signature of the pool;
+    `apply_audit` applies the decisions deterministically. Everything
+    is logged to `audit.log.yaml`; the caller freezes the result.
+    """
+    sha = store.put(pb)
+    rows = store.read_steps_csv()
+    cells = [
+        (row["bench"], _generator_dir(roles, int(row["step"]), row["bench"]))
+        for row in rows
+        if not int(row.get("generator_failed") or 0)
+    ]
+    evidence = _Evidence().render(cells)
+    guidance = known_guidance()
+    provenance = _provenance_block(pb, store.read_provenance())
+    plan_step = StepPlan(n_steps, 0, 0, AUDIT_BENCH, -1)
+    cfg = _make_step_config(
+        v,
+        "auditor",
+        plan_step,
+        sha,
+        upstream=_sha256(provenance + "\n" + evidence),
+        evidence=evidence,
+        guidance=guidance,
+        provenance=provenance,
+        audit_max_additions=v.audit_max_additions,
+    )
+    st = roles.adapt.run([cfg], max_workers=1, needs_rocq=False)
+    name = _config_name(cfg, _NO_UID)
+    audit = (
+        load_audit(roles.adapt.config_dir(name))
+        if st.get(name) == "done"
+        else None
+    )
+    if audit is None:
+        print("  audit: the Auditor produced nothing usable; frozen unaudited")
+        store.append_log(store.audit_log, {"config": name, "failed": True})
+        return pb, {"audit_config": name, "audit_failed": True}
+    additions = list(audit.additions)
+    results = _ground(
+        v,
+        roles,
+        plan_step,
+        sha,
+        additions,
+        representative_files(POOLS[v.pool]),
+    )
+    gate = _apply_gate(additions, results)
+    kept = gate.keep(additions)
+    out = apply_audit(
+        pb, audit.decisions, kept, max_tokens=v.playbook_max_tokens
+    )
+    for w in out.warnings:
+        print(f"  audit warning: {w}")
+    prov = store.read_provenance()
+    for new_id, op in _attribute(kept, out.added, out.refused):
+        prov[new_id] = _provenance_record(op, n_steps, [], [], "audit")
+    store.write_provenance(prov)
+    store.append_log(
+        store.audit_log,
+        {
+            "config": name,
+            "playbook_before": sha,
+            "playbook_after": out.playbook.sha256(),
+            "decisions": [
+                {"id": d.id, "action": d.action, "reason": d.reason}
+                for d in audit.decisions
+            ],
+            "dropped": [list(x) for x in out.dropped],
+            "rewritten": out.rewritten,
+            "added": out.added,
+            "ungrounded": [
+                {"content": op.content, "missing": gate.refused[id(op)]}
+                for op in additions
+                if id(op) in gate.refused
+            ],
+            "size_refused": out.refused,
+            "grounder_failed": results is None,
+            "warnings": out.warnings,
+        },
+    )
+    print(
+        f"  audit: kept {len(out.kept)}, rewrote {len(out.rewritten)},"
+        f" dropped {len(out.dropped)}, added {len(out.added)}"
+        f" ({len(gate.refused)} addition(s) ungrounded,"
+        f" {len(out.refused)} refused by the size guard)"
+        f" -> {len(out.playbook.bullets)} bullets,"
+        f" ~{out.playbook.token_estimate()} tokens"
+    )
+    store.put(out.playbook)
+    return out.playbook, {
+        "audit_config": name,
+        "audit_dropped": [i for i, _ in out.dropped],
+        "audit_rewritten": out.rewritten,
+        "audit_added": out.added,
+    }
 
 
 def _roles(v: AdaptVariant) -> _Roles:
@@ -1899,27 +2698,44 @@ class CLI:
             print(f"Online chain complete; final playbook {pb.sha256()[:8]}")
             return
         assert v.final_playbook is not None
+        n_steps = sum(len(b) for b in batches)
+        provenance: dict[str, Any] = {
+            "variant": v.name,
+            "mode": v.mode,
+            "pool": v.pool,
+            "epochs": n_epochs,
+            "shuffle_seed": v.shuffle_seed,
+            "steps": n_steps,
+            "warmup_sha256": (
+                v.warmup().sha256() if v.warmup_playbook else None
+            ),
+            "dedup": v.dedup,
+            "refine_every": v.refine_every,
+            "prune_harmful": v.prune_harmful,
+            "render_version": v.render_version,
+            "curator_contract": v.curator_contract,
+            "reflector_scope": v.reflector_scope,
+            "reducer_contract": v.reducer_contract,
+            "grounding": v.grounding,
+            "skip_trivial": v.skip_trivial,
+            "reflector_model": v.role_model("reflector"),
+            "curator_model": v.role_model("curator"),
+        }
+        if v.audit:
+            assert v.preaudit_playbook is not None
+            _freeze(
+                PLAYBOOKS_DIR / v.preaudit_playbook,
+                pb,
+                {**provenance, "sha256": pb.sha256(), "stage": "preaudit"},
+            )
+            pb, audit_info = _run_audit(v, pb, store, _roles(v), n_steps)
+            provenance.update(audit_info)
+            provenance["preaudit_playbook"] = v.preaudit_playbook
+            provenance["stage"] = "audited"
         _freeze(
             PLAYBOOKS_DIR / v.final_playbook,
             pb,
-            {
-                "variant": v.name,
-                "mode": v.mode,
-                "pool": v.pool,
-                "epochs": n_epochs,
-                "shuffle_seed": v.shuffle_seed,
-                "steps": sum(len(b) for b in batches),
-                "sha256": pb.sha256(),
-                "warmup_sha256": (
-                    v.warmup().sha256() if v.warmup_playbook else None
-                ),
-                "dedup": v.dedup,
-                "refine_every": v.refine_every,
-                "prune_harmful": v.prune_harmful,
-                "render_version": v.render_version,
-                "curator_contract": v.curator_contract,
-                "reflector_scope": v.reflector_scope,
-            },
+            {**provenance, "sha256": pb.sha256()},
         )
 
     def replay(self, variant: str = LEGACY_VARIANT) -> None:

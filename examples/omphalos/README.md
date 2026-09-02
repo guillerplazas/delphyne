@@ -549,6 +549,8 @@ playbook and are reported as v2 replicates (the noise floor).
 | v3 online cold, seeds 0/1 | 28 vs 27 (2 failed) / 27 vs 27 | 1–0 / 0–0 | 32 vs 32 (1–1; seed 0, selected by the rule) | ×1.31 / ×1.41 |
 | v4 offline = v3 + attribution channel `ace_x4_offline` | 55 vs 54 (vs its x3 pair: 55 vs 57, 2–4) | 3–2 | not selected | ×1.07 |
 | v4 online cold, seed 0 | 27 vs 27 | 1–1 | — | ×1.00 |
+| **2026-09-02** role strength: v3 method + terra Reflector/Curator `ace_x3_strong` | 55 vs 54 (vs x3-offline: 55 vs 57, 2–4) | 4–3 (p=1.0) | not selected | ×1.14 |
+| **2026-09-02** v5 evidence-first curation (digest + grounding gate + audit) `ace_x5_offline` | 53 vs 54 (vs x3-offline: 53 vs 57, 2–6) | 3–4 (p=1.0) | not selected | ×1.14 |
 
 Reading: on this benchmark ACE's playbook is a cheap, non-harmful
 addition whose effect on solves stays within one to three cells of
@@ -557,9 +559,18 @@ where the verifier already hands the Generator exact feedback every
 turn. The reference's attribution channel (v4), the no-Reflector and
 the monolithic ablations all land inside the same band; three
 epochs at an 8k guard grow the playbook to 54 bullets and lose four
-cells against the single-epoch one. Full tables,
-the paper-experiment mapping and the audit against the reference
-implementation: `report/ace_x_report.html`.
+cells against the single-epoch one. The 2026-09-02 follow-up tested
+the two remaining explanations as clean arms — a terra Reflector /
+Curator on the same method, and an evidence-first pipeline (pool-level
+failure digest, Rocq-grounded references, one terminal audit) — and
+both land in the same band: the v5 playbook shrinks the very failure
+classes it targets (unknown-reference 26 → 20 problems, syntax-error
+24 → 17) without moving solves, and both arms lose
+`mathd_numbertheory_405` on both seeds to a correct, grounded bullet
+the Generator applies where it does not fit. Diagnosis and details:
+PROGRESS 2026-09-02. Full tables, the paper-experiment mapping and
+the audit against the reference implementation:
+`report/ace_x_report.html`.
 
 
 ### Learned context: an ACE replication (2026-08-24)

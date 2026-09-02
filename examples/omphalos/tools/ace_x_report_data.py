@@ -597,6 +597,12 @@ def build_x_adapt() -> dict[str, Any]:
                         else None
                     ),
                     "tagsDropped": int(r.get("tags_dropped") or 0),
+                    # schema 4 (2026-09-02): the accounting v3 lacked
+                    "skippedTrivial": int(r.get("skipped_trivial") or 0),
+                    "proposed": int(r.get("proposed") or 0),
+                    "reducedOut": int(r.get("reduced_out") or 0),
+                    "ungrounded": int(r.get("ungrounded") or 0),
+                    "groundingError": int(r.get("grounding_error") or 0),
                 }
             )
         out[variant] = {
@@ -1182,6 +1188,47 @@ def build_x_audit() -> list[dict[str, Any]]:
             "the rendering the Generator saw",
             "argued",
             "_reflector_playbook",
+        ),
+        # ---- 2026-09-02: v5 (evidence-first curation) and x3-strong ----
+        row(
+            "digest",
+            "Pool-level verifier-failure digest in the curation prompts",
+            "the Reflector reflects per sample; nothing aggregates execution feedback across samples",
+            "contract-4 Curator, contract-2 Reducer and the Auditor see error classes ranked by problems × verdicts, the unknown names and the failing tactic heads (`ace_evidence.render_digest`), plus the prover's own pitfalls",
+            "omphalos addition, disclosed",
+            "PROGRESS 2026-09-02 §1 (C1, C4): the most frequent failure classes had no bullet; the reducer preferred distinctive over frequent",
+        ),
+        row(
+            "grounding",
+            "Verifier-grounded curation",
+            "no check that a bullet's lemma names exist",
+            "every ADD lists `references`; `Locate <name>.` through the bridge (cached compute) refuses bullets naming objects Rocq does not know; bridge failures keep the bullet and are counted",
+            "omphalos addition, disclosed",
+            "`grounding.log.yaml`, steps.csv `ungrounded` / `grounding_error`; v3's `rocq-00007` recommended `Nat.div_mod_eq` and the arm then failed to resolve it",
+        ),
+        row(
+            "skip-trivial",
+            "No Reflector/Curator call on a first-proposal solve",
+            "reflects on every sample",
+            "`skip_trivial`: a ≤1-request solve produces no role call (33/40 x3 steps were solves; step 13's reflection restated `rocq-00001`)",
+            "cost-motivated deviation, disclosed",
+            "steps.csv `skipped_trivial`",
+        ),
+        row(
+            "audit",
+            "One terminal whole-playbook audit pass",
+            "no terminal pass; the monolithic rewrite is the ablation (context collapse)",
+            "`AuditPlaybook` once after the last step: default keep, per-bullet reasons, counters preserved, ≤6 grounded additions; the pre-audit playbook is frozen alongside (`ace_x5_offline_preaudit.yaml`) so the pass is ablatable",
+            "in-spirit deviation, mitigated and disclosed",
+            "`audit.log.yaml`; both playbooks' provenance sidecars",
+        ),
+        row(
+            "role-strength",
+            "Stronger Reflector/Curator on the same Generator",
+            "one model for all roles (Table 16 varies the Reflector model)",
+            "`x3-strong`: gpt-5.6-terra Reflector and curation roles (curator, reducer), luna Generator, `role_cap` 0.25 — a minimal pair of x3-offline",
+            "measured (2026-09-02)",
+            "`tools/test_ace_driver.py::test_x3_strong_is_a_minimal_pair_of_x3`",
         ),
     ]
 

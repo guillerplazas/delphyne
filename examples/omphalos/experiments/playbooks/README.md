@@ -68,3 +68,32 @@ playbook must outlive the caches of the runs that produced it.
   (the reference's attribution channel), frozen by `make
   ace-x4-val-offline`. `steps.csv` schema 3 adds `cited_count` and
   `tags_dropped`.
+- Hashes of the other frozen files (migrated from HANDOFF.md, 2026-09-02):
+  v2 `ace_x_offline.yaml` (sha `1ac8a092`, 49 bullets),
+  `ace_x_noreflect.yaml` (`d56da056`, 52), `ace_x_mono.yaml`
+  (`fa985e70`, 40), `ace_x_offline_e3.yaml` (`07ee107d`, 44); v3
+  `ace_x3_offline_e3.yaml` (`d0d7ce24`, 54, 120 steps); v4
+  `ace_x4_offline.yaml` (`f1dd5c3a`, 27). Every sidecar carries the
+  full sha256.
+
+## 2026-09-02 — role strength and v5 (evidence-first curation)
+
+- `ace_x3_strong.yaml` — `x3-offline` with gpt-5.6-terra as Reflector
+  and as every curation role (curator, reducer); the Generator stays
+  luna (HINTS #49's minimal pair). Frozen 2026-09-02 (sha `b596e7df`,
+  28 bullets, ~2.4k tokens).
+- `ace_x5_offline_preaudit.yaml` / `ace_x5_offline.yaml` — v5: the
+  playbook after the 40th step, and the same playbook after the one
+  terminal `AuditPlaybook` pass (default-keep, per-bullet reasons,
+  grounded additions). Both carry a provenance sidecar; the audited
+  one records `preaudit_playbook`, `audit_config` and what the audit
+  dropped / rewrote / added.
+- New per-variant sidecars under `ace_adaptation_<variant>/`:
+  `bullets.provenance.yaml` (per bullet: step, origin problems and
+  whether they were solved, section, references, source — curator /
+  reducer / audit; kept out of the playbook YAML so frozen hashes
+  never move), `grounding.log.yaml` (per batch: every `Locate`
+  verdict and every refused ADD with the names Rocq did not know) and
+  `audit.log.yaml`. `steps.csv` is schema 4 (`skipped_trivial`,
+  `proposed`, `reduced_out`, `ungrounded`, `grounding_error`).
+

@@ -109,11 +109,33 @@ class Bullet:
 
 @dataclass
 class AddOp:
-    """A Curator delta operation. ADD-only by design (v1)."""
+    """
+    A Curator delta operation. ADD-only by design (v1).
+
+    `references` (curator contract 4, 2026-09-02) names the Rocq
+    objects — lemmas, definitions, Ltac tactics — the bullet relies on,
+    so the grounding gate can ask Rocq whether they exist before the
+    bullet enters the playbook. Defaulted, so every recorded v1-v3
+    delta still parses.
+    """
 
     type: Literal["ADD"]
     section: str
     content: str
+    references: list[str] = field(default_factory=lambda: list[str]())
+
+
+@dataclass
+class AuditDecision:
+    """
+    The Auditor's verdict on one existing bullet (`apply_audit`).
+    `content` is read for `rewrite` only.
+    """
+
+    id: str
+    action: Literal["keep", "drop", "rewrite"]
+    reason: str = ""
+    content: str = ""
 
 
 @dataclass
@@ -478,6 +500,115 @@ def refine(
         compacted.append(victim)
     return RefineOutcome(
         playbook=refined, pruned=pruned, merged=merged, compacted=compacted
+    )
+
+
+@dataclass
+class AuditOutcome:
+    """
+    Result of `apply_audit`.
+
+    Attributes:
+        playbook: The audited playbook (inputs never mutated).
+        kept: Ids kept verbatim (explicitly or by default).
+        dropped: Ids removed, with the Auditor's reason.
+        rewritten: Ids whose content changed, counters preserved.
+        added: Ids of the Auditor's additions that fit.
+        refused: Contents of additions refused by the size guard.
+        warnings: Unknown ids, empty rewrites, duplicate decisions.
+    """
+
+    playbook: Playbook
+    kept: list[str]
+    dropped: list[tuple[str, str]]
+    rewritten: list[str]
+    added: list[str]
+    refused: list[str]
+    warnings: list[str]
+
+
+def apply_audit(
+    pb: Playbook,
+    decisions: Sequence[AuditDecision],
+    additions: Sequence[AddOp],
+    *,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+) -> AuditOutcome:
+    """
+    Apply one terminal audit pass deterministically.
+
+    Unlike `rebuild` (the monolithic ablation, where whatever the model
+    omits is deleted), the audit is *default-keep*: a bullet the model
+    does not mention survives unchanged, `drop` needs an explicit
+    decision, and `rewrite` keeps the id and both counters — so the
+    prompt prefix stays stable for every bullet the audit left alone
+    and no counter is lost by construction. Additions get fresh ids
+    and pass the same size guard as `merge`; `next_id` never reuses an
+    id. A second decision on the same id is a warning and ignored.
+    """
+    by_id = {b.id: Bullet(**asdict(b)) for b in pb.bullets}
+    warnings: list[str] = []
+    seen: set[str] = set()
+    dropped: list[tuple[str, str]] = []
+    rewritten: list[str] = []
+    for d in decisions:
+        if d.id not in by_id:
+            warnings.append(
+                f"audit decision for unknown bullet id {d.id!r} ignored"
+            )
+            continue
+        if d.id in seen:
+            warnings.append(f"duplicate audit decision for {d.id!r} ignored")
+            continue
+        seen.add(d.id)
+        if d.action == "drop":
+            del by_id[d.id]
+            dropped.append((d.id, d.reason))
+        elif d.action == "rewrite":
+            content = d.content.strip()
+            if not content:
+                warnings.append(f"empty rewrite for {d.id!r} ignored; kept")
+                continue
+            by_id[d.id].content = content
+            rewritten.append(d.id)
+        elif d.action != "keep":  # pyright: ignore[reportUnnecessaryComparison]
+            warnings.append(f"unknown audit action {d.action!r} for {d.id!r}")
+    audited = Playbook(
+        next_id=pb.next_id,
+        bullets=[by_id[b.id] for b in pb.bullets if b.id in by_id],
+    )
+    kept = [b.id for b in audited.bullets if b.id not in rewritten]
+    added: list[str] = []
+    refused: list[str] = []
+    for op in additions:
+        if op.type != "ADD":  # pyright: ignore[reportUnnecessaryComparison]
+            warnings.append(f"non-ADD audit addition {op.type!r} ignored")
+            continue
+        section = _normalize_section(op.section, warnings)
+        candidate = Bullet(
+            id=f"{BULLET_ID_PREFIX}-{audited.next_id:05d}",
+            section=section,
+            content=op.content,
+        )
+        audited.bullets.append(candidate)
+        if audited.token_estimate() > max_tokens:
+            audited.bullets.pop()
+            refused.append(op.content)
+            warnings.append(
+                f"size guard ({max_tokens} tokens) refused an audit addition"
+                f" to section {op.section!r}"
+            )
+            continue
+        audited.next_id += 1
+        added.append(candidate.id)
+    return AuditOutcome(
+        playbook=audited,
+        kept=kept,
+        dropped=dropped,
+        rewritten=rewritten,
+        added=added,
+        refused=refused,
+        warnings=warnings,
     )
 
 

@@ -3,6 +3,8 @@
 .PHONY: ace-x3-val-offline ace-x3-val-noreflect ace-x3-val-mono ace-x3-online-s0
 .PHONY: ace-x3-online-s1 ace-x3-e3-adapt ace-x3-e3-val ace-x4-adapt ace-x4-val-offline
 .PHONY: ace-x4-online-s0 ace-x-matrix ace-x3-test-offline ace-x4-test-offline
+.PHONY: ace-x3-strong-adapt ace-x3-strong-val ace-x5-adapt ace-x5-val-offline
+.PHONY: ace-x3-strong-test ace-x5-test-offline
 .PHONY: sweep-train sweep-train-standard sweep-train-agentic
 .PHONY: sweep-validation sweep-test
 .PHONY: sweep-probing-validation sweep-probing-test
@@ -28,6 +30,7 @@ test: test-unit test-rocq test-standard test-agentic test-probing test-luna test
 test-unit:
 	python tools/test_ace_playbook.py
 	python tools/test_ace_driver.py
+	python tools/test_ace_evidence.py
 	python tools/test_parse_problem.py
 	python tools/test_launch_state.py
 	python tools/test_ace_x_eval.py
@@ -321,6 +324,37 @@ ace-x4-online-s0:
 ace-x-matrix: ace-x3-val-offline ace-x3-val-noreflect ace-x3-val-mono \
 	ace-x3-online-s0 ace-x3-online-s1 ace-x4-val-offline ace-x4-online-s0 \
 	ace-x3-e3-val
+
+# --- 2026-09-02: role strength (x3-strong) and v5 (x5-offline) ---
+#
+# Two attributable arms (PROGRESS 2026-09-02): x3-strong = x3-offline
+# with terra Reflector/Curator/Reducer; x5-offline = x3-offline + the
+# evidence-first curation (digest, grounding gate, trivial-solve skip,
+# terminal audit; pre-audit playbook frozen too). Both evaluate on
+# validationX through the v3 eval script (render_version 3 from the
+# provenance sidecar); testX targets stay one look each.
+
+ace-x3-strong-adapt:
+	python experiments/ace_adaptation.py run --variant=x3-strong --max_workers=$(ACE_X_WORKERS)
+
+ace-x3-strong-val: ace-x3-strong-adapt
+	python experiments/ace_x3_validation_experiment.py \
+	  --playbook=ace_x3_strong.yaml run --max_workers=$(ACE_X_WORKERS) --wait
+
+ace-x5-adapt:
+	python experiments/ace_adaptation.py run --variant=x5-offline --max_workers=$(ACE_X_WORKERS)
+
+ace-x5-val-offline: ace-x5-adapt
+	python experiments/ace_x3_validation_experiment.py \
+	  --playbook=ace_x5_offline.yaml run --max_workers=$(ACE_X_WORKERS) --wait
+
+ace-x3-strong-test:
+	python experiments/ace_x3_test_experiment.py \
+	  --playbook=ace_x3_strong.yaml run --max_workers=$(ACE_X_WORKERS) --wait
+
+ace-x5-test-offline:
+	python experiments/ace_x3_test_experiment.py \
+	  --playbook=ace_x5_offline.yaml run --max_workers=$(ACE_X_WORKERS) --wait
 
 # One look each; never re-run.
 ace-x3-test-offline:

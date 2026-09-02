@@ -1,0 +1,289 @@
+bullets:
+- content: 'For real polynomial goals, explicitly assert square nonnegativity in the
+    syntactic product form, e.g. `assert (Hsq : 0 <= t * t) by apply Rle_0_sqr`, before
+    calling `nra`; `nra` may not infer this fact, and `Rle_0_sqr` does not directly
+    match `t ^ 2`.
+
+    '
+  harmful: 0
+  helpful: 6
+  id: rocq-00001
+  section: tactics
+- content: 'To compare recursively defined sums whose summands differ systematically,
+    prove a symbolic invariant such as `forall n, sum_f f n = sum_f g n + d n` by
+    induction, then specialize it to the desired bound and finish with linear arithmetic.
+    Prefer exposing exactly one recursive layer with `change` over large `vm_compute`
+    evaluations or unrestricted `simpl`.
+
+    '
+  harmful: 0
+  helpful: 3
+  id: rocq-00002
+  section: strategy
+- content: 'For `nat` goals and hypotheses involving nonlinear products together with
+    truncated subtraction, try `nia` after introducing the relevant variables and
+    assumptions; it can reason about both polynomial arithmetic and natural-number
+    subtraction semantics.
+
+    '
+  harmful: 1
+  helpful: 5
+  id: rocq-00003
+  section: tactics
+- content: 'For a natural-number equation involving a product of positive-base powers,
+    such as `a ^ x * b ^ y = N`, first derive finite upper bounds on each exponent:
+    show that an exponent beyond a chosen threshold would force its power above `N`,
+    using power monotonicity and the fact that the other positive-base power is at
+    least `1`. Then destruct the bounded exponents and solve the remaining concrete
+    cases.
+
+    '
+  harmful: 0
+  helpful: 1
+  id: rocq-00004
+  section: strategy
+- content: 'For fixed-modulus `nat` goals from a hypothesis `H : n mod d = r`, reconstruct
+    the dividend as `n = d * (n / d) + r` using `Nat.Div0.mod_eq` and `lia` when applicable.
+    Rewrite the goal with this equality, then reduce the modulus with `Nat.Div0.add_mod`,
+    `Nat.Div0.mul_mod`, and `simpl`.
+
+    '
+  harmful: 0
+  helpful: 2
+  id: rocq-00005
+  section: tactics
+- content: 'For closed equalities of finite `nat`-list computations, especially expressions
+    built from `seq`, boolean `filter`, and `fold_right`, try `vm_compute; reflexivity`
+    to evaluate the finite data and close the resulting definitional equality.
+
+    '
+  harmful: 0
+  helpful: 1
+  id: rocq-00006
+  section: tactics
+- content: 'For real polynomial equality goals whose hypotheses are already polynomial
+    equalities, introduce the hypotheses and try `nra` directly. Do not add square-nonnegativity
+    facts unless the argument actually requires an inequality consequence.
+
+    '
+  harmful: 2
+  helpful: 11
+  id: rocq-00007
+  section: tactics
+- content: 'To extract a polynomial equation from a real reciprocal hypothesis such
+    as `1 / A + 1 / B - k / C = 0`, first use the nonzero denominator hypotheses to
+    clear denominators by multiplying through by `A * B * C` and proving the cancellation
+    identities with field/ring reasoning; then apply `nra` to the resulting numerator
+    equation. If denominators were introduced with local `pose` aliases, unfold those
+    aliases in the cleared equation before calling `nra`.
+
+    '
+  harmful: 0
+  helpful: 3
+  id: rocq-00008
+  section: tactics
+- content: 'For affine real-function goals with a specification `h_aff : forall x,
+    f x = a * x + b` and concrete value hypotheses, pose or rewrite with the relevant
+    instances such as `h_aff c` in both hypotheses and target before calling `nra`;
+    this exposes polynomial constraints on `a` and `b`.
+
+    '
+  harmful: 0
+  helpful: 1
+  id: rocq-00009
+  section: tactics
+- content: 'For goals using a fixed-index recurrence over `R`, instantiate the recurrence
+    at each needed consecutive `nat` index with `pose proof`, use `change` or simplification
+    to display the resulting concrete equations, then combine them with the given
+    sequence values using `lra`.
+
+    '
+  harmful: 0
+  helpful: 2
+  id: rocq-00010
+  section: tactics
+- content: 'When specializing a `nat`-indexed hypothesis at a concrete numeral while
+    a numeric scope such as `R_scope` is open, annotate the index explicitly, for
+    example `h (7%nat)`, to avoid overloaded-numeral elaboration failures.
+
+    '
+  harmful: 0
+  helpful: 3
+  id: rocq-00011
+  section: pitfalls
+- content: 'When rewriting a nat-indexed recurrence, arithmetically equal index forms
+    may not match syntactically (for example, `S (S a)` versus `S a + 1`). First align
+    the index explicitly with `replace ... by lia`, then instantiate the recurrence
+    at the matching predecessor index and rewrite.
+
+    '
+  harmful: 0
+  helpful: 1
+  id: rocq-00012
+  section: pitfalls
+- content: 'Before applying real polynomial tactics to expressions containing coercions
+    of closed nat numerals, normalize the coercion explicitly. Repeatedly rewrite
+    successor coercions with `S_INR`, reduce `INR_0`, and use `ring` if needed to
+    establish equalities such as `INR 49 = (49 : R)`.
+
+    '
+  harmful: 0
+  helpful: 4
+  id: rocq-00013
+  section: tactics
+- content: 'With only limited imports such as `Coq.Reals.Reals`, do not assume automation
+    tactics like `positivity` or `norm_num` are available. Prove required positivity
+    facts directly, for example by induction and `simpl`/`cbn` followed by `lra` or
+    `nra`, and supply them explicitly.
+
+    '
+  harmful: 1
+  helpful: 2
+  id: rocq-00014
+  section: pitfalls
+- content: 'In well-founded descent proofs on nat whose recursive argument is valid
+    only for positive indices, build that side condition into the induction predicate,
+    for example `fun k => 0 < k -> f k = c -> k = c`. Use `well_founded_induction
+    lt_wf` and apply the induction hypothesis only as `IH j Hjk` for a strictly smaller
+    `j`; otherwise the proof can get stuck at the impossible zero case.
+
+    '
+  harmful: 0
+  helpful: 0
+  id: rocq-00015
+  section: strategy
+- content: 'To derive a nat equality from an equality of real casts, first apply `INR_eq`,
+    then expose the arithmetic structure inside each cast from the outside inward.
+    For example, rewrite `INR (u + v + w)` first with `plus_INR (u + v) w`, then with
+    `plus_INR u v`, and rewrite exposed products with `mult_INR`; these lemmas do
+    not recursively normalize beneath an opaque outer `INR`.
+
+    '
+  harmful: 0
+  helpful: 0
+  id: rocq-00016
+  section: tactics
+- content: 'When proving a weighted-square nonnegativity fact with `Rmult_le_pos`,
+    parenthesize the square as `w * (t * t)`. The expression `w * t * t` parses as
+    `(w * t) * t`, causing the lemma to require signs for `w * t` and `t` instead
+    of the directly available facts `0 <= w` and `0 <= t * t`.
+
+    '
+  harmful: 0
+  helpful: 0
+  id: rocq-00017
+  section: pitfalls
+- content: 'For a nat equation containing `Nat.lcm a m`, obtain a divisibility witness
+    from `Nat.divide_lcm_l`, destruct it as `Nat.lcm a m = k * a`, and rewrite the
+    equation with that form. After expanding any fixed powers with `cbn [Nat.pow]`,
+    use `nia` to bound the witness and split the resulting finite cases.
+
+    '
+  harmful: 0
+  helpful: 0
+  id: rocq-00018
+  section: tactics
+- content: 'Do not run unrestricted `simpl` on symbolic `Nat.lcm` expressions: its
+    recursive computation may overflow the stack. For closed lcm values, establish
+    the value separately; for variable lcm terms, reason through divisibility lemmas
+    such as `Nat.divide_lcm_l` instead.
+
+    '
+  harmful: 0
+  helpful: 0
+  id: rocq-00019
+  section: pitfalls
+- content: 'For nat equalities of products of powers reducible to a common base, normalize
+    the expression symbolically before arithmetic: use `Nat.pow_mul_r` and `Nat.pow_add_r`
+    backwards to combine exponents, and `Nat.pow_mul_l` to expose powers of the common
+    base. Prove `1 < base`, apply `Nat.pow_inj_r`, and solve the resulting exponent
+    equation with `nia`.
+
+    '
+  harmful: 0
+  helpful: 0
+  id: rocq-00020
+  section: tactics
+- content: 'For an integer absolute-value hypothesis `H : Z.abs t < n`, apply `Z.abs_lt`
+    to obtain the linear bounds `- n < t` and `t < n`; `lia` can then derive shifted
+    or combined interval bounds.
+
+    '
+  harmful: 0
+  helpful: 0
+  id: rocq-00021
+  section: lemmas
+- content: 'To prove a real quotient positivity goal `0 < a / b`, apply `Rdiv_lt_0_compat`
+    and prove `0 < a` and `0 < b`; use this direct lemma rather than relying on guessed
+    quotient-positivity lemma names.
+
+    '
+  harmful: 0
+  helpful: 0
+  id: rocq-00022
+  section: lemmas
+- content: 'When a real polynomial hypothesis contains nat computations under casts
+    and a hypothesis fixes the index, first `subst` the index and run `simpl in` the
+    relevant hypotheses. This evaluates closed products, powers, and casts, exposing
+    concrete real equations that `nra` can use.
+
+    '
+  harmful: 0
+  helpful: 0
+  id: rocq-00023
+  section: tactics
+- content: 'For membership goals or hypotheses over an explicitly enumerated `Ensemble`
+    built by nested `Add`, unfold `Add` and reason through its `Union`/`Singleton`
+    structure. Construct membership with the needed `Union_introl` or `Union_intror`
+    steps ending in `In_singleton`; eliminate membership by repeated `Union_inv`,
+    then use `Singleton_inv` and `subst` in singleton branches. Do not expect general
+    automation to normalize a large nested `Add` tree reliably.
+
+    '
+  harmful: 0
+  helpful: 0
+  id: rocq-00024
+  section: tactics
+- content: 'To prove `cardinal nat` for a finite ensemble explicitly built from nested
+    `Add`, first establish an extensional equality with the intended enumerated predicate
+    if useful, then apply `card_add` once for each inserted element and `card_empty`
+    at the base. Discharge each freshness premise `~ In nat smaller_set new_element`
+    by structurally destructing membership in the smaller nested `Add` ensemble.
+
+    '
+  harmful: 0
+  helpful: 0
+  id: rocq-00025
+  section: strategy
+- content: 'For real logarithm equations involving products and powers, prove the
+    required positivity hypotheses first, including positivity of a power via `pow_lt`.
+    Then rewrite with `ln_mult` and `ln_pow` to expose an arithmetic equation in logarithms,
+    for example rewriting `ln (x * y ^ n)` into `ln x + INR n * ln y`; similarly expand
+    logarithms in the target before finishing with arithmetic reasoning.
+
+    '
+  harmful: 0
+  helpful: 0
+  id: rocq-00026
+  section: tactics
+- content: 'For real goals containing `sqrt (u ^ 2)`, first establish `Hu : 0 <= u`,
+    then rewrite with `sqrt_pow2 u Hu` to replace the square root by `u`. This is
+    useful when prior algebra has rewritten a radicand into a square.
+
+    '
+  harmful: 0
+  helpful: 0
+  id: rocq-00027
+  section: lemmas
+- content: '`nia` can handle polynomial `nat` arithmetic, including many goals involving
+    truncated subtraction after appropriate order cases are split, but it does not
+    establish witnesses expressed using Euclidean division such as `x / 2`. First
+    prove the needed divisibility or parity fact, then use and destruct the corresponding
+    `Nat.divide` witness.
+
+    '
+  harmful: 0
+  helpful: 0
+  id: rocq-00028
+  section: pitfalls
+next_id: 29

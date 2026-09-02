@@ -249,6 +249,14 @@ def test_step_config_identity_is_backward_compatible() -> None:
         "show_definitions",
         "max_new_bullets",
         "injection",
+        # v5 (2026-09-02)
+        "reducer_contract",
+        "evidence",
+        "known_guidance",
+        "references",
+        "environments",
+        "provenance",
+        "audit_max_additions",
     ):
         assert f'"{absent}"' not in rep, absent
 
@@ -340,6 +348,262 @@ def test_x4_is_a_minimal_pair_of_x3() -> None:
     a = asdict(ad.VARIANTS["x3-online-s0"])
     b = asdict(ad.VARIANTS["x4-online-s0"])
     assert {k for k in a if a[k] != b[k]} == {"name", "reflector_scope"}
+
+
+def test_x3_strong_is_a_minimal_pair_of_x3() -> None:
+    """Role strength alone: model on the reflector + curation side, and
+    the cap that keeps terra's calls from being truncated."""
+    from dataclasses import asdict
+
+    import ace_adaptation as ad
+
+    a = asdict(ad.VARIANTS["x3-offline"])
+    b = asdict(ad.VARIANTS["x3-strong"])
+    diff = {k for k in a if a[k] != b[k]}
+    assert diff == {
+        "name",
+        "final_playbook",
+        "reflector_model",
+        "curator_model",
+        "role_cap",
+    }, diff
+    strong = ad.VARIANTS["x3-strong"]
+    for role in ("reflector", "curator", "reducer", "grounder", "auditor"):
+        assert strong.role_model(role) == "gpt-5.6-terra", role
+        assert strong.role_effort(role) == ad.ADAPT_EFFORT, role
+    assert strong.role_model("generator") == ad.ADAPT_MODEL
+    base = ad.VARIANTS["x3-offline"]
+    assert base.role_model("reducer") == ad.ADAPT_MODEL
+    assert base.role_cap == ad.ROLE_DOLLAR_CAP
+
+
+def test_role_effort_and_cap_reach_the_step_config() -> None:
+    import ace_adaptation as ad
+
+    v = ad.VARIANTS["x3-strong"]
+    s = ad.StepPlan(0, 0, 0, next(iter(ad.POOLS[v.pool])), 0)
+    refl = ad._make_step_config(  # pyright: ignore[reportPrivateUsage]
+        v, "reflector", s, "sha"
+    )
+    assert refl.model_name == "gpt-5.6-terra"
+    assert refl.max_dollar_budget == 0.25
+    assert refl.reasoning_effort == ad.ADAPT_EFFORT
+    gen = ad._make_step_config(  # pyright: ignore[reportPrivateUsage]
+        v, "generator", s, "sha"
+    )
+    assert gen.model_name == ad.ADAPT_MODEL
+    assert gen.max_dollar_budget == v.generator_cap
+    # An x3 config is unchanged by the plumbing (same identity as before).
+    v3 = ad.VARIANTS["x3-offline"]
+    r3 = ad._make_step_config(  # pyright: ignore[reportPrivateUsage]
+        v3, "reducer", s, "sha"
+    )
+    assert r3.model_name == ad.ADAPT_MODEL
+    assert r3.max_dollar_budget == ad.ROLE_DOLLAR_CAP
+    assert r3.reasoning_effort == ad.ADAPT_EFFORT
+
+
+def test_x5_bundle_is_exactly_the_declared_knobs() -> None:
+    """x5-offline is x3-offline plus the v5 mechanisms and nothing else."""
+    from dataclasses import asdict
+
+    import ace_adaptation as ad
+
+    a = asdict(ad.VARIANTS["x3-offline"])
+    b = asdict(ad.VARIANTS["x5-offline"])
+    diff = {k for k in a if a[k] != b[k]}
+    assert diff == {
+        "name",
+        "final_playbook",
+        "curator_contract",
+        "reducer_contract",
+        "grounding",
+        "skip_trivial",
+        "audit",
+        "preaudit_playbook",
+    }, diff
+    v = ad.VARIANTS["x5-offline"]
+    assert v.render_version == 3, "the Generator prompt stays at v3"
+    assert v.role_model("auditor") == ad.ADAPT_MODEL
+    # Every recorded variant keeps the v5 mechanisms off.
+    for name, other in ad.VARIANTS.items():
+        if not name.startswith("x5-"):
+            assert not (other.grounding or other.audit), name
+            assert other.reducer_contract == 1 and not other.skip_trivial, name
+
+
+def test_recorded_curator_delta_still_parses() -> None:
+    """`AddOp.references` is defaulted: a v3 curator's cached YAML
+    (no `references` key) must still load."""
+    import ace_adaptation as ad
+
+    recorded = (
+        Path(__file__).resolve().parent.parent
+        / "experiments/output/ace_adaptation_x3-offline/configs"
+        / "step35_curator_amc12b_2003_p17"
+    )
+    if not recorded.exists():
+        print(
+            "  (no recorded x3-offline curator on disk; parse check skipped)"
+        )
+        return
+    delta = ad.load_delta(recorded)
+    assert delta is not None and delta.operations
+    assert all(op.references == [] for op in delta.operations)
+    gen = recorded.parent / "step35_generator_amc12b_2003_p17"
+    assert ad.read_requests(gen) >= 1
+
+
+def test_grounding_gate() -> None:
+    import ace_adaptation as ad
+    from prove_ace import GroundingResult
+
+    a = AddOp(
+        type="ADD", section="lemmas", content="a", references=["pow2_sqrt"]
+    )
+    b = AddOp(
+        type="ADD",
+        section="lemmas",
+        content="b",
+        references=["norm_num", "lia"],
+    )
+    c = AddOp(
+        type="ADD", section="tactics", content="c", references=["Weird_name"]
+    )
+    d = AddOp(type="ADD", section="tactics", content="d", references=[])
+    results = [
+        GroundingResult("pow2_sqrt", "grounded", "f.v", "Constant …"),
+        GroundingResult(
+            "norm_num", "missing", "f.v", "No object of basename norm_num"
+        ),
+        GroundingResult(
+            "Weird_name", "error", "f.v", "Rocq rejected the command: x"
+        ),
+    ]
+    gate = ad._apply_gate([a, b, c, d], results)  # pyright: ignore[reportPrivateUsage]
+    assert gate.keep([a, b, c, d]) == [a, c, d]
+    assert gate.refused == {id(b): ["norm_num"]}
+    assert gate.errors == {id(c)}
+    # Grounder failed entirely: keep everything, count what was uncheckable.
+    none_gate = ad._apply_gate([a, b, d], None)  # pyright: ignore[reportPrivateUsage]
+    assert none_gate.keep([a, b, d]) == [a, b, d]
+    assert none_gate.errors == {id(a), id(b)}
+
+
+def test_attribute_and_provenance() -> None:
+    import ace_adaptation as ad
+
+    ops = [
+        AddOp(type="ADD", section="lemmas", content="one", references=["x"]),
+        AddOp(type="ADD", section="lemmas", content="dup", references=[]),
+        AddOp(type="ADD", section="tactics", content="three", references=[]),
+    ]
+    pairs = ad._attribute(  # pyright: ignore[reportPrivateUsage]
+        ops, ["rocq-00007", "rocq-00008"], ["dup"]
+    )
+    assert pairs == [("rocq-00007", ops[0]), ("rocq-00008", ops[2])]
+    pb = _pb("one", "three", section="lemmas")
+    pb.bullets[0].helpful = 2
+    prov = {
+        "rocq-00001": ad._provenance_record(  # pyright: ignore[reportPrivateUsage]
+            ops[0], 3, ["amc12_2000_p1"], [True], "curator"
+        )
+    }
+    block = ad._provenance_block(pb, prov)  # pyright: ignore[reportPrivateUsage]
+    lines = block.split("\n")
+    assert lines[0].startswith(
+        "- [rocq-00001] step 3 (curator), from amc12_2000_p1 (solved)"
+    )
+    assert "helpful=2, harmful=0; references: x" in lines[0]
+    assert (
+        lines[1] == "- [rocq-00002] origin not recorded; helpful=0, harmful=0"
+    )
+
+
+def test_grounder_and_auditor_configs() -> None:
+    import ace_adaptation as ad
+
+    v = ad.VARIANTS["x5-offline"]
+    s = ad.StepPlan(4, 0, 4, "mathd_algebra_28", 1)
+    cfg = ad._make_step_config(  # pyright: ignore[reportPrivateUsage]
+        v,
+        "grounder",
+        s,
+        "sha",
+        references="pow2_sqrt\nNat.div_mod_eq",
+        environments="a.v@t|b.v@u",
+    )
+    name = ad._config_name(  # pyright: ignore[reportPrivateUsage]
+        cfg,
+        ad._NO_UID,  # pyright: ignore[reportPrivateUsage]
+    )
+    assert name == "step04_grounder_mathd_algebra_28"
+    args = cfg.instantiate(None)
+    assert args.strategy == "ground_references"
+    assert args.args == {
+        "names": ["pow2_sqrt", "Nat.div_mod_eq"],
+        "environments": [("a.v", "t"), ("b.v", "u")],
+    }
+    final = ad.StepPlan(40, 0, 0, ad.AUDIT_BENCH, -1)
+    aud = ad._make_step_config(  # pyright: ignore[reportPrivateUsage]
+        v, "auditor", final, "sha", provenance="p", audit_max_additions=6
+    )
+    aud_name = ad._config_name(  # pyright: ignore[reportPrivateUsage]
+        aud,
+        ad._NO_UID,  # pyright: ignore[reportPrivateUsage]
+    )
+    assert aud_name == "step40_auditor_final"
+    assert aud.audit_max_additions == 6 and aud.reducer_contract == 2
+
+
+def test_role_runner_evicts_stale_same_name_cells() -> None:
+    """A config re-registered under an existing name with different
+    params must not reuse the old directory (HINTS #65)."""
+    import yaml
+
+    import ace_adaptation as ad
+    from delphyne.utils.typing import pydantic_dump
+
+    def cfg(upstream: str) -> ad.ACEAdaptStepConfig:
+        return ad.ACEAdaptStepConfig(
+            role="reducer",
+            step=0,
+            bench_name="t",
+            seed=0,
+            model_name="m",
+            toolset="core",
+            reasoning_effort="medium",
+            num_requests=3,
+            max_dollar_budget=0.02,
+            playbook_sha256="pb",
+            upstream_sha256=upstream,
+        )
+
+    with tempfile.TemporaryDirectory(dir=ad._OMPHALOS_DIR) as tmp:  # pyright: ignore[reportPrivateUsage]
+        rel = str(Path(tmp).relative_to(ad._OMPHALOS_DIR))  # pyright: ignore[reportPrivateUsage]
+        runner = ad.RoleRunner(ad.ACEAdaptStepConfig, rel, ad._config_name)  # pyright: ignore[reportPrivateUsage]
+        old = cfg("old")
+        name = ad._config_name(old, ad._NO_UID)  # pyright: ignore[reportPrivateUsage]
+        state = {
+            "name": "x",
+            "description": None,
+            "configs": {
+                name: {
+                    "params": pydantic_dump(ad.ACEAdaptStepConfig, old),
+                    "status": "done",
+                }
+            },
+        }
+        (Path(tmp) / "experiment.yaml").write_text(yaml.safe_dump(state))
+        cell = Path(tmp) / "configs" / name
+        cell.mkdir(parents=True)
+        (cell / "result.yaml").write_text("stale: true\n")
+        # Same params: nothing happens.
+        assert runner._evict_stale([cfg("old")]) == []  # pyright: ignore[reportPrivateUsage]
+        assert cell.exists()
+        # Different upstream hash, same name: the stale cell goes.
+        assert runner._evict_stale([cfg("new")]) == [name]  # pyright: ignore[reportPrivateUsage]
+        assert not cell.exists()
 
 
 def test_reflector_scope_is_not_in_default_identity() -> None:

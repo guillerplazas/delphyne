@@ -40,15 +40,16 @@ frozen rendering untouched — proven by `make test` + experiment
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import delphyne as dp
-from delphyne import Branch, Strategy, dfs, strategy
+from delphyne import Branch, Compute, Strategy, dfs, strategy
 from delphyne.stdlib.queries import ExampleSelector, SelectedExample
 
 import pytanque_utils as pt
 import skills as sk
-from ace_playbook import AddOp, BulletTag, RewriteBullet
+from ace_evidence import GroundingVerdict, grounding_verdict, locate_command
+from ace_playbook import AddOp, AuditDecision, BulletTag, RewriteBullet
 from model_registry import ApiType, OmphalosReasoningEffort, make_model
 from prove_agentic import (
     InspectAt,
@@ -347,6 +348,18 @@ class CuratePlaybook(dp.Query[CurationDelta]):
     implementation feeds its curator all three, and its prompt cannot
     reject "theorem-specific" bullets without seeing the theorem.
     """
+    evidence: str = ""
+    known_guidance: str = ""
+    """
+    v4 evidence (contract 4, 2026-09-02; default-empty so v1-v3 prompts
+    render unchanged): the pool-level verifier-failure digest
+    (`ace_evidence.render_digest`) and the pitfalls section of the
+    prover's own system prompt (`ace_evidence.known_guidance`). The
+    contract-3 rule "do not restate the system prompt" was addressed
+    to a model that had never seen that prompt; and one diagnosis at a
+    time cannot tell frequent from distinctive (PROGRESS 2026-09-02,
+    causes C1 and C4).
+    """
     """
     1 = the original output contract; 2 demands block scalars
     (`content: |`) — an unquoted `: ` inside a plain scalar makes YAML
@@ -370,6 +383,8 @@ def curate_playbook(
     theorem: str = "",
     outcome: str = "",
     progress: str = "",
+    evidence: str = "",
+    known_guidance: str = "",
 ) -> Strategy[Branch, dp.PromptingPolicy, CurationDelta]:
     delta = yield from dp.branch(
         CuratePlaybook(
@@ -383,6 +398,8 @@ def curate_playbook(
             theorem,
             outcome,
             progress,
+            evidence,
+            known_guidance,
         ).using(dp.ambient_pp)
     )
     return delta
@@ -511,6 +528,14 @@ class AggregateCurationDeltas(dp.Query[CurationDelta]):
     """The proposed operations, rendered one `[Sample k]` block each."""
     max_new_bullets: int = 6
     progress: str = ""
+    contract_version: int = 1
+    evidence: str = ""
+    """
+    Contract 2 (2026-09-02): the reducer sees the pool-level failure
+    digest and is told that frequent beats distinctive, and it carries
+    each proposal's `references` into the final ADDs. Both default so
+    the recorded contract-1 prompts render unchanged.
+    """
 
     __parser__ = dp.last_code_block.yaml
 
@@ -521,13 +546,125 @@ def aggregate_curation_deltas(
     proposals: str,
     max_new_bullets: int = 6,
     progress: str = "",
+    contract_version: int = 1,
+    evidence: str = "",
 ) -> Strategy[Branch, dp.PromptingPolicy, CurationDelta]:
     delta = yield from dp.branch(
         AggregateCurationDeltas(
-            playbook, proposals, max_new_bullets, progress
+            playbook,
+            proposals,
+            max_new_bullets,
+            progress,
+            contract_version,
+            evidence,
         ).using(dp.ambient_pp)
     )
     return delta
+
+
+#####
+##### v5 (2026-09-02): the Auditor and the grounding gate
+#####
+
+
+@dataclass
+class PlaybookAudit:
+    """
+    The Auditor's output: a decision per bullet it chose to mention
+    (unmentioned bullets are kept — `ace_playbook.apply_audit`) and a
+    capped list of additions for uncovered, frequent failure classes.
+    """
+
+    reasoning: str
+    decisions: list[AuditDecision]
+    additions: list[AddOp]
+
+
+@dataclass
+class AuditPlaybook(dp.Query[PlaybookAudit]):
+    """
+    One-shot terminal audit of a finished playbook.
+
+    Runs once, after the last adaptation step and before the playbook
+    is frozen. Sees the playbook *with counters*, a provenance line per
+    bullet (origin step and theorem, solved or not, references), the
+    pool-level failure digest and the prover's own pitfalls. This is
+    the "be more selective" step the v3 study lacked: 15 of its 26
+    bullets were never tagged, several contradicted each other or the
+    verifier, and nothing ever read the playbook as a whole. It is
+    deliberately *not* the monolithic-rewrite ablation: default-keep,
+    explicit per-bullet reasons, a single pass, and the pre-audit
+    playbook is frozen alongside the audited one.
+    """
+
+    playbook: str
+    provenance: str
+    evidence: str
+    known_guidance: str
+    max_additions: int = 6
+
+    __parser__ = dp.last_code_block.yaml
+
+
+@strategy
+def audit_playbook(
+    playbook: str,
+    provenance: str,
+    evidence: str,
+    known_guidance: str,
+    max_additions: int = 6,
+) -> Strategy[Branch, dp.PromptingPolicy, PlaybookAudit]:
+    audit = yield from dp.branch(
+        AuditPlaybook(
+            playbook, provenance, evidence, known_guidance, max_additions
+        ).using(dp.ambient_pp)
+    )
+    return audit
+
+
+@dataclass
+class GroundingResult:
+    """
+    What Rocq said about one referenced name: `grounded` (an object of
+    that name exists in `environment`), `missing` (no environment
+    knows it) or `error` (the bridge could not answer — not evidence
+    either way). `answer` is the last `Locate` output seen.
+    """
+
+    name: str
+    verdict: GroundingVerdict
+    environment: str
+    answer: str
+
+
+@strategy
+def ground_references(
+    names: list[str],
+    environments: list[tuple[str, str]],
+) -> Strategy[Compute, object, list[GroundingResult]]:
+    """
+    The grounding gate's Rocq half: for each name, ask `Locate name.`
+    in each `(problem_file, theorem_name)` environment in order and
+    stop at the first that knows it. No LLM anywhere — every answer is
+    a `dp.compute` over `pytanque_utils.query`, cached and replayable
+    exactly like the verifier's `check` calls. Ordering is fixed by the
+    inputs, so a resumed run re-derives the same verdicts from cache.
+    """
+    results: list[GroundingResult] = []
+    for name in names:
+        verdict: GroundingVerdict = "missing"
+        environment = ""
+        answer = ""
+        for problem_file, theorem_name in environments:
+            answer = yield from dp.compute(pt.query)(
+                problem_file, theorem_name, locate_command(name)
+            )
+            environment = problem_file
+            verdict = grounding_verdict(answer)
+            if verdict == "grounded":
+                break
+        results.append(GroundingResult(name, verdict, environment, answer))
+    return results
 
 
 #####
@@ -623,3 +760,26 @@ def rewrite_playbook_policy(
     return _one_shot_policy(
         model_name, temperature, api, reasoning_effort, max_requests
     )
+
+
+@dp.ensure_compatible(audit_playbook)
+def audit_playbook_policy(
+    model_name: str,
+    temperature: float | None = None,
+    api: ApiType = "responses",
+    reasoning_effort: OmphalosReasoningEffort | None = None,
+    max_requests: int = 3,
+) -> dp.Policy[Branch, dp.PromptingPolicy]:
+    return _one_shot_policy(
+        model_name, temperature, api, reasoning_effort, max_requests
+    )
+
+
+@dp.ensure_compatible(ground_references)
+def ground_references_policy() -> dp.Policy[Compute, object]:
+    """
+    The grounder has no LLM: `Compute` is its only effect, eliminated
+    by performing the computations (`dp.just_compute`). The inner
+    policy is never consulted.
+    """
+    return dp.just_compute(cast(object, None))

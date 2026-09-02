@@ -46,7 +46,7 @@ step-playbook directory. Frozen: a variant may change the directory it
 writes to, never the one the legacy run already wrote.
 """
 
-STEPS_SCHEMA_VERSION = 3
+STEPS_SCHEMA_VERSION = 4
 
 STEP_COLUMNS: tuple[str, ...] = (
     "schema_version",
@@ -82,13 +82,25 @@ STEP_COLUMNS: tuple[str, ...] = (
     "reflector_failed",
     "cited_count",
     "tags_dropped",
+    "skipped_trivial",
+    "proposed",
+    "reduced_out",
+    "ungrounded",
+    "grounding_error",
 )
 """
 Schema 3 (2026-08-26) appends `cited_count` (bullet ids the generator
 named in its own messages, render_version >= 3) and `tags_dropped`
 (reflector tags outside the cited set, discarded under
-`reflector_scope="cited"`). Readers accept schema >= 2; a resumed run
-rewrites the whole file at the current schema.
+`reflector_scope="cited"`). Schema 4 (2026-09-02) appends the
+accounting the v3 record lacked: `skipped_trivial` (no Reflector /
+Curator on a first-proposal solve), `proposed` (ADDs the step's
+curator emitted), `reduced_out` (ADDs the batch reducer kept, on the
+batch's last row — the reducer discarded 62 % of proposals in x3
+without any column showing it), `ungrounded` (ADDs refused because a
+referenced name does not exist in Rocq) and `grounding_error` (ADDs
+kept because the bridge could not answer). Readers accept schema >= 2;
+a resumed run rewrites the whole file at the current schema.
 """
 
 
@@ -205,6 +217,57 @@ class PlaybookStore:
     def reset_refine_log(self) -> None:
         if self.refine_log.exists():
             self.refine_log.unlink()
+
+    # --- v5 sidecars (2026-09-02) ---------------------------------
+
+    @property
+    def provenance_file(self) -> Path:
+        """`bullets.provenance.yaml`: where every bullet came from."""
+        return self.dir / "bullets.provenance.yaml"
+
+    def read_provenance(self) -> dict[str, dict[str, Any]]:
+        if not self.provenance_file.exists():
+            return {}
+        loaded: Any = yaml.safe_load(self.provenance_file.read_text())
+        return cast(dict[str, dict[str, Any]], loaded or {})
+
+    def write_provenance(
+        self, records: Mapping[str, Mapping[str, Any]]
+    ) -> None:
+        """
+        Whole-file rewrite, keys sorted by bullet id: the record is
+        derived from the run and regenerated on every resume, like the
+        step index. Kept OUT of the playbook YAML on purpose — a new
+        `Bullet` field would change every frozen playbook's sha256.
+        """
+        self.dir.mkdir(parents=True, exist_ok=True)
+        ordered = {k: dict(records[k]) for k in sorted(records)}
+        self.provenance_file.write_text(
+            yaml.safe_dump(ordered, sort_keys=False)
+        )
+
+    @property
+    def grounding_log(self) -> Path:
+        return self.dir / "grounding.log.yaml"
+
+    @property
+    def audit_log(self) -> Path:
+        return self.dir / "audit.log.yaml"
+
+    def append_log(self, path: Path, event: Mapping[str, Any]) -> None:
+        events: list[Any] = []
+        if path.exists():
+            loaded: Any = yaml.safe_load(path.read_text())
+            events = cast(list[Any], loaded or [])
+        events.append(dict(event))
+        self.dir.mkdir(parents=True, exist_ok=True)
+        path.write_text(yaml.safe_dump(events, sort_keys=False))
+
+    def reset_logs(self) -> None:
+        """A run re-derives its logs from scratch, like the refine log."""
+        for path in (self.grounding_log, self.audit_log):
+            if path.exists():
+                path.unlink()
 
     @property
     def embeddings_cache(self) -> Path:

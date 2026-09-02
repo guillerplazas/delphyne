@@ -78,60 +78,75 @@ class ErrorClass:
 
 
 TAXONOMY: tuple[ErrorClass, ...] = (
+    # Every multi-word pattern joins its words with `\s+`: Rocq's
+    # pretty-printer wraps long messages at ~78 columns, so a verbatim
+    # "was not found in the current environment" straddles a line break
+    # in a quarter of the recorded caches and used to fall into `other`
+    # (2026-09-02 correction; the taxonomy under-reported the largest
+    # fixable class by that much).
     ErrorClass(
         "incomplete-proof",
-        r"Attempt to save an incomplete proof",
+        r"Attempt\s+to\s+save\s+an\s+incomplete\s+proof",
         "every tactic applied but goals were left open at Qed",
     ),
     ErrorClass(
         "no-witness",
-        r"Cannot find witness",
+        r"Cannot\s+find\s+witness",
         "a nonlinear-arithmetic closer (nia/nra) gave up",
     ),
     ErrorClass(
         "unknown-reference",
-        r"(reference|variable) .* was not found in the current environment",
+        r"(reference|variable)\s.*\swas\s+not\s+found\s+in\s+the\s+current"
+        r"\s+environment",
         "reached for a lemma or tactic that does not exist here",
     ),
     ErrorClass(
         "syntax-error",
-        r"Syntax error",
+        r"Syntax\s+error",
         "malformed Rocq sentence",
     ),
     ErrorClass(
         "no-applicable-tactic",
-        r"No applicable tactic",
+        r"No\s+applicable\s+tactic",
         "a closer was applied to a goal shape it cannot handle",
     ),
     ErrorClass(
         "rewrite-no-match",
-        r"Found no subterm matching",
+        r"Found\s+no\s+subterm\s+matching",
         "rewrite target absent — usually a normal-form mismatch",
     ),
     ErrorClass(
         "already-used",
-        r"is already used",
+        r"is\s+already\s+used",
         "re-bound a name already in context",
     ),
     ErrorClass(
         "focus-error",
-        r"cannot be unfocused|This proof is focused",
+        r"cannot\s+be\s+unfocused|This\s+proof\s+is\s+focused"
+        r"|Wrong\s+bullet",
         "mismatched bullets or braces",
     ),
     ErrorClass(
         "not-convertible",
-        r"Not convertible",
+        r"Not\s+convertible",
         "`change` to a term that is not definitionally equal",
     ),
     ErrorClass(
         "type-mismatch",
-        r"Unable to apply lemma|The term .* has type|Illegal application",
+        r"Unable\s+to\s+apply\s+lemma|The\s+term\s.*\shas\s+type"
+        r"|Illegal\s+application",
         "term does not have the type the goal wants",
     ),
     ErrorClass(
         "timeout",
-        r"Timeout|timed out",
+        r"Timeout|timed\s+out",
         "a tactic exceeded its time budget",
+    ),
+    ErrorClass(
+        "prover-crash",
+        r"No\s+response\s+from\s+pet\s+process|transport\s+failure"
+        r"|closed\s+the\s+connection|Stack\s+overflow|Out\s+of\s+memory",
+        "the prover died on the tactic (vm_compute on a huge term, …)",
     ),
 )
 
