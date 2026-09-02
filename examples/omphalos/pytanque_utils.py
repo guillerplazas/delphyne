@@ -7,11 +7,13 @@ Pure Python: no Delphyne imports, so this module can be called from
 
 from __future__ import annotations
 
+import copy
+import os
 import re
 from collections import OrderedDict
 from collections.abc import Generator
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as dc_replace
 from pathlib import Path
 from typing import Literal
 
@@ -79,6 +81,23 @@ _PREFIX_MEMO: OrderedDict[tuple[int, str, str, tuple[str, ...]], State] = (
     OrderedDict()
 )
 PREFIX_MEMO_CAP = 1024
+_MEMO_LAST_GEN: list[int] = [-1]
+
+
+def _memo_purge_stale() -> None:
+    """
+    Drop entries of dead server generations. A recycle already
+    invalidates them implicitly (the generation is in the key), but
+    without the purge they kept occupying the LRU and evicting live
+    entries — one archived process reached generation 75 against a
+    1024-entry cap. Runs only when the generation actually changed.
+    """
+    gen = MANAGER.generation
+    if gen == _MEMO_LAST_GEN[0]:
+        return
+    _MEMO_LAST_GEN[0] = gen
+    for key in [k for k in _PREFIX_MEMO if k[0] != gen]:
+        del _PREFIX_MEMO[key]
 
 
 def _memo_enabled(client: Pytanque) -> bool:
@@ -95,6 +114,7 @@ def _memo_key(
 def _memo_put(
     abs_file: str, theorem_name: str, prefix: tuple[str, ...], state: State
 ) -> None:
+    _memo_purge_stale()
     key = _memo_key(abs_file, theorem_name, prefix)
     _PREFIX_MEMO[key] = state
     _PREFIX_MEMO.move_to_end(key)
@@ -309,6 +329,14 @@ def _extract_section(header: str, label: str) -> str:
     return m.group(1).strip()
 
 
+_PARSE_MEMO: dict[tuple[str, bool, int, int], ProblemSpec] = {}
+"""Keyed by `(resolved path, show_definitions, size, mtime_ns)`.
+`parse_problem` runs in the strategy body, so every strategy *replay*
+re-reads and re-regexes the file; the benchmark files are frozen, so
+the parse is cached on the file's stat. Entries hold private copies
+and hits return fresh copies (`ProblemSpec` fields are all strings)."""
+
+
 def parse_problem(path: str, show_definitions: bool = False) -> ProblemSpec:
     """
     Parse a miniF2F problem file into a `ProblemSpec`.
@@ -323,6 +351,22 @@ def parse_problem(path: str, show_definitions: bool = False) -> ProblemSpec:
     Verification never depended on it: pytanque loads the real file.
     """
     path = _resolve(path)
+    try:
+        st = Path(path).stat()
+        memo_key = (path, show_definitions, st.st_size, st.st_mtime_ns)
+    except OSError:
+        memo_key = None
+    if memo_key is not None:
+        hit = _PARSE_MEMO.get(memo_key)
+        if hit is not None:
+            return dc_replace(hit)
+    spec = _parse_problem_uncached(path, show_definitions)
+    if memo_key is not None:
+        _PARSE_MEMO[memo_key] = dc_replace(spec)
+    return spec
+
+
+def _parse_problem_uncached(path: str, show_definitions: bool) -> ProblemSpec:
     text = Path(path).read_text()
 
     header = ""
@@ -474,6 +518,42 @@ GOALS_TRUNCATED_MARKER = (
 )
 
 
+_CHECK_MEMO: OrderedDict[
+    tuple[str, str, tuple[str, ...], tuple[str, ...], bool, GoalCaps | None],
+    Feedback,
+] = OrderedDict()
+CHECK_MEMO_CAP = 512
+
+
+def _check_memo_enabled() -> bool:
+    """
+    The in-process memo over full verification results, on unless
+    `OMPHALOS_CHECK_MEMO=0`. The compute cache keys entries by
+    occurrence index, so an agent repeating a byte-identical script
+    re-pays the whole verification — 9.4% of the 74.8k archived compute
+    calls are such repeats (`tools/compute_repeat_audit.py`), including
+    failing tactics that re-pay `PROOF_TACTIC_TIMEOUT` each time.
+    Verdicts are deterministic (the audit found divergence only on
+    transport/resource failures, 7 groups in 74.8k calls), and results
+    are stored only for calls the transport survived untouched.
+    """
+    return os.environ.get("OMPHALOS_CHECK_MEMO", "1") != "0"
+
+
+def check_memo_size() -> int:
+    """Entries currently memoised (for tests and the timing harness)."""
+    return len(_CHECK_MEMO)
+
+
+def clear_check_memo() -> None:
+    """
+    Empty the check-result memo. For tests and harnesses whose point
+    is *re-execution* (transport parity, cold-run agreement): a repeat
+    served from the memo would make them vacuous.
+    """
+    _CHECK_MEMO.clear()
+
+
 def check(
     file: str,
     theorem_name: str,
@@ -501,12 +581,49 @@ def check(
 
     `goal_caps` (treatment, off by default — see `GoalCaps`) bounds how
     many goals the battery probes and how many are reported.
+
+    Repeated byte-identical calls are answered from an in-process memo
+    (`_check_memo_enabled`): the verdict for a given (file, theorem,
+    script) does not depend on the server, and only results from calls
+    with no transport incident (no exception, no recycle, no poisoned
+    session, no start failure) are stored.
     """
     file = _resolve(file)
+    memo = _check_memo_enabled()
+    key = (
+        file,
+        theorem_name,
+        tuple(tactics),
+        extra_imports,
+        probe_automation,
+        goal_caps,
+    )
+    if memo:
+        hit = _CHECK_MEMO.get(key)
+        if hit is not None:
+            _CHECK_MEMO.move_to_end(key)
+            return copy.deepcopy(hit)
+    gen_before = MANAGER.generation
     with _augmented_file(file, extra_imports) as run_file:
-        return _check_against(
+        fb = _check_against(
             run_file, theorem_name, tactics, probe_automation, goal_caps
         )
+    if (
+        memo
+        and MANAGER.generation == gen_before
+        and not (
+            fb.error_message is not None
+            and (
+                "Rocq transport failure" in fb.error_message
+                or fb.error_message.startswith("Failed to start session")
+            )
+        )
+    ):
+        _CHECK_MEMO[key] = copy.deepcopy(fb)
+        _CHECK_MEMO.move_to_end(key)
+        while len(_CHECK_MEMO) > CHECK_MEMO_CAP:
+            _CHECK_MEMO.popitem(last=False)
+    return fb
 
 
 def check_assisted(

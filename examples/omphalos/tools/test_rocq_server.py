@@ -171,8 +171,10 @@ def test_prefix_memo_reuses_states() -> None:
     assert fb1.remaining_goals and fb2.failing_index is not None
     # The extended script reused the memoised prefix: only new entries.
     assert pt.prefix_memo_size() == n1 + 1
-    # Preview and verification agree with a cold run.
+    # Preview and verification agree with a cold run (the check memo
+    # is cleared so the rerun actually re-executes).
     rs.MANAGER.recycle("test")
+    pt.clear_check_memo()
     cold = pt.check_assisted(PROBLEM, THM, [*script, "nra."])
     assert cold == fb2
 
@@ -180,9 +182,11 @@ def test_prefix_memo_reuses_states() -> None:
 def test_stdio_mode_matches_socket() -> None:
     script = ["intros x H0 H1 H2.", "split.", "nra."]
     os.environ["OMPHALOS_PET_MODE"] = "socket"
+    pt.clear_check_memo()  # this test is about re-execution parity
     a = pt.check_assisted(PROBLEM, THM, script)
     q_a = pt.query(PROBLEM, THM, "Check sqrt.")
     os.environ["OMPHALOS_PET_MODE"] = "stdio"
+    pt.clear_check_memo()
     b = pt.check_assisted(PROBLEM, THM, script)
     q_b = pt.query(PROBLEM, THM, "Check sqrt.")
     os.environ["OMPHALOS_PET_MODE"] = "socket"
@@ -202,6 +206,49 @@ def test_goal_caps_shape() -> None:
     assert fb.remaining_goals[0].endswith("[goal truncated]")
     plain = pt.check_assisted(PROBLEM, THM, ["intros x H0 H1 H2.", "split."])
     assert plain.probe is not None and len(plain.probe) == 2
+
+
+def test_check_memo_hit_guards_and_kill_switch() -> None:
+    os.environ["OMPHALOS_PET_MODE"] = "socket"
+    rs.MANAGER.recycle("test")
+    pt.clear_check_memo()
+    script = ["intros x H0 H1 H2.", "split.", "nra."]
+    fb1 = pt.check_assisted(PROBLEM, THM, script)
+    n = pt.check_memo_size()
+    assert n == 1
+    sessions_before = rs.MANAGER.stats().sessions
+    fb2 = pt.check_assisted(PROBLEM, THM, script)
+    assert fb2 == fb1
+    assert fb2 is not fb1, "hits must be private copies"
+    assert rs.MANAGER.stats().sessions == sessions_before, (
+        "a memo hit must not open a session"
+    )
+    # A memo hit survives a recycle: the verdict does not depend on
+    # the server generation, unlike the prefix memo.
+    rs.MANAGER.recycle("test")
+    assert pt.check_assisted(PROBLEM, THM, script) == fb1
+    # Kill switch: OMPHALOS_CHECK_MEMO=0 re-executes.
+    os.environ["OMPHALOS_CHECK_MEMO"] = "0"
+    try:
+        with_off = pt.check_assisted(PROBLEM, THM, script)
+        assert with_off == fb1
+        assert pt.check_memo_size() == n, "disabled memo must not grow"
+    finally:
+        del os.environ["OMPHALOS_CHECK_MEMO"]
+    # A call the transport did not survive is not stored: with a tiny
+    # reply cap the session fails to start (a recycle mid-call), the
+    # feedback reports the failure, and nothing is memoised for the key.
+    pt.clear_check_memo()
+    rs.configure(reply_cap_bytes=64)
+    try:
+        bad = pt.check_assisted(PROBLEM, THM, script)
+        assert not bad.success and bad.error_message is not None
+        assert pt.check_memo_size() == 0, "failed transport must not memoise"
+    finally:
+        rs.configure(reply_cap_bytes=rs.Settings().reply_cap_bytes)
+    good = pt.check_assisted(PROBLEM, THM, script)
+    assert good == fb1
+    assert pt.check_memo_size() == 1
 
 
 def test_rlimit_spawn_failure_falls_back_loudly() -> None:

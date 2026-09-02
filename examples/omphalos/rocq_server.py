@@ -38,7 +38,9 @@ Design (2026-08-26, measured before adoption — numbers in PROGRESS):
 from __future__ import annotations
 
 import atexit
+import functools
 import hashlib
+import json
 import logging
 import os
 import shutil
@@ -55,6 +57,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from pytanque import PetanqueError, Pytanque, PytanqueMode
+from pytanque.client import PETANQUE_ROUTES, Failure, Response, mk_request
 from pytanque.routes import RouteName
 
 _WORKSPACE_ROOT = Path(__file__).resolve().parent
@@ -265,6 +268,55 @@ class BoundedPytanque(Pytanque):
         # silently dropped by the library's per-fragment decode.
         return b"".join(chunks).decode(errors="ignore")
 
+    def _query_unlogged(
+        self,
+        route_name: Any,
+        params: Any,
+        size: int,
+        timeout: float | None,
+    ) -> Any:
+        """
+        `Pytanque.query`, socket branch, minus its two `logger.info`
+        f-strings: the library formats the full payload and the full
+        raw reply *eagerly* — with no handler configured that is pure
+        string copying, tens of MB for a reply near the cap, on every
+        RPC. Behaviour is otherwise byte-identical (same requests, same
+        replies, same errors); `tools/test_rocq_server.py` pins it
+        against the parent implementation.
+        """
+        if self.mode != PytanqueMode.SOCKET:  # pragma: no cover
+            return super().query(  # type: ignore[reportUnknownMemberType]
+                route_name, params, size=size, timeout=timeout
+            )
+        self.id += 1
+        request = mk_request(  # type: ignore[reportUnknownMemberType]
+            self.id, params, route_name, project_state=True
+        )
+        payload = request.to_json()  # type: ignore[reportUnknownMemberType]
+        sock = cast(socket.socket, self.socket)  # type: ignore[reportUnknownMemberType]
+        sock.settimeout(timeout)
+        try:
+            data = json.dumps(payload) + "\n"
+            sock.sendall(data.encode())
+            raw = self._read_socket_response(size)
+        except TimeoutError:
+            raise PetanqueError(-33000, f"Timeout on {self.id}")  # type: ignore[reportUnknownMemberType]
+        try:
+            resp = cast(Any, Response).from_json_string(raw)
+            if resp.id != self.id:
+                raise PetanqueError(  # type: ignore[reportUnknownMemberType]
+                    -32603, f"Sent request {self.id}, got response {resp.id}"
+                )
+            if not resp.result and resp.result is not False:
+                return None
+            response_cls = PETANQUE_ROUTES[route_name].response_cls  # type: ignore[reportUnknownMemberType]
+            return response_cls.from_json(resp.result)
+        except ValueError:
+            failure = cast(Any, Failure).from_json_string(raw)
+            raise PetanqueError(  # type: ignore[reportUnknownMemberType]
+                failure.error.code, failure.error.message
+            )
+
     def query(  # type: ignore[override]
         self,
         route_name: Any,
@@ -284,7 +336,7 @@ class BoundedPytanque(Pytanque):
         else:
             deadline = timeout
         try:
-            return super().query(  # type: ignore[reportUnknownMemberType]
+            return self._query_unlogged(
                 route_name, params, size=size, timeout=deadline
             )
         except TransportError as e:
@@ -309,6 +361,13 @@ class BoundedPytanque(Pytanque):
 ##### Stable augmented files
 #####
 
+_AUG_MEMO: dict[tuple[str, tuple[str, ...], int, int], str] = {}
+"""`(src, extra_imports, src size, src mtime_ns)` -> verified dst path.
+The bridge calls `augmented_path` on *every* tool call; without the
+memo each call re-reads the source and the destination and re-hashes
+the content. Keyed by the source's stat so an edited problem file
+invalidates naturally (benchmark files are frozen in practice)."""
+
 
 def augmented_path(file: str, extra_imports: tuple[str, ...]) -> str:
     """
@@ -326,12 +385,23 @@ def augmented_path(file: str, extra_imports: tuple[str, ...]) -> str:
     src = Path(file).resolve()
     if not extra_imports:
         return str(src)
+    try:
+        st = src.stat()
+        memo_key = (str(src), extra_imports, st.st_size, st.st_mtime_ns)
+    except OSError:
+        memo_key = None
+    if memo_key is not None:
+        hit = _AUG_MEMO.get(memo_key)
+        if hit is not None and Path(hit).exists():
+            return hit
     body = src.read_bytes()
     content = ("\n".join(extra_imports) + "\n").encode() + body
     digest = hashlib.sha256(str(src).encode() + b"\0" + content).hexdigest()
     dst = AUG_DIR / digest[:16] / src.name
     try:
         if dst.read_bytes() == content:
+            if memo_key is not None:
+                _AUG_MEMO[memo_key] = str(dst)
             return str(dst)
     except OSError:
         pass
@@ -341,6 +411,8 @@ def augmented_path(file: str, extra_imports: tuple[str, ...]) -> str:
     )
     tmp.write_bytes(content)
     os.replace(tmp, dst)
+    if memo_key is not None:
+        _AUG_MEMO[memo_key] = str(dst)
     return str(dst)
 
 
@@ -372,6 +444,12 @@ class ServerStats:
     rss_mb: float | None
     recycles: dict[str, int]
     fallbacks: int
+
+
+@functools.cache
+def _which(name: str) -> str | None:
+    """`shutil.which`, cached: `_spawn` used to re-scan PATH per spawn."""
+    return shutil.which(name)
 
 
 def _free_port() -> int:
@@ -503,9 +581,9 @@ class PetServerManager:
         # SIGKILL. `prlimit --as`: address-space cap. Both exec the next
         # command in place (same pid), no `preexec_fn` in a threaded
         # parent.
-        if shutil.which("setpriv"):
+        if _which("setpriv"):
             cmd = ["setpriv", "--pdeathsig=KILL", *cmd]
-        if shutil.which("prlimit"):
+        if _which("prlimit"):
             cap = st.server_rlimit_as_mb * 2**20
             cmd = ["prlimit", f"--as={cap}", *cmd]
         log_path = LOG_DIR / f"pet-server-{os.getpid()}-{self._generation}.log"

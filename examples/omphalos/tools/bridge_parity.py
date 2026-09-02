@@ -36,6 +36,7 @@ Usage:
 # pyright: strict
 
 import argparse
+import os
 import re
 import statistics
 import sys
@@ -156,6 +157,10 @@ def run_config(config_dir: Path, funs: tuple[str, ...]) -> list[Outcome]:
 
 
 def main() -> int:
+    # Parity must *re-execute* every archived call: a repeat served
+    # from the check-result memo would mask a transport regression.
+    # An explicit OMPHALOS_CHECK_MEMO=1 still allows memo-on parity.
+    os.environ.setdefault("OMPHALOS_CHECK_MEMO", "0")
     ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     ap.add_argument("--run", required=True, help="experiments/output/<run>")
     ap.add_argument(

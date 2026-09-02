@@ -48,7 +48,9 @@ CLI additions over the stdlib `ExperimentCLI`: `run --wait`, `run
 
 from __future__ import annotations
 
+import atexit
 import fcntl
+import json
 import multiprocessing as mp
 import os
 import shlex
@@ -180,8 +182,15 @@ def _holder(path: Path) -> str:
         return "unknown"
 
 
-def _try_lock(path: Path, note: str) -> int | None:
-    """Non-blocking exclusive `flock`; returns the fd (kept open) or None."""
+def _try_lock(path: Path, note: str, *, probe: bool = False) -> int | None:
+    """
+    Non-blocking exclusive `flock`; returns the fd (kept open) or None.
+
+    With `probe`, the file is left untouched: a probe used to truncate
+    the file and write a `pid=... probe` note, so a concurrent `status`
+    / `slots` call could momentarily hold a free slot with a stale-
+    looking holder line and push a real acquirer into the queue.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
     try:
@@ -189,11 +198,12 @@ def _try_lock(path: Path, note: str) -> int | None:
     except OSError:
         os.close(fd)
         return None
-    os.ftruncate(fd, 0)
-    os.write(
-        fd,
-        f"pid={os.getpid()} host={socket.gethostname()} at={_now()} {note}\n".encode(),
-    )
+    if not probe:
+        os.ftruncate(fd, 0)
+        os.write(
+            fd,
+            f"pid={os.getpid()} host={socket.gethostname()} at={_now()} {note}\n".encode(),
+        )
     return fd
 
 
@@ -219,7 +229,7 @@ def slot_table(max_streams: int | None = None) -> list[tuple[int, str | None]]:
     out: list[tuple[int, str | None]] = []
     for i in range(n):
         path = slot_dir() / f"slot-{i}.lock"
-        fd = _try_lock(path, "probe")
+        fd = _try_lock(path, "probe", probe=True)
         if fd is None:
             out.append((i, _holder(path)))
         else:
@@ -263,25 +273,29 @@ def stream_slots(
             os.close(fd)
         held.clear()
 
-    # Strict FIFO: a newcomer may only grab immediately when nobody is
-    # queued; otherwise it queues behind the earlier waiters even if a
-    # slot happens to be free (else single-slot chains starve a
-    # four-slot evaluation forever).
-    if not _live_tickets():
-        grab()
-    if len(held) < n and not wait:
-        release()
-        holders = [f"{i}:{h}" for i, h in slot_table(max_streams) if h]
-        raise LaunchRefused(
-            f"need {n} Rocq stream slot(s), fewer are free "
-            f"(OMPHALOS_MAX_STREAMS={max_streams}); holders: "
-            f"{'; '.join(holders) or 'none'}. Use --wait to queue."
-        )
-    ticket: Path | None = None
+    # Strict FIFO: the ticket is taken *before* the first grab. The
+    # previous shape grabbed first and ticketed only on failure, so a
+    # newcomer could take every free slot in the window during which an
+    # earlier launch was between two resumes (bookkeeping, no ticket
+    # yet) — observed as a 53-minute starvation of a single-slot chain
+    # behind a four-slot evaluation. With the ticket taken first, a
+    # newcomer that arrives while anyone is queued ranks behind them;
+    # when the queue is empty it is head immediately and grabs without
+    # any added latency.
+    ticket = _take_ticket(note)
     announced = False
+    wait_started = time.monotonic()
     try:
-        if len(held) < n:
-            ticket = _take_ticket(note)
+        if _is_head(ticket):
+            grab()
+        if len(held) < n and not wait:
+            release()
+            holders = [f"{i}:{h}" for i, h in slot_table(max_streams) if h]
+            raise LaunchRefused(
+                f"need {n} Rocq stream slot(s), fewer are free "
+                f"(OMPHALOS_MAX_STREAMS={max_streams}); holders: "
+                f"{'; '.join(holders) or 'none'}. Use --wait to queue."
+            )
         while len(held) < n:
             if _is_head(ticket):
                 grab()
@@ -296,10 +310,14 @@ def stream_slots(
                     f"{_rank(ticket)}); holders: {'; '.join(holders)}"
                 )
                 announced = True
-            time.sleep(3)
+            time.sleep(1)
     finally:
-        if ticket is not None:
-            ticket.unlink(missing_ok=True)
+        ticket.unlink(missing_ok=True)
+    if announced:
+        _log(
+            f"slots acquired after {time.monotonic() - wait_started:.0f}s "
+            f"in queue"
+        )
     try:
         yield [i for i, _ in held]
     finally:
@@ -403,19 +421,106 @@ def _yaml_load(path: Path) -> Any:
         return yaml.load(f, Loader=loader)  # type: ignore[reportUnknownMemberType]
 
 
+SCAN_CACHE_NAME = ".result_scan_cache.json"
+
+
+class _ResultScanCache:
+    """
+    Stats of `result.yaml` files already verified complete, one sidecar
+    per experiment directory. A result file is written once, at
+    completion, and never touched again, so a file whose `(size,
+    mtime_ns)` matches a verified entry needs no re-parse — before the
+    cache, every `rebuild_statuses` pass fully YAML-parsed every ≤4 MB
+    result of every config, `done` ones included (measured 15 s for a
+    240-config directory, ≥2 passes per resume, O(resumes × configs)
+    over an adaptation chain). A corrupt or missing sidecar simply
+    means a cold scan; entries are dropped when their file changes.
+    """
+
+    def __init__(self, out_dir: Path) -> None:
+        self.path = out_dir / SCAN_CACHE_NAME
+        self.entries: dict[str, tuple[int, int]] = {}
+        self.dirty = False
+        try:
+            raw: Any = json.loads(self.path.read_text())
+            self.entries = {
+                str(k): (int(v[0]), int(v[1]))
+                for k, v in cast(dict[str, Any], raw).items()
+            }
+        except Exception:
+            pass
+
+    def hit(self, name: str, st: os.stat_result) -> bool:
+        return self.entries.get(name) == (st.st_size, st.st_mtime_ns)
+
+    def update(self, name: str, st: os.stat_result, complete: bool) -> None:
+        if complete:
+            self.entries[name] = (st.st_size, st.st_mtime_ns)
+            self.dirty = True
+        elif self.entries.pop(name, None) is not None:
+            self.dirty = True
+
+    def save(self) -> None:
+        if not self.dirty:
+            return
+        tmp = self.path.with_name(f"{SCAN_CACHE_NAME}.{os.getpid()}.tmp")
+        try:
+            tmp.write_text(json.dumps(self.entries))
+            os.replace(tmp, self.path)
+            self.dirty = False
+        except OSError:
+            tmp.unlink(missing_ok=True)
+
+
+_SCAN_CACHES: dict[Path, _ResultScanCache] = {}
+
+
+def _scan_cache_for(result_path: Path) -> _ResultScanCache | None:
+    """The per-directory cache for `<out>/configs/<name>/result.yaml`."""
+    config_dir = result_path.parent
+    if config_dir.parent.name != "configs":
+        return None
+    out_dir = config_dir.parent.parent
+    cache = _SCAN_CACHES.get(out_dir)
+    if cache is None:
+        if not _SCAN_CACHES:
+            atexit.register(save_scan_caches)
+        cache = _SCAN_CACHES[out_dir] = _ResultScanCache(out_dir)
+    return cache
+
+
+def save_scan_caches() -> None:
+    """Persist every dirty scan cache (atomic per-file `os.replace`)."""
+    for cache in _SCAN_CACHES.values():
+        cache.save()
+
+
 def _result_is_complete(path: Path) -> bool:
     """
     `result.yaml` is written once, at completion, so its presence
     means "done" — unless a killed worker left it truncated. Small
     files are parsed; large ones (traces) are checked for the closing
-    structure to avoid minute-long parses.
+    structure to avoid minute-long parses. Verified-complete verdicts
+    are cached against the file's stat (`_ResultScanCache`).
     """
     try:
-        size = path.stat().st_size
+        st = path.stat()
     except OSError:
         return False
-    if size == 0:
+    cache = _scan_cache_for(path)
+    if st.st_size == 0:
+        if cache is not None:
+            cache.update(path.parent.name, st, False)
         return False
+    if cache is not None and cache.hit(path.parent.name, st):
+        return True
+    ok = _result_is_complete_uncached(path, st.st_size)
+    if cache is not None:
+        cache.update(path.parent.name, st, ok)
+    return ok
+
+
+def _result_is_complete_uncached(path: Path, size: int) -> bool:
     if size <= 4 * 2**20:
         try:
             raw = _yaml_load(path)
@@ -458,6 +563,7 @@ def rebuild_statuses(exp: dp.Experiment[Any], *, write: bool) -> StatusDelta:
     Reconcile `experiment.yaml` with the per-config files. With
     `write`, a timestamped backup is kept next to the state file.
     """
+    started = time.monotonic()
     state = exp._load_state()  # pyright: ignore[reportPrivateUsage]
     delta = StatusDelta()
     if state is None:
@@ -469,6 +575,12 @@ def rebuild_statuses(exp: dp.Experiment[Any], *, write: bool) -> StatusDelta:
             delta.changes[name] = (info.status, truth)
             info.status = truth
         delta.counts[truth] = delta.counts.get(truth, 0) + 1
+    save_scan_caches()
+    elapsed = time.monotonic() - started
+    if elapsed > 2.0:
+        _log(
+            f"rebuild scanned {len(state.configs)} config(s) in {elapsed:.1f}s"
+        )
     if write and delta.changes:
         state_file = out_dir / STATE_FILE
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -670,39 +782,44 @@ class OmphalosExperiment[C: dp.ExperimentConfig](dp.Experiment[C]):
             worker_rlimit_as_mb=worker_rlimit_as_mb(),
             omphalos_dir=str(_OMPHALOS_DIR),
         )
-        with ExitStack() as stack:
-            stack.enter_context(launch_lock(out_dir))
+        with launch_lock(out_dir):
             # Nothing to run (a cached re-derivation, a finished
             # directory): say so and leave without touching the slots.
             delta = self.rebuild(write=True)
             if not self._has_todo():
                 _log(f"{out_dir.name}: nothing to do — {delta.summary()}")
                 return
-            slots: list[int] = []
-            if self.needs_rocq:
-                slots = stack.enter_context(
-                    stream_slots(
-                        max_workers,
-                        self.max_streams,
-                        wait=self.wait_for_slots,
-                        note=lock_note(out_dir, f"workers={max_workers}"),
+            # The slot scope covers only the attempts; the final
+            # rebuild below runs after release, so the slots free
+            # several seconds earlier on large directories.
+            with ExitStack() as slot_stack:
+                slots: list[int] = []
+                if self.needs_rocq:
+                    slots = slot_stack.enter_context(
+                        stream_slots(
+                            max_workers,
+                            self.max_streams,
+                            wait=self.wait_for_slots,
+                            note=lock_note(out_dir, f"workers={max_workers}"),
+                        )
                     )
+                _log(
+                    f"{out_dir.name}: workers={max_workers} "
+                    f"slots={slots if self.needs_rocq else 'none (LLM-only)'} "
+                    f"pet_mode={_setup_args.pet_mode} worker_rlimit={_setup_args.worker_rlimit_as_mb}MB"
                 )
-            _log(
-                f"{out_dir.name}: workers={max_workers} "
-                f"slots={slots if self.needs_rocq else 'none (LLM-only)'} "
-                f"pet_mode={_setup_args.pet_mode} worker_rlimit={_setup_args.worker_rlimit_as_mb}MB"
-            )
-            for attempt in range(1, self.attempts + 1):
-                if attempt > 1:
-                    delta = self.rebuild(write=True)
-                _log(f"attempt {attempt}/{self.attempts}: {delta.summary()}")
-                if not self._has_todo():
-                    break
-                rc = self._run_attempt(max_workers, log_progress, attempt)
-                if rc == 0:
-                    break
-                _log(f"attempt {attempt} ended with rc={rc}; cleaning up")
+                for attempt in range(1, self.attempts + 1):
+                    if attempt > 1:
+                        delta = self.rebuild(write=True)
+                    _log(
+                        f"attempt {attempt}/{self.attempts}: {delta.summary()}"
+                    )
+                    if not self._has_todo():
+                        break
+                    rc = self._run_attempt(max_workers, log_progress, attempt)
+                    if rc == 0:
+                        break
+                    _log(f"attempt {attempt} ended with rc={rc}; cleaning up")
             delta = self.rebuild(write=True)
             _log(f"final: {delta.summary()}")
 
@@ -759,7 +876,7 @@ class OmphalosExperiment[C: dp.ExperimentConfig](dp.Experiment[C]):
         for i, holder in slot_table(self.max_streams):
             lines.append(f"  slot {i}: {holder or 'free'}")
         lock = self.absolute_output_dir / LAUNCH_LOCK_NAME
-        fd = _try_lock(lock, "probe")
+        fd = _try_lock(lock, "probe", probe=True)
         if fd is None:
             lines.append(f"launch lock: HELD ({_holder(lock)})")
         else:
@@ -829,7 +946,8 @@ class OmphalosCLI(ExperimentCLI):
         except LaunchRefused as e:
             print(f"launch refused: {e}", file=sys.stderr)
             raise SystemExit(3)
-        if self.oexp.get_status()["todo"] or self.oexp.get_status()["failed"]:
+        status = self.oexp.get_status()
+        if status["todo"] or status["failed"]:
             raise SystemExit(1)
 
     def status(self) -> None:  # type: ignore[override]
@@ -854,6 +972,7 @@ __all__ = [
     "LaunchRefused",
     "OmphalosCLI",
     "OmphalosExperiment",
+    "SCAN_CACHE_NAME",
     "StatusDelta",
     "ground_truth",
     "group_members",
@@ -863,6 +982,7 @@ __all__ = [
     "original_cmdline",
     "parse_holder",
     "rebuild_statuses",
+    "save_scan_caches",
     "slot_table",
     "stream_slots",
 ]

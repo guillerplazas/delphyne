@@ -191,6 +191,74 @@ def test_stream_slots_refuse_and_release() -> None:
             del os.environ["OMPHALOS_SLOT_DIR"]
 
 
+def test_result_scan_cache() -> None:
+    """Verified-complete results are cached on their stat and persist."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        done = _config_dir(root, "cell")
+        result = done / "result.yaml"
+        result.write_text("command: run_strategy\noutcome:\n  result: 1\n")
+        assert ol.ground_truth(done) == "done"
+        ol.save_scan_caches()
+        sidecar = root / ol.SCAN_CACHE_NAME
+        assert sidecar.exists()
+        # A fresh process (simulated by dropping the in-memory caches)
+        # answers from the sidecar without parsing.
+        ol._SCAN_CACHES.clear()  # pyright: ignore[reportPrivateUsage]
+        import json
+
+        entries = json.loads(sidecar.read_text())
+        assert "cell" in entries
+        assert ol.ground_truth(done) == "done"
+        # Any change to the file (here: truncation) invalidates by stat.
+        result.write_text("")
+        assert ol.ground_truth(done) == "todo"
+        ol.save_scan_caches()
+        assert "cell" not in json.loads(sidecar.read_text())
+        # Restored content re-verifies and re-caches.
+        result.write_text("command: run_strategy\noutcome:\n  result: 1\n")
+        assert ol.ground_truth(done) == "done"
+        ol._SCAN_CACHES.pop(root, None)  # pyright: ignore[reportPrivateUsage]
+
+
+def test_try_lock_probe_is_nondestructive() -> None:
+    """A probe must not rewrite the holder note or keep the lock."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "x.lock"
+        fd = ol._try_lock(path, "real-holder")  # pyright: ignore[reportPrivateUsage]
+        assert fd is not None
+        note = path.read_text()
+        assert "real-holder" in note
+        os.close(fd)
+        probe_fd = ol._try_lock(path, "probe", probe=True)  # pyright: ignore[reportPrivateUsage]
+        assert probe_fd is not None
+        os.close(probe_fd)
+        assert path.read_text() == note, "probe must leave the note intact"
+
+
+def test_stream_slots_queue_is_ticket_first() -> None:
+    """Free slots + a live queued waiter: a newcomer must not jump it."""
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["OMPHALOS_SLOT_DIR"] = tmp
+        try:
+            waiter = ol._take_ticket("queued-waiter")  # pyright: ignore[reportPrivateUsage]
+            try:
+                with ol.stream_slots(1, 4, wait=False):
+                    raise AssertionError(
+                        "a newcomer must queue behind a live ticket"
+                    )
+            except ol.LaunchRefused:
+                pass
+            # The refused newcomer left no ticket behind.
+            assert ol._live_tickets() == [waiter]  # pyright: ignore[reportPrivateUsage]
+            waiter.unlink()
+            with ol.stream_slots(1, 4, wait=False) as held:
+                assert held == [0]
+            assert not ol._live_tickets()  # pyright: ignore[reportPrivateUsage]
+        finally:
+            del os.environ["OMPHALOS_SLOT_DIR"]
+
+
 def test_group_members_and_kill() -> None:
     proc = subprocess.Popen(
         [sys.executable, "-c", "import os,time; os.setsid(); time.sleep(60)"],
