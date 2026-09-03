@@ -483,3 +483,6 @@ clean: clean-experiments
 
 clean-experiments:
 	rm -rf experiments/output
+
+# Ladon, the overnight improvement loop (ladon/README.md).
+-include ladon/ladon.mk

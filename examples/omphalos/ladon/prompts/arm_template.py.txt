@@ -1,0 +1,82 @@
+"""
+Ladon arm for hint $hint_n — $title (night $date).
+
+Pre-registered before the smoke ran (fill every line):
+
+- Idea: <what the hint claims and why it could help>
+- The one change: <what this arm does differently from the baseline>
+- Primary: paired solves per (problem, seed) on ladonX against
+  `experiments/output/x_ladon_agentic`, exact sign test on the
+  discordant cells.
+- Secondary: spend among the jointly-solved cells (median ratio, sign
+  test at a 2 % tie band).
+- Expected effect: <solves | cost | both> — <one sentence why>.
+- Decision rule: Ladon's (`ladon/LADON.md`): KEEP on established
+  paired solves (p < 0.05) or established cheaper spend (p < 0.05,
+  median ratio <= 0.90) with no solve deficit; DISCARD on established
+  harm or a powered null; INSPECT otherwise.
+- Expected spend: about $$1.7 for 80 cells; the smoke about a cent.
+
+Ladon runs this script; by hand only the smoke:
+    LADON_SMOKE=1 LADON_SEEDS=0 python $script run --max_workers=2 --wait
+"""
+
+# pyright: strict
+
+import os
+import sys
+from pathlib import Path
+
+_OMPHALOS_DIR = Path(__file__).resolve().parent.parent
+for _sub in ("experiments", ""):
+    _p = str(_OMPHALOS_DIR / _sub)
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+import omphalos_launch as ol  # noqa: E402
+
+import delphyne as dp  # noqa: E402
+from ladon import bench  # noqa: E402
+
+SEEDS = tuple(int(s) for s in os.environ.get("LADON_SEEDS", "0,1").split(","))
+SMOKE = os.environ.get("LADON_SMOKE") == "1"
+PROBLEMS = bench.SMOKE_PROBLEMS if SMOKE else tuple(bench.LADONX_PROBLEMS)
+OUTPUT_DIR = "$smoke_dir" if SMOKE else "$output_dir"
+
+# ---- the arm: one change relative to bench.ladon_config -----------------
+# Knob pattern (a defaulted field keeps every cell's identity readable):
+#
+#   @dataclass
+#   class ArmConfig(bench.LadonConfig):
+#       my_knob: int = 8
+#
+#       def instantiate(self, context: object) -> dp.RunStrategyArgs:
+#           args = super().instantiate(context)
+#           args.args["my_knob"] = self.my_knob
+#           return args
+#
+#   CONFIG_CLASS = ArmConfig
+#   def cell(name, seed): return replace(bench.ladon_config(name, seed) ...)
+#
+# A change in product code (a strategy, the verifier, a prompt) needs no
+# knob: keep CONFIG_CLASS = bench.LadonConfig and describe the change in
+# the docstring.
+
+CONFIG_CLASS = bench.LadonConfig
+
+
+def cell(name: str, seed: int) -> bench.LadonConfig:
+    return bench.ladon_config(name, seed)
+
+
+configs = [cell(name, seed) for seed in SEEDS for name in PROBLEMS]
+
+
+if __name__ == "__main__":
+    ol.OmphalosExperiment(
+        config_class=CONFIG_CLASS,
+        context=dp.workspace_execution_context(__file__),
+        configs=configs,
+        output_dir=OUTPUT_DIR,
+        config_naming=bench.config_name,
+    ).run_cli()
