@@ -27,6 +27,7 @@ with Fable" for a human-driven session (Guille's rule, 2026-09-02).
 
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -137,6 +138,18 @@ ALLOWED_TOOLS: tuple[str, ...] = (
     "Bash(cp:*)",
     "Bash(mv:*)",
     "Bash(echo:*)",
+    "Bash(tee:*)",
+    "Bash(sort:*)",
+    "Bash(uniq:*)",
+    "Bash(cut:*)",
+    "Bash(awk:*)",
+    "Bash(tr:*)",
+    "Bash(xargs:*)",
+    "Bash(test:*)",
+    "Bash(true:*)",
+    "Bash(for:*)",
+    "Bash(while:*)",
+    "Bash(if:*)",
     "Bash(git diff:*)",
     "Bash(git status:*)",
     "Bash(git log:*)",
@@ -553,10 +566,12 @@ class Ladon:
     def ensure_baseline(self) -> None:
         n = self.night
         counts = L.counts(self.baseline_dir)
-        n.baseline = {
-            "dir": str(self.baseline_dir.relative_to(_OMPHALOS_DIR)),
-            "counts": str(counts),
-        }
+        n.baseline.update(
+            {
+                "dir": str(self.baseline_dir.relative_to(_OMPHALOS_DIR)),
+                "counts": str(counts),
+            }
+        )
         if n.dry:
             n.baseline["note"] = (
                 "dry night pairs against the archived trainX baseline"
@@ -610,7 +625,9 @@ class Ladon:
             n.baseline["spend_usd"] = spend
             if res.timed_out or not counts.complete:
                 raise Halt(f"baseline incomplete: {counts} (rc={res.rc})")
-            n.baseline["note"] = f"run tonight in {res.wall_s / 60:.0f} min"
+            n.baseline["note"] = (
+                f"run tonight in {float(n.baseline['wall_s']) / 60:.0f} min"
+            )
         n.enter("baseline_ok")
         self.save()
 
@@ -786,11 +803,26 @@ class Ladon:
     ) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         seen_files: set[str] = set()
-        for entry in ranked:
+        seen_hints: set[int] = set()
+        prefer_a = {
+            int(e["hint"])
+            for e in ranked
+            if str(e.get("class")) == "A" and "hint" in e
+        }
+        ordered = [e for e in ranked if str(e.get("class")) == "A"] + [
+            e for e in ranked if str(e.get("class")) != "A"
+        ]
+        for entry in ordered:
             try:
                 k = int(entry["hint"])
             except (KeyError, TypeError, ValueError):
                 continue
+            if k in seen_hints:
+                self.log(f"plan: dropping a second entry for #{k}")
+                continue
+            if k in prefer_a and str(entry.get("class")) != "A":
+                continue
+            seen_hints.add(k)
             if self.night.dry and k == 0:
                 out.append(dict(entry))
                 continue
@@ -1325,7 +1357,9 @@ class Ladon:
     def step_evaluate(self, h: S.HintRun) -> None:
         n = self.night
         d = self.hint_dir(h.n)
-        needs_prose = h.outcome in ("KEEP", "DISCARD", "INSPECT") and h.numbers
+        needs_prose = h.outcome in ("KEEP", "DISCARD", "INSPECT") and (
+            h.numbers or h.hint_class == "A"
+        )
         if needs_prose and not self.no_claude:
             m = _manifest_from_dict(
                 cast(dict[str, Any], h.guard.get("manifest", {}))
@@ -1340,7 +1374,7 @@ class Ladon:
                 outcome=h.outcome,
                 rule=h.rule,
                 reason=h.reason,
-                numbers=_numbers_block(h),
+                numbers=_numbers_block(h) or _analysis_block(h, d),
                 notes=notes_path.read_text()
                 if notes_path.exists()
                 else "(no notes)",
@@ -1366,6 +1400,12 @@ class Ladon:
                     break
             if structured is not None:
                 h.evaluation.update(structured)
+        if not h.evaluation.get("new_hints"):
+            notes_path = _OMPHALOS_DIR / str(h.notes)
+            if notes_path.exists():
+                h.evaluation["new_hints"] = _notes_new_hints(
+                    notes_path.read_text()
+                )
         if "progress_bullet" not in h.evaluation:
             h.evaluation["progress_bullet"] = self.fallback_bullet(h)
         if "hints_marker" not in h.evaluation:
@@ -1688,6 +1728,54 @@ def _load_arm(path: Path) -> dict[str, Any]:
     except yaml.YAMLError:
         return {"summary": "arm.yaml is not valid YAML"}
     return cast(dict[str, Any], raw) if isinstance(raw, dict) else {}
+
+
+_NOTES_HINT_RE = re.compile(
+    r"^-\s*\[(?P<tag>[a-z]+)\]\s*(?P<title>.+?)\s+[—-]\s+(?P<body>.+)$"
+)
+
+
+def _notes_new_hints(notes: str) -> list[dict[str, str]]:
+    """`- [tag] Title — body` bullets under `## New hints` in notes.md."""
+    out: list[dict[str, str]] = []
+    section = notes.split("## New hints", 1)
+    if len(section) < 2:
+        return out
+    block = section[1].split("\n## ", 1)[0]
+    current: list[str] = []
+    for line in block.splitlines() + [""]:
+        if line.startswith("- "):
+            if current:
+                out.append(_notes_hint_entry(" ".join(current)))
+            current = [line.strip()]
+        elif line.strip() and current:
+            current.append(line.strip())
+        elif not line.strip() and current:
+            out.append(_notes_hint_entry(" ".join(current)))
+            current = []
+    return [e for e in out if e.get("title") and e["title"] != "none"]
+
+
+def _notes_hint_entry(text: str) -> dict[str, str]:
+    m = _NOTES_HINT_RE.match(text)
+    if m is None:
+        return {"tag": "experiment", "title": text[2:80].strip(), "body": ""}
+    return {
+        "tag": m.group("tag"),
+        "title": m.group("title").strip(),
+        "body": m.group("body").strip(),
+    }
+
+
+def _analysis_block(h: S.HintRun, d: Path) -> str:
+    """For an offline analysis: the artifact itself stands in for numbers."""
+    analysis = d / "analysis.md"
+    if analysis.exists():
+        return (
+            "(offline analysis — no paired cells)\n\n"
+            + analysis.read_text()[:9000]
+        )
+    return "(offline analysis — no paired cells, no analysis.md written)"
 
 
 def _numbers_block(h: S.HintRun) -> str:

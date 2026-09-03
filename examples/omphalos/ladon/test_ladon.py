@@ -631,6 +631,42 @@ def test_arm_template_renders_and_runs() -> None:
         script.unlink(missing_ok=True)
 
 
+def test_notes_new_hints_and_plan_dedupe() -> None:
+    from ladon import cli
+
+    notes = (
+        "# Notes\n\nbody\n\n## New hints\n\n- [experiment] Re-run the audit"
+        " after a baseline refresh — both scripts are\n  zero-cost and would"
+        " show the pathology.\n- [tool] Split the char cap — a distinct"
+        " treatment.\n\n## Other\n\n- [x] not a hint\n"
+    )
+    hs = cli._notes_new_hints(notes)  # pyright: ignore[reportPrivateUsage]
+    assert [h["tag"] for h in hs] == ["experiment", "tool"]
+    assert hs[0]["title"] == "Re-run the audit after a baseline refresh"
+    assert hs[0]["body"].startswith("both scripts are zero-cost")
+    assert cli._notes_new_hints("no section") == []  # pyright: ignore[reportPrivateUsage]
+    assert cli._notes_new_hints("## New hints\n\n- none\n") == []  # pyright: ignore[reportPrivateUsage]
+    night = S.Night(date="2026-09-03t")
+    runner = cli.Ladon(night, root=Path(tempfile.mkdtemp()), no_claude=True)
+    text = HINTS_FILE.read_text()
+    by_n = {h.n: h for h in H.parse_hints(text)}
+    open_n = [h.n for h in H.open_hints(text)][:3]
+    ranked: list[dict[str, Any]] = [
+        {"hint": open_n[0], "class": "B", "files": ["a.py"]},
+        {"hint": open_n[0], "class": "B", "files": ["b.py"]},
+        {"hint": open_n[0], "class": "A", "files": []},
+        {"hint": open_n[1], "class": "C", "files": ["a.py"]},
+        {"hint": open_n[2], "class": "C", "files": ["a.py"]},
+    ]
+    out = runner.validate_plan(ranked, by_n, 3)
+    # #0's arm entries yield to its free analysis (and their files do
+    # not count); #2 shares a file with #1 and is dropped.
+    assert [(e["hint"], e["class"]) for e in out] == [
+        (open_n[0], "A"),
+        (open_n[1], "C"),
+    ], out
+
+
 def main() -> int:
     tests: list[Any] = [
         v for k, v in globals().items() if k.startswith("test_")

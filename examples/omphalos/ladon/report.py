@@ -239,7 +239,17 @@ def render_report(night: Night, *, night_dir: Path) -> str:
                     else "FAILED " + ", ".join(failed)
                 )
             )
-        paths = [p for p in (h.script, h.output_dir, h.notes, h.patch) if p]
+        paths = [
+            p
+            for p in (
+                h.script,
+                h.output_dir,
+                h.notes,
+                h.patch,
+                h.arm.get("analysis"),
+            )
+            if p and (night_dir.parent.parent.parent / str(p)).exists()
+        ]
         if paths:
             lines.append("- Files: " + ", ".join(f"`{p}`" for p in paths))
         lines.append("")
