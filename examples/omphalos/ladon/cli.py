@@ -567,19 +567,47 @@ class Ladon:
             )
             n.event("baseline launch")
             self.save()
-            res = L.run_script(
+            res = L.launch_arm(
                 BASELINE_SCRIPT,
-                ["run", f"--max_workers={self.max_workers}", "--wait"],
-                env=self.env,
-                log=self.dir / "baseline.log",
-                timeout_s=BASELINE_TIMEOUT_S,
                 run_dir=self.baseline_dir,
+                seeds=(0, 1),
+                max_workers=self.max_workers,
+                timeout_s=BASELINE_TIMEOUT_S,
+                log=self.dir / "baseline.log",
+                env=self.env,
                 tick=lambda t, c: self.log(f"baseline {t / 60:.0f} min: {c}"),
             )
             counts = res.counts
+            # Platform-failed cells (a request timeout, a broken worker)
+            # are retried once, as the hint tiers do; a cell that fails
+            # twice is a real halt.
+            if not res.timed_out and counts.failed and counts.todo == 0:
+                self.log(f"baseline {counts}; retrying the failed cell(s)")
+                res = L.launch_arm(
+                    BASELINE_SCRIPT,
+                    run_dir=self.baseline_dir,
+                    seeds=(0, 1),
+                    max_workers=self.max_workers,
+                    timeout_s=BASELINE_TIMEOUT_S,
+                    log=self.dir / "baseline.log",
+                    env=self.env,
+                    retry_errors=True,
+                    tick=lambda t, c: self.log(
+                        f"baseline retry {t / 60:.0f} min: {c}"
+                    ),
+                )
+                counts = res.counts
             n.baseline["counts"] = str(counts)
-            n.baseline["wall_s"] = res.wall_s
-            n.spent["usd_openai"] += _spend(V.load_cells(self.baseline_dir))
+            n.baseline["wall_s"] = (
+                float(n.baseline.get("wall_s", 0.0)) + res.wall_s
+            )
+            # Idempotent across resumes: the baseline's cells are charged
+            # once, at their current total, never re-added per attempt.
+            spend = _spend(V.load_cells(self.baseline_dir))
+            n.spent["usd_openai"] += spend - float(
+                n.baseline.get("spend_usd", 0.0)
+            )
+            n.baseline["spend_usd"] = spend
             if res.timed_out or not counts.complete:
                 raise Halt(f"baseline incomplete: {counts} (rc={res.rc})")
             n.baseline["note"] = f"run tonight in {res.wall_s / 60:.0f} min"
@@ -1728,10 +1756,19 @@ def preflight_checks(*, dry: bool, no_claude: bool) -> dict[str, str]:
         "ok" if not pids else f"FAIL: launches running (pids {pids})"
     )
     dirty = [ln for ln in guard.git_status() if not ln.startswith("??")]
+    ladon_only = all(
+        ln[3:].strip().startswith(f"{guard.REL}/ladon/") for ln in dirty
+    )
     if not dirty:
         checks["git_clean"] = "ok"
     elif dry:
         checks["git_clean"] = f"ok (dry: {len(dirty)} tracked change(s))"
+    elif ladon_only:
+        # Ladon's own code edited by hand between nights: no arm measures
+        # it, and a KEEP commit adds only the session's manifest paths.
+        checks["git_clean"] = (
+            f"ok ({len(dirty)} uncommitted change(s) inside ladon/)"
+        )
     else:
         checks["git_clean"] = f"FAIL: tracked changes present ({len(dirty)})"
     sha = guard.head_sha()
@@ -1785,12 +1822,15 @@ def _mem_available_mb() -> int:
 
 
 def _latest_night_dir(root: Path = NIGHTS_DIR) -> Path | None:
+    """The most recently written night (by `night.yaml` mtime)."""
     if not root.exists():
         return None
-    dirs = sorted(
+    dirs = [
         d for d in root.iterdir() if d.is_dir() and (d / "night.yaml").exists()
-    )
-    return dirs[-1] if dirs else None
+    ]
+    if not dirs:
+        return None
+    return max(dirs, key=lambda d: (d / "night.yaml").stat().st_mtime)
 
 
 def _install_signals() -> None:
