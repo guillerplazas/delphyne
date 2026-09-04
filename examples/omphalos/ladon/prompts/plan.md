@@ -42,7 +42,9 @@ $$1.7 and 2.5 h (screen tier 40 cells ≈ 1 h, select tier +40 cells
 - Independence: no two ranked hints may touch the same file; their
   commits must stand alone.
 - Rank a few more than $max_hints so Ladon can skip one that turns out
-  infeasible; execution order = your order.
+  infeasible; execution order = your order. **Every ranked entry is a
+  different hint** — one entry per hint number, never variants of the
+  same hint; when the pool is smaller than that, rank fewer.
 
 ## Past Ladon verdicts (ledger, newest last)
 

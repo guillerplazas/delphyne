@@ -17,6 +17,9 @@ utilisation and `resets_at` (epoch seconds); `--bare` must never be
 used (it ignores the subscription login); an `ANTHROPIC_API_KEY` in
 the environment would silently outrank the subscription; the Bash
 tool's default timeouts (2 / 10 min) are shorter than a Rocq smoke.
+Seen on 2026-09-03: the windows arrive as `rate_limit_info.
+unifiedWindows.{five_hour,seven_day}.{utilization,resetsAt}` in
+stream-json (camelCase), and not at all in `--output-format json`.
 """
 
 # pyright: strict
@@ -82,6 +85,8 @@ class ClaudeCall:
     max_budget_usd: float | None = None
     add_dirs: tuple[str, ...] = ()
     strict_mcp: bool = True
+    resume_session: str | None = None
+    """Continue an earlier session (its `session_id`) instead of starting."""
 
 
 @dataclass(frozen=True)
@@ -149,8 +154,9 @@ def build_argv(
         call.permission_mode,
         "--output-format",
         call.output_format,
-        "--no-session-persistence",
     ]
+    if call.resume_session:
+        argv += ["--resume", call.resume_session]
     if call.output_format == "stream-json":
         argv.append("--verbose")
     if call.tools is not None:
@@ -319,7 +325,7 @@ def run(
         u = _utilization(win)
         if u is not None:
             util[key] = u
-        ra = win.get("resets_at")
+        ra = win.get("resets_at", win.get("resetsAt"))
         if isinstance(ra, (int, float)) and (u is None or u >= 1.0):
             resets_at = (
                 float(ra) if resets_at is None else min(resets_at, float(ra))

@@ -133,6 +133,38 @@ def expected_seconds(
     return max(est, MIN_EXPECTED_S)
 
 
+def prune_todo_seeds(run_dir: Path, seeds: Sequence[int]) -> int:
+    """
+    Drop `todo` entries whose seed is not in `seeds` from the state file.
+
+    A `status` or `--dry` run of an arm script without `LADON_SEEDS`
+    registers every cell of the full arm as todo (seen on 2026-09-04,
+    hint 64: the screen tier then ran both seeds). Only entries with no
+    cell on disk are removed; done and failed cells are never touched.
+    """
+    state = run_dir / ol.STATE_FILE
+    if not state.exists():
+        return 0
+    raw: Any = yaml.safe_load(state.read_text())
+    doc = cast(dict[str, Any], raw or {})
+    configs = cast(dict[str, dict[str, Any]], doc.get("configs", {}))
+    keep = {str(s) for s in seeds}
+    drop = [
+        name
+        for name, info in configs.items()
+        if str(cast(dict[str, Any], info.get("params", {})).get("seed", ""))
+        not in keep
+        and ol.ground_truth(run_dir / "configs" / name) == "todo"
+    ]
+    for name in drop:
+        del configs[name]
+    if drop:
+        tmp = state.with_suffix(".yaml.tmp")
+        tmp.write_text(yaml.safe_dump(doc, sort_keys=False))
+        os.replace(tmp, state)
+    return len(drop)
+
+
 def counts(run_dir: Path) -> Counts:
     done = failed = todo = 0
     for name in _state_configs(run_dir):

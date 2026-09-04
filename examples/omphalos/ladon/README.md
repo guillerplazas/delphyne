@@ -125,7 +125,11 @@ the patch under the night directory.
   per step; the night halts when the weekly window is 90 % used.
 - Models: plan and design (class C) on Opus, knobs and prose on
   Sonnet; override with `--plan_model`, `--design_model`, `--knob_model`.
-- `--yolo` runs implement sessions with `bypassPermissions` (the deny
-  list still applies). Default is `acceptEdits` with an allowlist.
+- Implement sessions run with `bypassPermissions` plus the deny list
+  (no commit/push/reset/checkout, no `rm -r`, no `make clean*`), because
+  the allowlist mode refused shell loops, variables and pipes and cost
+  every session turns; `--strict_permissions` restores the allowlist.
+- `--no_analysis` asks the planner for arms only (no class A) — for a
+  night meant to exercise the arm-to-commit path.
 - Never edit `HINTS.md` while a night is running (Ladon rewrites the
   entry it judges); the rest of the file is untouched.

@@ -83,3 +83,8 @@ abandoned.
 - Read the launcher's output with `python <script> status`; never
   `cat` a `result.yaml` or `cache.yaml` (they are megabytes) — `head`
   is fine.
+- Shell commands run under an allowlist: keep each Bash call a single
+  simple command. Shell variables (`$run`, `${x}`), `for`/`while`
+  loops and pipes into `tee` are refused by the permission system; put
+  loops and captures in a small Python script under your night
+  directory instead, and read outputs with `python ... | head`.

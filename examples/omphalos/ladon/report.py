@@ -89,7 +89,7 @@ def ledger_row(night: Night, h: HintRun) -> str:
         "reverify_failed": n.get("reverify_failed"),
         "commit": h.commit,
         "output_dir": h.output_dir,
-        "note": h.reason,
+        "note": h.evaluation.get("hints_marker") or h.reason,
     }
     return "\t".join(_fmt(values[c]) for c in LEDGER_COLUMNS)
 

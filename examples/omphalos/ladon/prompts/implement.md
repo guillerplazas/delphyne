@@ -25,7 +25,9 @@ $plan_entry
    `make bridge-parity`.
 5. Smoke: `LADON_SMOKE=1 LADON_SEEDS=0 python $script run
    --max_workers=2 --wait` — three trainX cells (about a cent). Then
-   `python $script status`: it must report 3 done, 0 failed. Read a
+   `LADON_SMOKE=1 LADON_SEEDS=0 python $script status`: it must report
+   3 done, 0 failed. Never run the script without both variables: a
+   bare `run`, `status` or `--dry` registers every cell of the full arm. Read a
    `result.yaml` only with `head -60` and only if a cell failed.
 6. Write `$notes` (markdown): what you changed and why, the files
    touched, the smoke numbers, anything that surprised you, and a

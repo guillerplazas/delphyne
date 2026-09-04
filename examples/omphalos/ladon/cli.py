@@ -79,7 +79,7 @@ COMMANDS_DIR = _OMPHALOS_DIR / "commands"
 
 MODEL_POLICY: dict[str, tuple[str, str, int]] = {
     "plan": ("opus", "high", 25),
-    "A": ("sonnet", "medium", 40),
+    "A": ("sonnet", "medium", 80),
     "B": ("sonnet", "medium", 60),
     "C": ("opus", "high", 120),
     "evaluate": ("sonnet", "medium", 5),
@@ -103,6 +103,8 @@ SEVEN_DAY_HALT = 0.90
 LAUNCH_REFUSED_RETRIES = 2
 LAUNCH_REFUSED_SLEEP_S = 300.0
 EVALUATE_RETRIES = 2
+WRAPUP_TURNS = 12
+"""Turns granted to a resumed session that must only write its artifacts."""
 WRAP = 72
 
 ALLOWED_TOOLS: tuple[str, ...] = (
@@ -748,6 +750,12 @@ class Ladon:
             )
             or "- none yet"
         )
+        extra = (
+            "\n\n**Tonight: no class A.** Rank arms only (class B or C);"
+            " an offline analysis is not wanted tonight.\n"
+            if self.budget.get("no_analysis")
+            else ""
+        )
         prompt = _render(
             "plan.md",
             date=n.date,
@@ -759,6 +767,7 @@ class Ladon:
             progress_head=_progress_head(PROGRESS.read_text()),
             hints="\n".join(H.render_hint_context(h) for h in pool),
         )
+        prompt += extra
         (self.dir / "plan_prompt.md").write_text(prompt)
         call = self.base_call(
             "plan",
@@ -846,6 +855,9 @@ class Ladon:
                 continue
             if cls not in ("A", "B", "C"):
                 cls = "B"
+            if cls == "A" and self.budget.get("no_analysis"):
+                self.log(f"plan: dropping #{k} (class A, no_analysis night)")
+                continue
             overlap = seen_files & set(files)
             if overlap:
                 self.log(
@@ -1018,9 +1030,9 @@ class Ladon:
                 h.hint_class,
                 prompt,
                 d / "implement.jsonl",
-                permission_mode="bypassPermissions"
-                if self.budget.get("yolo")
-                else "acceptEdits",
+                permission_mode="acceptEdits"
+                if self.budget.get("strict_permissions")
+                else "bypassPermissions",
                 allowed=ALLOWED_TOOLS,
                 disallowed=DISALLOWED_TOOLS,
                 max_budget_usd=SESSION_BUDGET_USD,
@@ -1028,8 +1040,26 @@ class Ladon:
             )
             result = self.session(call, h)
             h.evaluation["implement_subtype"] = result.subtype
-            if result.hit_max_turns:
-                self.log(f"hint {h.n}: implement session hit its turn cap")
+            if result.hit_max_turns and result.session_id:
+                self.log(
+                    f"hint {h.n}: session hit its turn cap; resuming it for"
+                    f" {WRAPUP_TURNS} wrap-up turns"
+                )
+                wrap = C.ClaudeCall(
+                    phase="wrapup",
+                    prompt=_wrapup_prompt(h, d, arm_yaml),
+                    model=call.model,
+                    effort=call.effort,
+                    max_turns=WRAPUP_TURNS,
+                    log=d / "wrapup.jsonl",
+                    permission_mode=call.permission_mode,
+                    allowed=call.allowed,
+                    disallowed=call.disallowed,
+                    system_file=SYSTEM_FILE,
+                    add_dirs=call.add_dirs,
+                    resume_session=result.session_id,
+                )
+                self.session(wrap, h)
         after = guard.take()
         m = guard.manifest(before, after)
         h.guard = {
@@ -1047,9 +1077,30 @@ class Ladon:
         arm = _load_arm(arm_yaml)
         h.arm = arm
         if h.hint_class == "A":
-            self.judge_now(
-                h, "INSPECT", "analysis", "offline analysis: read the artifact"
-            )
+            analysis = d / "analysis.md"
+            if analysis.exists() and analysis.stat().st_size > 200:
+                self.judge_now(
+                    h,
+                    "INSPECT",
+                    "analysis",
+                    str(
+                        arm.get("summary")
+                        or "offline analysis: read the artifact"
+                    )[:300],
+                )
+            else:
+                self.judge_now(
+                    h,
+                    "INSPECT",
+                    "no-artifact",
+                    "the analysis session ended without writing analysis.md"
+                    + (
+                        " (turn cap)"
+                        if h.evaluation.get("implement_subtype")
+                        == "error_max_turns"
+                        else ""
+                    ),
+                )
             return
         if not arm or not arm.get("ready", False):
             why = str(arm.get("summary") or "no valid arm.yaml / ready: false")
@@ -1181,6 +1232,12 @@ class Ladon:
             "attempts": [],
             "wall_s": 0.0,
         }
+        pruned = L.prune_todo_seeds(run_dir, seeds)
+        if pruned:
+            self.log(
+                f"hint {h.n} {tier}: dropped {pruned} pre-registered todo"
+                " cell(s) of other seeds"
+            )
         res: L.LaunchResult | None = None
         retry_errors = False
         outcome = "incomplete"
@@ -1395,9 +1452,11 @@ class Ladon:
                     schema=EVAL_SCHEMA,
                 )
                 result = self.session(call, h)
-                if result.structured is not None:
+                problems = _evaluation_problems(result.structured)
+                if not problems:
                     structured = result.structured
                     break
+                self.log(f"hint {h.n}: evaluate output rejected ({problems})")
             if structured is not None:
                 h.evaluation.update(structured)
         if not h.evaluation.get("new_hints"):
@@ -1778,6 +1837,39 @@ def _analysis_block(h: S.HintRun, d: Path) -> str:
     return "(offline analysis — no paired cells, no analysis.md written)"
 
 
+def _wrapup_prompt(h: S.HintRun, d: Path, arm_yaml: Path) -> str:
+    rel = d.relative_to(_OMPHALOS_DIR)
+    return (
+        "Your turn budget is exhausted. Do not explore or run anything"
+        " further. From what you already know, write now: "
+        f"`{rel}/notes.md` (what you did, what you found, a `## New hints`"
+        " section), "
+        + (
+            f"`{rel}/analysis.md` (question, commands, numbers, answer,"
+            " recommendation) and "
+            if h.hint_class == "A"
+            else ""
+        )
+        + f"`{arm_yaml.relative_to(_OMPHALOS_DIR)}` in the required shape"
+        " — with `ready: false` and an honest `summary` if no working arm"
+        " exists. Then stop."
+    )
+
+
+def _evaluation_problems(structured: dict[str, Any] | None) -> list[str]:
+    """Why an evaluate session's output is unusable (empty = fine)."""
+    if structured is None:
+        return ["no structured output"]
+    out: list[str] = []
+    bullet = str(structured.get("progress_bullet", "")).strip()
+    marker = str(structured.get("hints_marker", "")).strip()
+    if len(bullet) < 120 or not bullet.startswith("- **Hint"):
+        out.append("progress_bullet")
+    if len(marker) < 20 or marker.lower() in ("test", "tbd", "todo", "n/a"):
+        out.append("hints_marker")
+    return out
+
+
 def _numbers_block(h: S.HintRun) -> str:
     nums = dict(h.numbers)
     cells = cast(list[dict[str, Any]], nums.pop("discordant_cells", []))
@@ -1941,7 +2033,8 @@ class LadonCLI:
         claude_cap_usd: float = 25.0,
         hints: Any = None,
         dry: bool = False,
-        yolo: bool = False,
+        strict_permissions: bool = False,
+        no_analysis: bool = False,
         no_claude: bool = False,
         max_workers: int = 4,
         dry_timeout_s: float | None = None,
@@ -1978,7 +2071,8 @@ class LadonCLI:
                 "cap_usd": float(cap_usd),
                 "claude_cap_usd": float(claude_cap_usd),
                 "hints": _parse_hint_numbers(hints),
-                "yolo": bool(yolo),
+                "strict_permissions": bool(strict_permissions),
+                "no_analysis": bool(no_analysis),
                 "max_workers": int(max_workers),
                 "dry_timeout_s": dry_timeout_s,
                 "models": models,

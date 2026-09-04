@@ -36,4 +36,8 @@ touched: [<files you created or modified, relative to examples/omphalos>]
 ready: false
 ```
 
-You have at most $max_turns turns. Do not modify product code.
+You have at most $max_turns turns. Write a first version of
+`$analysis` as soon as you have any numbers and refine it as you go —
+a session that runs out of turns with nothing written counts as no
+result. Keep the last ten turns for `$notes` and `$arm_yaml`. Do not
+modify product code.

@@ -154,17 +154,17 @@ def test_append_hints_numbering_and_section() -> None:
         H.NewHint("experiment", "A first idea", "body " * 30),
         H.NewHint("tool", "A second", "short body"),
     ]
-    out = H.append_hints(text, "2026-09-03", new)
+    day = "2099-01-01"  # no section for it yet: entries land on top
+    out = H.append_hints(text, day, new)
     hs = H.parse_hints(out)
     assert hs[0].n == top + 2 and hs[1].n == top + 1
-    assert hs[0].section == H.ladon_section_heading("2026-09-03")[3:]
+    assert hs[0].section == H.ladon_section_heading(day)[3:]
     assert hs[0].status == "open" and hs[1].tag == "tool"
-    out2 = H.append_hints(
-        out, "2026-09-03", [H.NewHint("policy", "Third", "x")]
-    )
+    out2 = H.append_hints(out, day, [H.NewHint("tactic", "Third", "x")])
     hs2 = H.parse_hints(out2)
     assert hs2[0].n == top + 3 and hs2[0].section == hs[0].section
-    assert out2.count(H.ladon_section_heading("2026-09-03")) == 1
+    assert hs2[0].tag == "experiment"  # unknown tags fall back to the legend
+    assert out2.count(H.ladon_section_heading(day)) == 1
     block = out.splitlines()[hs[0].first_line : hs[0].last_line + 1]
     assert all(ln.startswith("   ") for ln in block[1:])
 
@@ -409,6 +409,48 @@ def test_expected_seconds_on_archived_baseline() -> None:
     assert L.counts(VALIDATION_RUN).complete
 
 
+def test_prune_todo_seeds() -> None:
+    import yaml
+
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        run = tmp / "arm"
+        (run / "configs" / "p0__core-medium__m__seed0").mkdir(parents=True)
+        (
+            run / "configs" / "p0__core-medium__m__seed0" / "result.yaml"
+        ).write_text("outcome:\n  result:\n    success: true\n")
+        doc = {
+            "configs": {
+                "p0__core-medium__m__seed0": {
+                    "params": {"seed": 0},
+                    "status": "done",
+                },
+                "p0__core-medium__m__seed1": {
+                    "params": {"seed": 1},
+                    "status": "todo",
+                },
+                "p1__core-medium__m__seed1": {
+                    "params": {"seed": 1},
+                    "status": "todo",
+                },
+                "p1__core-medium__m__seed0": {
+                    "params": {"seed": 0},
+                    "status": "todo",
+                },
+            }
+        }
+        (run / "experiment.yaml").write_text(yaml.safe_dump(doc))
+        assert L.prune_todo_seeds(run, (0,)) == 2
+        left = yaml.safe_load((run / "experiment.yaml").read_text())["configs"]
+        assert set(left) == {
+            "p0__core-medium__m__seed0",
+            "p1__core-medium__m__seed0",
+        }
+        assert L.prune_todo_seeds(run, (0, 1)) == 0
+    finally:
+        shutil.rmtree(tmp)
+
+
 def test_launch_env() -> None:
     env = L.launch_env({"A": "1", "LADON_SMOKE": "1"}, seeds=(0, 1))
     assert env["LADON_SEEDS"] == "0,1" and "LADON_SMOKE" not in env
@@ -453,10 +495,11 @@ def test_build_argv() -> None:
         "--max-budget-usd",
         "--add-dir",
         "--strict-mcp-config",
-        "--no-session-persistence",
     ):
         assert flag in argv, flag
     assert "--bare" not in argv
+    resumed = C.build_argv(replace(call, resume_session="abc"))
+    assert "--resume" in resumed and "abc" in resumed
     inline = C.build_argv(call, system_prompt_flag="inline")
     assert "--append-system-prompt" in inline
     assert "--append-system-prompt-file" not in inline

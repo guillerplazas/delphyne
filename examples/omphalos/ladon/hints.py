@@ -195,8 +195,23 @@ def mark_hint(text: str, n: int, marker: str) -> str:
     return "".join(lines)
 
 
+LEGEND_TAGS: frozenset[str] = frozenset(
+    {
+        "prompt",
+        "tool",
+        "policy",
+        "experiment",
+        "demo",
+        "upstream",
+        "process",
+        "method",
+        "caution",
+    }
+)
+
+
 def _wrap_entry(n: int, hint: NewHint) -> str:
-    tag = hint.tag if _TAG_RE.match(hint.tag) else "experiment"
+    tag = hint.tag if hint.tag in LEGEND_TAGS else "experiment"
     body = " ".join(hint.body.split())
     title = " ".join(hint.title.split())
     return textwrap.fill(
