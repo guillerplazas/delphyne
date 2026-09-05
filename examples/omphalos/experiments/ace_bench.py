@@ -32,6 +32,11 @@ if str(_OMPHALOS_DIR) not in sys.path:
 import minif2f_x as x  # noqa: E402
 
 from ace_playbook import Playbook  # noqa: E402
+from ace_triggers import (  # noqa: E402
+    DEFAULT_MAX_HINTS,
+    DEFAULT_SELECTION_RULE,
+    TriggerTable,
+)
 
 ACE_ARM_RE = re.compile(
     r"^ace-(?P<sha>[0-9a-f]{8})(?:-k(?P<k>\d+))?-(?P<toolset>\w+)-(?P<effort>\w+)$"
@@ -39,6 +44,17 @@ ACE_ARM_RE = re.compile(
 """
 The arm segment of an ACE evaluation cell's directory name; the report
 tools match on it, so `ace_config_name` and this regex move together.
+"""
+
+ACET_ARM_RE = re.compile(
+    r"^acet-(?P<sha>[0-9a-f]{8})-(?P<tsha>[0-9a-f]{8})-k(?P<k>\d+)"
+    r"(?:-r(?P<rule>\d+))?-(?P<toolset>\w+)-(?P<effort>\w+)$"
+)
+"""
+The arm segment of a hint-on-error cell (`ACETriggeredConfig`): the
+playbook sha, the trigger table sha and the hint cap. Deliberately not
+matched by `ACE_ARM_RE`, so the frozen-playbook report tools never
+mistake a triggered arm for a full-injection one.
 """
 
 
@@ -100,6 +116,73 @@ class ACEAgenticConfig(mf.ResponsesAgenticConfig):
         args.args["show_definitions"] = self.show_definitions
         args.args["render_version"] = self.render_version
         return args
+
+
+@dataclass
+class ACETriggeredConfig(ACEAgenticConfig):
+    """
+    Hint on error (2026-09-05): the playbook is not rendered into the
+    prompt at all; `prove_ace.prove_theorem_ace_triggered` attaches the
+    bullets whose trigger matches each verifier rejection to that
+    rejection's feedback. `triggers_file` / `triggers_sha256` pin the
+    frozen, self-contained trigger table (`ace_triggers.TriggerTable`;
+    it embeds the bullet contents and the playbook's sha, which must
+    equal `playbook_sha256`); `max_hints` caps the bullets per
+    feedback message. `injection` is `"triggered"` by construction and
+    `render_version` is irrelevant (no playbook section is rendered).
+    """
+
+    triggers_file: str = ""
+    triggers_sha256: str = ""
+    max_hints: int = DEFAULT_MAX_HINTS
+    selection_rule: int = DEFAULT_SELECTION_RULE
+    """`ace_triggers.score` semantics (see `DEFAULT_SELECTION_RULE`);
+    the x5 arm recorded rule 1, later arms set 2 explicitly."""
+
+    def instantiate(self, context: object) -> dp.RunStrategyArgs:
+        # The canonical agentic args, not `ACEAgenticConfig`'s: no
+        # playbook is rendered (`render_injection` has no "triggered").
+        args = super(ACEAgenticConfig, self).instantiate(context)
+        pb = Playbook.load(_OMPHALOS_DIR / self.playbook_file)
+        assert pb.sha256() == self.playbook_sha256, (
+            f"{self.playbook_file} does not match the hash this config"
+            " was created with — the playbook drifted after the runs"
+            " were recorded"
+        )
+        text = (_OMPHALOS_DIR / self.triggers_file).read_text()
+        table = TriggerTable.loads(text)
+        assert table.sha256() == self.triggers_sha256, (
+            f"{self.triggers_file} does not match the hash this config"
+            " was created with — the trigger table drifted"
+        )
+        assert table.playbook_sha256 == self.playbook_sha256, (
+            f"{self.triggers_file} was built for playbook "
+            f"{table.playbook_sha256[:8]}, not {self.playbook_sha256[:8]}"
+        )
+        assert self.injection == "triggered", self.injection
+        args.strategy = "prove_theorem_ace_triggered"
+        args.policy = "prove_theorem_ace_triggered_policy"
+        args.args["triggers"] = text
+        args.args["max_hints"] = self.max_hints
+        args.args["show_definitions"] = self.show_definitions
+        if self.selection_rule != DEFAULT_SELECTION_RULE:
+            args.args["selection_rule"] = self.selection_rule
+        return args
+
+
+def acet_config_name(cfg: ACETriggeredConfig, _uid: object) -> str:
+    """`{bench}__acet-{sha8}-{tsha8}-k{K}-{toolset}-{effort}__{model}__seed{n}`."""
+    rule = (
+        ""
+        if cfg.selection_rule == DEFAULT_SELECTION_RULE
+        else f"-r{cfg.selection_rule}"
+    )
+    return (
+        f"{cfg.bench_name}__acet-{cfg.playbook_sha256[:8]}"
+        f"-{cfg.triggers_sha256[:8]}-k{cfg.max_hints}{rule}"
+        f"-{cfg.toolset}-{cfg.reasoning_effort}"
+        f"__{cfg.model_name}__seed{cfg.seed}"
+    )
 
 
 def ace_config_name(cfg: ACEAgenticConfig, _uid: object) -> str:

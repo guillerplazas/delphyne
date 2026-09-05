@@ -152,6 +152,48 @@ TAXONOMY: tuple[ErrorClass, ...] = (
 
 UNCLASSIFIED = "other"
 
+FINE_TAXONOMY: tuple[ErrorClass, ...] = (
+    # Sub-classes of `other`, added 2026-09-05 after the ladonX /
+    # validationX audit: `other` was the third-largest class on every
+    # run (84 verdicts on 22 of ladonX's 40 problems) and hid one
+    # frequent, teachable mistake — `ring` on a goal that is not a
+    # ring equation — that no digest had ever shown a curator. They are
+    # kept OUT of `TAXONOMY` on purpose: `classify` is pinned into the
+    # identity of every recorded contract-4 curator through the
+    # evidence digest (`ace_evidence`), so its output must not move.
+    # `refine_class` is the opt-in finer reading (`--fine`).
+    ErrorClass(
+        "ring-failure",
+        r"not\s+a\s+valid\s+ring\s+equation",
+        "`ring`/`field` on an inequality or a non-ring goal",
+    ),
+    ErrorClass(
+        "no-such-goal",
+        r"No\s+such\s+goal",
+        "a goal selector or bullet addressed a goal that is not there",
+    ),
+    ErrorClass(
+        "subproof-incomplete",
+        r"Proof\s+is\s+not\s+complete",
+        "an inline sub-proof (`by`, `abstract`, `{ }`) left goals open",
+    ),
+    ErrorClass(
+        "no-matching-clause",
+        r"No\s+matching\s+clauses\s+for\s+match",
+        "an Ltac `match goal` found nothing to match",
+    ),
+    ErrorClass(
+        "unify-failure",
+        r"Unable\s+to\s+unify",
+        "`apply`/`exact` with a lemma whose statement does not unify",
+    ),
+    ErrorClass(
+        "no-product",
+        r"No\s+product\s+even\s+after\s+head-reduction",
+        "`intros` past the last binder",
+    ),
+)
+
 
 def classify(message: str | None) -> str:
     """Bucket one Rocq error message, or `other` if nothing matches."""
@@ -160,6 +202,22 @@ def classify(message: str | None) -> str:
     if not message:
         return UNCLASSIFIED
     for cls in TAXONOMY:
+        if cls.matches(message):
+            return cls.label
+    return UNCLASSIFIED
+
+
+def refine_class(message: str | None) -> str:
+    """
+    `classify`, then the finer `FINE_TAXONOMY` reading of `other`.
+
+    Never used by the adaptation pipeline (see `FINE_TAXONOMY`); the
+    diagnosis tools and `--fine` use it.
+    """
+    label = classify(message)
+    if label != UNCLASSIFIED or not message:
+        return label
+    for cls in FINE_TAXONOMY:
         if cls.matches(message):
             return cls.label
     return UNCLASSIFIED
@@ -195,6 +253,10 @@ class Verdict:
     @property
     def error_class(self) -> str:
         return classify(self.error_message)
+
+    @property
+    def fine_class(self) -> str:
+        return refine_class(self.error_message)
 
 
 def _feedback_entries(cache: Path) -> list[dict[str, Any]]:
@@ -312,12 +374,14 @@ class Tally:
     )
 
 
-def tally(verdicts: Sequence[Verdict]) -> dict[str, Tally]:
+def tally(
+    verdicts: Sequence[Verdict], *, fine: bool = False
+) -> dict[str, Tally]:
     out: dict[str, Tally] = defaultdict(Tally)
     for v in verdicts:
         if v.success:
             continue
-        t = out[v.error_class]
+        t = out[v.fine_class if fine else v.error_class]
         t.verdicts += 1
         t.problems.add(v.bench)
         if not v.solved_run:
@@ -337,8 +401,14 @@ def _short(message: str, width: int = 96) -> str:
     return text[:width] + ("…" if len(text) > width else "")
 
 
-def render_run(run: Path, verdicts: Sequence[Verdict], examples: int) -> str:
-    counts = tally(verdicts)
+def render_run(
+    run: Path,
+    verdicts: Sequence[Verdict],
+    examples: int,
+    *,
+    fine: bool = False,
+) -> str:
+    counts = tally(verdicts, fine=fine)
     failed = sum(1 for v in verdicts if not v.success)
     n_problems = len({v.bench for v in verdicts})
     unsolved = {v.bench for v in verdicts if not v.solved_run}
@@ -350,7 +420,7 @@ def render_run(run: Path, verdicts: Sequence[Verdict], examples: int) -> str:
         f"    {'class':22}{'verdicts':>9}{'problems':>10}{'unsolved':>10}"
         "  what it means",
     ]
-    blurbs = {c.label: c.blurb for c in TAXONOMY}
+    blurbs = {c.label: c.blurb for c in TAXONOMY + FINE_TAXONOMY}
     blurbs[NEVER_PROPOSED] = (
         "budget spent on tool calls; no proof was ever submitted"
     )
@@ -373,7 +443,9 @@ def render_run(run: Path, verdicts: Sequence[Verdict], examples: int) -> str:
     return "\n".join(buf)
 
 
-def render_compare(runs: Sequence[tuple[Path, Sequence[Verdict]]]) -> str:
+def render_compare(
+    runs: Sequence[tuple[Path, Sequence[Verdict]]], *, fine: bool = False
+) -> str:
     """
     Side-by-side taxonomy, plus the set comparison that matters more:
     which problems each configuration never solved.
@@ -383,7 +455,7 @@ def render_compare(runs: Sequence[tuple[Path, Sequence[Verdict]]]) -> str:
     header = f"{'class':22}" + "".join(f"{n[:16]:>18}" for n in labels)
     buf.append(header)
     buf.append("-" * len(header))
-    tallies = [tally(v) for _, v in runs]
+    tallies = [tally(v, fine=fine) for _, v in runs]
     classes = sorted(
         {c for t in tallies for c in t},
         key=lambda c: (
@@ -454,7 +526,13 @@ def main() -> int:
     parser.add_argument(
         "--json", metavar="PATH", help="also write the tallies as JSON"
     )
+    parser.add_argument(
+        "--fine",
+        action="store_true",
+        help="split `other` with FINE_TAXONOMY (diagnosis reading only)",
+    )
     args = parser.parse_args()
+    fine = bool(args.fine)
 
     arm = re.compile(str(args.arm)) if args.arm else None
     loaded: list[tuple[Path, list[Verdict]]] = []
@@ -469,9 +547,9 @@ def main() -> int:
     print("=" * 74)
     for run, verdicts in loaded:
         print()
-        print(render_run(run, verdicts, int(args.examples)))
+        print(render_run(run, verdicts, int(args.examples), fine=fine))
     if args.compare and len(loaded) > 1:
-        print(render_compare(loaded))
+        print(render_compare(loaded, fine=fine))
 
     if args.json:
         target = Path(str(args.json))
@@ -485,7 +563,7 @@ def main() -> int:
                     "problems": sorted(t.problems),
                     "unsolved_problems": sorted(t.unsolved_problems),
                 }
-                for label, t in tally(verdicts).items()
+                for label, t in tally(verdicts, fine=fine).items()
             }
             for run, verdicts in loaded
         }

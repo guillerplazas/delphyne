@@ -39,7 +39,7 @@ frozen rendering untouched — proven by `make test` + experiment
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal, cast
 
 import delphyne as dp
@@ -50,6 +50,14 @@ import pytanque_utils as pt
 import skills as sk
 from ace_evidence import GroundingVerdict, grounding_verdict, locate_command
 from ace_playbook import AddOp, AuditDecision, BulletTag, RewriteBullet
+from ace_triggers import (
+    DEFAULT_MAX_HINTS,
+    DEFAULT_SELECTION_RULE,
+    Hint,
+    TriggerAssignment,
+    parse_table,
+    select_hints,
+)
 from model_registry import ApiType, OmphalosReasoningEffort, make_model
 from prove_agentic import (
     InspectAt,
@@ -668,6 +676,281 @@ def ground_references(
 
 
 #####
+##### Hint on error (2026-09-05): error-keyed injection
+#####
+
+
+@dataclass
+class ProposeProofScriptACETriggered(ProposeProofScriptACE):
+    """
+    The agentic proposal query with the playbook delivered *on error*.
+
+    `playbook` stays empty, so the system and instance prompts render
+    byte-identically to the agentic baseline's (the first request of a
+    cell is the baseline's first request); the only difference is the
+    feedback template, which appends the bullets `check_proof_assisted
+    _hinted` attached to the verdict. A separate class so the templates
+    and the cache namespace are its own — the frozen ACE and agentic
+    templates are not touched.
+    """
+
+
+@dataclass
+class HintedFeedback(pt.Feedback):
+    """A verifier verdict plus the playbook bullets it triggered."""
+
+    hints: list[Hint] = field(default_factory=list[Hint])
+
+
+@strategy
+def check_proof_assisted_hinted(
+    problem_file: str,
+    theorem_name: str,
+    script: ProofScript,
+    triggers: str,
+    max_hints: int = DEFAULT_MAX_HINTS,
+    goal_caps: pt.GoalCaps | None = None,
+    selection_rule: int = DEFAULT_SELECTION_RULE,
+) -> Strategy[Compute, object, ProofScript | dp.Error]:
+    """
+    `prove_agentic.check_proof_assisted`, then hint selection.
+
+    The verifier call is the same cached `compute` with the same
+    arguments (a hinted cell's verdicts are byte-identical to the
+    baseline's for the same script); the selection is pure Python over
+    the verdict (`ace_triggers.select_hints`) and travels to the
+    prompt inside the error's `meta`. `triggers` is the frozen table's
+    own text, so a recorded cell replays without reading any file.
+    """
+    tactics = yield from dp.compute(pt.split_into_tactics)(script)
+    if goal_caps is None:
+        feedback = yield from dp.compute(pt.check_assisted)(
+            problem_file, theorem_name, tactics
+        )
+    else:
+        feedback = yield from dp.compute(pt.check_assisted)(
+            problem_file, theorem_name, tactics, goal_caps=goal_caps
+        )
+    if feedback.success:
+        if feedback.auto_finished:
+            return "\n".join(feedback.proof_so_far)
+        return script
+    hints = select_hints(
+        parse_table(triggers),
+        error_message=feedback.error_message,
+        failing_tactic=feedback.failing_tactic,
+        goals=feedback.remaining_goals,
+        k=max_hints,
+        rule=selection_rule,
+    )
+    hinted = HintedFeedback(
+        success=feedback.success,
+        failing_index=feedback.failing_index,
+        failing_tactic=feedback.failing_tactic,
+        error_message=feedback.error_message,
+        remaining_goals=feedback.remaining_goals,
+        proof_so_far=feedback.proof_so_far,
+        finished=feedback.finished,
+        probe=feedback.probe,
+        auto_finished=feedback.auto_finished,
+        hints=hints,
+    )
+    if feedback.failing_tactic == "Qed." and feedback.remaining_goals:
+        return dp.Error(label="incomplete", meta=hinted)
+    return dp.Error(label="feedback", meta=hinted)
+
+
+@strategy
+def prove_theorem_ace_triggered(
+    problem_file: str,
+    theorem_name: str,
+    triggers: str,
+    toolset: Toolset = "core",
+    turn_budget: int = 32,
+    max_hints: int = DEFAULT_MAX_HINTS,
+    show_definitions: bool = False,
+    goal_caps: pt.GoalCaps | None = None,
+    selection_rule: int = DEFAULT_SELECTION_RULE,
+) -> Strategy[Branch, dp.PromptingPolicy, ProofScript]:
+    """
+    ACE generator with the playbook injected on error only.
+
+    `prove_theorem_ace` with an empty playbook, the triggered query and
+    the hinted verifier: the prompt carries no playbook, and each
+    rejected proposal's feedback carries at most `max_hints` bullets
+    whose triggers match the rejection. Same tools, same budget.
+    """
+    spec = pt.parse_problem(problem_file, show_definitions)
+    available = sk.list_skills()
+    script = yield from dp.interact(
+        step=lambda prefix, _:
+            ProposeProofScriptACETriggered(
+                spec, available, toolset, turn_budget, prefix, "", 2,
+            ).using(dp.ambient_pp),
+        process=lambda s, _:
+            check_proof_assisted_hinted(
+                problem_file, theorem_name, s, triggers, max_hints,
+                goal_caps, selection_rule,
+            ).using(dp.just_compute),
+        tools={
+            ReadSkill: lambda call:
+                _read_skill_handler(call.skill_name).using(dp.just_compute),
+            SearchRocq: lambda call:
+                _search_rocq_handler(problem_file, theorem_name, call.command)
+                  .using(dp.just_compute),
+            InspectAt: lambda call:
+                _inspect_at_handler(
+                    problem_file, theorem_name, call.tactics, call.command
+                ).using(dp.just_compute),
+            TryAutomation: lambda call:
+                _try_automation_handler(
+                    problem_file, theorem_name, call.tactics
+                ).using(dp.just_compute),
+            TryTactics: lambda call:
+                _try_tactics_handler(
+                    problem_file, theorem_name,
+                    call.tactics, call.candidates,
+                ).using(dp.just_compute),
+        },
+    )
+    return script
+
+
+@dp.ensure_compatible(prove_theorem_ace_triggered)
+def prove_theorem_ace_triggered_policy(
+    model_name: str,
+    temperature: float | None = None,
+    max_turns: int | None = None,
+    loop: bool = False,
+    api: ApiType = "responses",
+    reasoning_effort: OmphalosReasoningEffort | None = None,
+    convert_user_feedback_to_tool: bool = True,
+) -> dp.Policy[Branch, dp.PromptingPolicy]:
+    """`prove_theorem_ace_policy`, verbatim: same model construction,
+    same bucket-redirected examples."""
+    model = make_model(
+        model_name,
+        for_tool_calls=True,
+        api=api,
+        reasoning_effort=reasoning_effort,
+        convert_user_feedback_to_tool=convert_user_feedback_to_tool,
+    )
+    sp = dfs(max_depth=max_turns)
+    if loop:
+        sp = dp.loop() @ sp
+    pp = dp.few_shot(
+        model,
+        temperature=temperature,
+        max_requests=1,
+        select_examples=_ace_examples(),
+        tag_user_feedback_messages=(api == "responses"),
+    )
+    return sp & pp
+
+
+@dataclass
+class RepairAddition:
+    """A repair bullet with its trigger (`WriteRepairBullets`)."""
+
+    section: str
+    content: str
+    references: list[str] = field(default_factory=list[str])
+    classes: list[str] = field(default_factory=list[str])
+    names: list[str] = field(default_factory=list[str])
+    patterns: list[str] = field(default_factory=list[str])
+    goal_patterns: list[str] = field(default_factory=list[str])
+    rationale: str = ""
+
+    def as_add_op(self) -> AddOp:
+        return AddOp(
+            type="ADD",
+            section=self.section,
+            content=self.content,
+            references=list(self.references),
+        )
+
+
+@dataclass
+class RepairBullets:
+    reasoning: str
+    additions: list[RepairAddition]
+
+
+@dataclass
+class WriteRepairBullets(dp.Query[RepairBullets]):
+    """
+    One-shot writer of repair bullets (`ace_repairs`): sees the
+    existing playbook, the ranked digest of verifier-accepted repairs
+    on the adaptation pool, the taxonomy and the prover's own
+    pitfalls; answers with at most `max_new_bullets` bullets, each
+    with `references` (for the grounding gate) and a trigger.
+    """
+
+    playbook: str
+    repairs: str
+    classes: str
+    known_guidance: str = ""
+    max_new_bullets: int = 8
+    max_patterns: int = 3
+
+    __parser__ = dp.last_code_block.yaml
+
+
+@strategy
+def write_repair_bullets(
+    playbook: str,
+    repairs: str,
+    classes: str,
+    known_guidance: str = "",
+    max_new_bullets: int = 8,
+    max_patterns: int = 3,
+) -> Strategy[Branch, dp.PromptingPolicy, RepairBullets]:
+    bullets = yield from dp.branch(
+        WriteRepairBullets(
+            playbook, repairs, classes, known_guidance, max_new_bullets,
+            max_patterns,
+        ).using(dp.ambient_pp)
+    )
+    return bullets
+
+
+@dataclass
+class AssignTriggers(dp.Query[TriggerAssignment]):
+    """
+    One-shot assignment of a trigger to every bullet of a frozen
+    playbook (`ace_triggers`): which failure classes, unknown names
+    and error/tactic patterns should summon it. Sees the playbook with
+    ids, the taxonomy it may use and the pool's failure digest (the
+    names Rocq did not know, the failing tactic heads). Run once per
+    playbook, by a stronger model than the generator if wanted; the
+    answer is validated and frozen by
+    `experiments/ace_triggers_experiment.py`.
+    """
+
+    playbook: str
+    classes: str
+    evidence: str
+    max_patterns: int = 3
+
+    __parser__ = dp.last_code_block.yaml
+
+
+@strategy
+def assign_triggers(
+    playbook: str,
+    classes: str,
+    evidence: str,
+    max_patterns: int = 3,
+) -> Strategy[Branch, dp.PromptingPolicy, TriggerAssignment]:
+    assignment = yield from dp.branch(
+        AssignTriggers(playbook, classes, evidence, max_patterns).using(
+            dp.ambient_pp
+        )
+    )
+    return assignment
+
+
+#####
 ##### Shared one-shot policy for Reflector and Curator
 #####
 
@@ -764,6 +1047,32 @@ def rewrite_playbook_policy(
 
 @dp.ensure_compatible(audit_playbook)
 def audit_playbook_policy(
+    model_name: str,
+    temperature: float | None = None,
+    api: ApiType = "responses",
+    reasoning_effort: OmphalosReasoningEffort | None = None,
+    max_requests: int = 3,
+) -> dp.Policy[Branch, dp.PromptingPolicy]:
+    return _one_shot_policy(
+        model_name, temperature, api, reasoning_effort, max_requests
+    )
+
+
+@dp.ensure_compatible(assign_triggers)
+def assign_triggers_policy(
+    model_name: str,
+    temperature: float | None = None,
+    api: ApiType = "responses",
+    reasoning_effort: OmphalosReasoningEffort | None = None,
+    max_requests: int = 3,
+) -> dp.Policy[Branch, dp.PromptingPolicy]:
+    return _one_shot_policy(
+        model_name, temperature, api, reasoning_effort, max_requests
+    )
+
+
+@dp.ensure_compatible(write_repair_bullets)
+def write_repair_bullets_policy(
     model_name: str,
     temperature: float | None = None,
     api: ApiType = "responses",

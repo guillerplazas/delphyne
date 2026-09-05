@@ -97,3 +97,36 @@ playbook must outlive the caches of the runs that produced it.
   `audit.log.yaml`. `steps.csv` is schema 4 (`skipped_trivial`,
   `proposed`, `reduced_out`, `ungrounded`, `grounding_error`).
 
+
+## 2026-09-05 — trigger tables (hint on error)
+
+- `<stem>.triggers.yaml` — the frozen **trigger table** of a playbook
+  (`ace_triggers.TriggerTable`): one row per bullet with its id,
+  section, content (copied, so the file is self-contained and an
+  evaluation cell replays without reading the playbook), `classes`,
+  `names`, `patterns`, `goal_patterns`, plus the playbook's sha256.
+  Written once per playbook by `experiments/ace_triggers_experiment.py`
+  (one terra call), validated and replayed over the trainX rejections;
+  its own sha256 is part of every `ACETriggeredConfig` cell's identity
+  (arm `acet-<playbook sha8>-<table sha8>-k<K>-…`). Never edit in
+  place — the experiment refuses to overwrite a table whose content
+  would change.
+- `<stem>.triggers.provenance.yaml` — model, effort, pool, config
+  directory, the assigner's reasoning and per-bullet rationales, the
+  coverage report and the `selection_rule` in force when the table was
+  frozen.
+- `ace_x5_offline.triggers.yaml` (sha `b1806cce`, 2026-09-05,
+  gpt-5.6-terra/medium on the `x_train_agentic` digest): 24 armed
+  bullets, `rocq-00024` unarmed (no error signature), goal-gated
+  selection decided before the first paid cell (PROGRESS 2026-09-05).
+- `ace_x6_repairs.yaml` (sha `1d2bc630`, 2026-09-05, 31 bullets, ~2.6k
+  tokens) — `ace_x5_offline.yaml` plus six **repair bullets** written
+  by gpt-5.6-terra from the verifier-accepted repairs mined on the
+  trainX runs (`ace_repairs.py`, `experiments/ace_repairs_experiment.
+  py`; 379 repairs from 120 cells), both referenced lemmas grounded.
+  Provenance sidecar: writer config, reasoning, per-bullet rationales,
+  grounding outcome. `ace_x6_repairs.triggers.yaml` (`30d3e288`) = the
+  x5 trigger rows verbatim + the writer's own triggers for the six;
+  evaluated under selection rule 2 (classes are a precondition when
+  listed — `ace_triggers.DEFAULT_SELECTION_RULE`), its sidecar carries
+  both coverages.

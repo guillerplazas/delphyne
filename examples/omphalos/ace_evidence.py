@@ -240,23 +240,29 @@ def render_digest(
     attempts: int,
     max_classes: int = 8,
     max_items: int = 8,
+    blurbs: Mapping[str, str] | None = None,
 ) -> str:
     """
     The evidence block a curation prompt receives, or `""` when there
     is nothing to report (the templates guard on emptiness, so the
     first steps of a run render exactly like a contract-3 prompt would
     have with no evidence). This text is part of LLM prompts and of
-    config identity: change it with the care of a template.
+    config identity: change it with the care of a template. `blurbs`
+    extends the class descriptions (the trigger assigner passes the
+    fine classes); the default renders every recorded digest
+    byte-identically.
     """
     if not verdicts:
         return ""
+    if blurbs is None:
+        blurbs = _BLURBS
     lines = [
         f"{attempts} attempt(s) on this pool so far, {len(verdicts)} failed"
         " verifier verdicts (one verdict = one rejected proposal),"
         " most frequent classes first:"
     ]
     for c in summarize(verdicts, max_classes=max_classes, max_items=max_items):
-        blurb = _BLURBS.get(c.label, "unclassified")
+        blurb = blurbs.get(c.label, "unclassified")
         if c.label == UNCLASSIFIED:
             blurb = "no class matched"
         line = (

@@ -1,0 +1,76 @@
+You assign **triggers** to the bullets of an ACE playbook for a Rocq
+proof agent. The playbook is no longer shown up front. Instead, each
+time the verifier rejects a proposal, the bullets whose trigger matches
+that rejection are attached to the feedback message — at most three,
+the most specific first. Your job: for every bullet, say precisely when
+it should be shown.
+
+A trigger has four parts, all optional:
+
+- `classes`: failure classes from the taxonomy below. A class match is
+  the weakest signal (score 1) — a bullet keyed only on a broad class
+  such as `syntax-error` would be shown on every syntax error, so use a
+  bare class only when the bullet genuinely applies to the whole class
+  (for example, a bullet about Lean-only tactics fits every
+  `unknown-reference` error whose name is one of those tactics — but
+  then put the names in `names` too).
+- `names`: identifiers Rocq reports as not found ("The reference X was
+  not found in the current environment"). The strongest signal (score
+  3). A bullet that says "`omega` does not exist here, use `lia`" gets
+  `names: [omega]`; a bullet about a lemma name the prover tends to
+  guess gets the guessed names.
+- `patterns`: Python `re` regular expressions, case-insensitive,
+  searched in the error message and the failing tactic (score 2). Use
+  them for tactic shapes (`^\s*set\s+\w+\s*:=`), for specific messages
+  (`not a valid ring equation`), for objects in the failing tactic
+  (`\bsqrt\b`). Keep each under 80 characters; never paste a whole
+  error message.
+- `goal_patterns`: regular expressions searched in the remaining goals.
+  They never summon a bullet on their own; when present they are a
+  precondition — the bullet is shown only if the goal matches one of
+  them (a `names` match bypasses this) — so use them to say what the
+  goal must look like for the bullet to be relevant (`\bmod\b`,
+  `\bsqrt\b`, `\bRabs\b`, `INR`), and leave them empty for a bullet
+  that applies whatever the goal.
+
+Rules:
+
+- Be specific. A trigger that fires on every error is worse than none:
+  the prover reads the bullet on turns where it cannot help and pays
+  for the tokens on every later turn.
+- Every bullet gets at most {{ query.max_patterns }} patterns and
+  {{ query.max_patterns }} goal patterns.
+- A bullet with no error signature at all (pure strategy prose that
+  no rejection would point at) gets empty lists — it will simply never
+  be shown. Say so in `rationale`. Prefer this to inventing a trigger.
+- Use the evidence: the names Rocq did not know and the failing tactic
+  heads listed below are what actually happens on this benchmark. A
+  bullet that addresses one of them should be triggered by it.
+- Do not invent bullet ids; mention every bullet exactly once.
+
+## Failure classes you may use
+
+{{ query.classes | trim }}
+
+## Output format
+
+End your reply with a single fenced code block containing ONLY a YAML
+object with exactly these fields:
+
+```yaml
+reasoning: |
+  <your overall assessment>
+triggers:
+  - id: rocq-00006
+    classes: [unknown-reference]
+    names: [omega]
+    patterns: []
+    goal_patterns: []
+    rationale: |
+      <one line>
+```
+
+Write every `rationale` as a YAML block scalar. Quote every regular
+expression as a YAML single-quoted string (`'\bsqrt\b'`) so
+backslashes survive. The code block must be the last thing in your
+message.

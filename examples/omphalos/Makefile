@@ -31,6 +31,9 @@ test-unit:
 	python tools/test_ace_playbook.py
 	python tools/test_ace_driver.py
 	python tools/test_ace_evidence.py
+	python tools/test_ace_triggers.py
+	python tools/test_ace_diagnosis.py
+	python tools/test_ace_repairs.py
 	python tools/test_parse_problem.py
 	python tools/test_launch_state.py
 	python tools/test_ace_x_eval.py
@@ -347,6 +350,34 @@ ace-x5-adapt:
 ace-x5-val-offline: ace-x5-adapt
 	python experiments/ace_x3_validation_experiment.py \
 	  --playbook=ace_x5_offline.yaml run --max_workers=$(ACE_X_WORKERS) --wait
+
+# --- Hint on error (2026-09-05): error-keyed injection of a frozen playbook ---
+#
+# `ace-triggers` writes and freezes the trigger table of TRIG_PLAYBOOK (one
+# terra call, cents); `ace-x-val-trig` evaluates the playbook delivered
+# on error only, on validationX (SEEDS, default `0,1`; the protocol runs
+# `SEEDS=0` first). `ace-diagnosis` is the offline readout of where a
+# playbook's effect goes (turn tax, per-request spend, citations).
+TRIG_PLAYBOOK ?= ace_x5_offline.yaml
+SEEDS ?= 0,1
+ace-triggers:
+	python experiments/ace_triggers_experiment.py --playbook=$(TRIG_PLAYBOOK)
+
+ace-x-val-trig:
+	python experiments/ace_x3_validation_experiment.py \
+	  --playbook=$(TRIG_PLAYBOOK) --injection=triggered --seeds=$(SEEDS) \
+	  run --max_workers=$(ACE_X_WORKERS) --wait
+
+# One terra call over the mined repairs of the trainX runs, grounded,
+# appended to TRIG_PLAYBOOK and frozen as REPAIR_OUT with its triggers.
+REPAIR_OUT ?= ace_x6_repairs.yaml
+ace-repairs:
+	python experiments/ace_repairs_experiment.py --playbook=$(TRIG_PLAYBOOK) --out=$(REPAIR_OUT)
+
+ace-diagnosis:
+	python tools/ace_diagnosis.py --baseline experiments/output/x_validation_agentic \
+	  $(foreach a,$(ARMS),--arm experiments/output/$(a)) \
+	  --json experiments/output/ace_diagnosis/validationX.json
 
 ace-x3-strong-test:
 	python experiments/ace_x3_test_experiment.py \
