@@ -123,7 +123,9 @@ def test_parse_real_hints() -> None:
     by = {h.n: h for h in hs}
     assert by[54].status == "done" and by[49].status == "done"
     assert by[55].status == "partial"
-    assert by[67].status == "open" and by[61].status == "open"
+    # Live statuses of open hints change as Ladon judges them; only the
+    # frozen DONE markers and the tag parse are stable facts.
+    assert any(h.open for h in hs)
     assert by[28].status == "done"  # suffix-style ✅
     assert by[67].tag == "experiment" and by[54].tag == "tool"
     assert any(h.tag == "method" for h in hs)
@@ -708,6 +710,39 @@ def test_notes_new_hints_and_plan_dedupe() -> None:
         (open_n[0], "A"),
         (open_n[1], "C"),
     ], out
+
+
+def test_quota_counts_arms_and_analyses_separately() -> None:
+    from ladon import cli
+
+    night = S.Night(
+        date="2026-09-05t",
+        budget={
+            "max_hints": 1,
+            "max_analyses": 2,
+            "wallclock_h": 9.0,
+            "cap_usd": 12.0,
+        },
+    )
+    runner = cli.Ladon(night, root=Path(tempfile.mkdtemp()), no_claude=True)
+    a1 = S.HintRun(
+        n=1, title="a", tag="experiment", hint_class="A", state="recorded"
+    )
+    a2 = S.HintRun(
+        n=2, title="b", tag="experiment", hint_class="A", state="recorded"
+    )
+    b1 = S.HintRun(n=3, title="c", tag="tool", hint_class="B")
+    a3 = S.HintRun(n=4, title="d", tag="tool", hint_class="A")
+    night.hints = {1: a1, 2: a2, 3: b1, 4: a3}
+    night.order = [1, 2, 3, 4]
+    assert (
+        runner.cannot_start(b1) is None
+    )  # two analyses do not use the arm quota
+    assert runner.cannot_start(a3) == "night's analysis allowance reached"
+    b1.state = "recorded"
+    b2 = S.HintRun(n=5, title="e", tag="tool", hint_class="C")
+    night.hints[5] = b2
+    assert runner.cannot_start(b2) == "night's hint quota reached"
 
 
 def main() -> int:

@@ -39,6 +39,10 @@ $$1.7 and 2.5 h (screen tier 40 cells ≈ 1 h, select tier +40 cells
   prefer an untried hint.
 - `[upstream]` and `[process]` hints are D or skipped. Hints that need
   a fresh partition or testX are D.
+- Hints whose status line says `LADON HUMAN` were judged structural on
+  an earlier night; they are listed so you can disagree. Rank one only
+  with a concrete reason the earlier verdict missed; otherwise skip it
+  without repeating the D reason.
 - Independence: no two ranked hints may touch the same file; their
   commits must stand alone.
 - Rank a few more than $max_hints so Ladon can skip one that turns out

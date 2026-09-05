@@ -31,8 +31,9 @@ must be committed first**: preflight refuses to start when
 `ladon/ladonX.txt` is not in `HEAD`, because the re-verifier checks
 out that commit.
 
-Defaults: 3 hints, 9 h wall-clock, $12 OpenAI, $25 Claude estimate,
-4 Rocq workers. Every knob is a `--flag` of `python -m ladon.cli night`.
+Defaults: 3 arms plus 3 free offline analyses, 9 h wall-clock, $12
+OpenAI, $25 Claude estimate, 4 Rocq workers. A hint you pin with
+`--hints` runs regardless of an earlier INSPECT/HUMAN mark. Every knob is a `--flag` of `python -m ladon.cli night`.
 
 ## What one hint costs
 

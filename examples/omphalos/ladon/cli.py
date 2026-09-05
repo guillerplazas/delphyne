@@ -637,7 +637,6 @@ class Ladon:
         n = self.night
         hints_text = self.knowledge_file("HINTS.md").read_text()
         pinned = _parse_hint_numbers(self.budget.get("hints"))
-        open_hints = H.open_hints(hints_text)
         by_n = {h.n: h for h in H.parse_hints(hints_text)}
         max_hints = int(self.budget.get("max_hints", 3))
         ranked: list[dict[str, Any]] = []
@@ -660,7 +659,11 @@ class Ladon:
             pool = (
                 [by_n[k] for k in pinned if k in by_n]
                 if pinned
-                else open_hints
+                else [
+                    h
+                    for h in H.parse_hints(hints_text)
+                    if h.open or h.status == "human"
+                ]
             )
             missing = [k for k in pinned if k not in by_n]
             if missing:
@@ -686,7 +689,7 @@ class Ladon:
                 hint = by_n[int(entry["hint"])]
                 entry["title"] = hint.title
                 entry["tag"] = hint.tag
-        ranked = self.validate_plan(ranked, by_n, max_hints)
+        ranked = self.validate_plan(ranked, by_n, max_hints, pinned=pinned)
         n.plan = {
             **n.plan,
             "ranked": ranked,
@@ -707,9 +710,14 @@ class Ladon:
         for entry in skipped:
             why = str(entry.get("why", ""))
             if why.startswith("D:") and int(entry["hint"]) in by_n:
-                n.human.append(
-                    {"hint": int(entry["hint"]), "why": why[2:].strip()}
-                )
+                k = int(entry["hint"])
+                n.human.append({"hint": k, "why": why[2:].strip()})
+                if by_n[k].status != "human":
+                    self.mark_hint(
+                        k,
+                        f"LADON HUMAN {n.date} — structural: "
+                        + why[2:].strip(),
+                    )
                 self.mark_hint(
                     int(entry["hint"]),
                     f"LADON HUMAN {n.date} — structural: {why[2:].strip()}",
@@ -809,6 +817,8 @@ class Ladon:
         ranked: Sequence[dict[str, Any]],
         by_n: Mapping[int, H.Hint],
         max_hints: int,
+        *,
+        pinned: Sequence[int] = (),
     ) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         seen_files: set[str] = set()
@@ -836,7 +846,10 @@ class Ladon:
                 out.append(dict(entry))
                 continue
             hint = by_n.get(k)
-            if hint is None or not hint.open:
+            eligible = hint is not None and (
+                hint.open or hint.status == "human" or k in pinned
+            )
+            if hint is None or not eligible or hint.status == "done":
                 self.log(f"plan: dropping #{k} (not an open hint)")
                 continue
             cls = str(entry.get("class", "B"))
@@ -849,9 +862,12 @@ class Ladon:
                     else str(entry.get("rationale", ""))
                 )
                 self.night.human.append({"hint": k, "why": why[3:]})
-                self.mark_hint(
-                    k, f"LADON HUMAN {self.night.date} — structural: {why[3:]}"
-                )
+                if hint.status != "human":
+                    self.mark_hint(
+                        k,
+                        f"LADON HUMAN {self.night.date} — structural: "
+                        + why[3:],
+                    )
                 continue
             if cls not in ("A", "B", "C"):
                 cls = "B"
@@ -868,7 +884,11 @@ class Ladon:
             e = dict(entry)
             e["class"] = cls
             out.append(e)
-            if len(out) >= max_hints + 2:
+            arms = sum(1 for e in out if e["class"] != "A")
+            analyses = sum(1 for e in out if e["class"] == "A")
+            if arms >= max_hints + 2 and analyses >= int(
+                self.budget.get("max_analyses", 3)
+            ):
                 break
         return out
 
@@ -891,13 +911,22 @@ class Ladon:
 
     def cannot_start(self, h: S.HintRun) -> str | None:
         n = self.night
-        attempted = sum(
-            1
+        started = [
+            x
             for x in n.hints.values()
             if x.state != "queued" and x.state != "skipped"
-        )
-        if attempted >= int(self.budget.get("max_hints", 3)):
-            return "night's hint quota reached"
+        ]
+        # Offline analyses cost nothing and have their own allowance;
+        # the hint quota counts arms (night 2026-09-04c spent its whole
+        # quota on three free analyses and skipped both arms).
+        if h.hint_class == "A":
+            analyses = sum(1 for x in started if x.hint_class == "A")
+            if analyses >= int(self.budget.get("max_analyses", 3)):
+                return "night's analysis allowance reached"
+        else:
+            arms = sum(1 for x in started if x.hint_class != "A")
+            if arms >= int(self.budget.get("max_hints", 3)):
+                return "night's hint quota reached"
         minutes, usd = CLASS_ESTIMATES.get(h.hint_class, CLASS_ESTIMATES["B"])
         if self.minutes_left() < minutes:
             return f"not enough wall-clock left ({self.minutes_left():.0f} min < {minutes:.0f})"
@@ -1423,7 +1452,9 @@ class Ladon:
             )
             notes_path = _OMPHALOS_DIR / str(h.notes)
             prompt = _render(
-                "evaluate.md",
+                "evaluate_analysis.md"
+                if h.hint_class == "A"
+                else "evaluate.md",
                 hint_n=h.n,
                 title=h.title,
                 date=n.date,
@@ -2028,6 +2059,7 @@ class LadonCLI:
         self,
         date: str | None = None,
         max_hints: int = 3,
+        max_analyses: int = 3,
         wallclock_h: float = 9.0,
         cap_usd: float = 12.0,
         claude_cap_usd: float = 25.0,
@@ -2067,6 +2099,7 @@ class LadonCLI:
             dry=dry,
             budget={
                 "max_hints": int(max_hints),
+                "max_analyses": int(max_analyses),
                 "wallclock_h": float(wallclock_h),
                 "cap_usd": float(cap_usd),
                 "claude_cap_usd": float(claude_cap_usd),
