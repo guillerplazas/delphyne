@@ -35,7 +35,7 @@ import stop_launches as sl  # noqa: E402
 OUTPUT = _OMPHALOS_DIR / "experiments" / "output"
 _X_DIRS = re.compile(
     r"^(x_(train|validation|test)_agentic|ace_x_.*_agentic|"
-    r"acet_x_.*_agentic|ace_triggers_.*|"
+    r"acet_x_.*_agentic|ace_ladon_.*_agentic|ace_triggers_.*|ace_repairs_.*|"
     r"ace_online_.*_agentic|ace_adaptation_x[0-9]?-.*)$"
 )
 

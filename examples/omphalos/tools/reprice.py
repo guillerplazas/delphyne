@@ -51,6 +51,7 @@ guard that can never go green catches nothing.
 import argparse
 import csv
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from pathlib import Path
@@ -289,6 +290,17 @@ def run_date(run: Path) -> date | None:
     return min(starts) if starts else None
 
 
+def _label(row: Mapping[str, str]) -> str:
+    """
+    A cell's label: its bench name, or — for the one-config role
+    experiments that have none (the 2026-09-05 trigger assigner and
+    repair writer, keyed by playbook) — the playbook file, so the
+    guard never trips on a directory that has nothing to do with a
+    benchmark problem.
+    """
+    return row.get("bench_name") or row.get("playbook_file") or "(config)"
+
+
 def usages_from_summary(
     summary: Path, group_by: str | None, ran_on: date | None = None
 ) -> list[Usage]:
@@ -305,7 +317,7 @@ def usages_from_summary(
                 continue  # config errored before recording a budget
             usages.append(
                 Usage(
-                    label=row["bench_name"],
+                    label=_label(row),
                     model=row["model_name"],
                     input_tokens=int(row["input_tokens"]),
                     cached_input_tokens=int(row["cached_input_tokens"]),
@@ -367,7 +379,7 @@ def write_repriced_summary(run: Path) -> Path | None:
         if not row.get("price"):
             continue
         usage = Usage(
-            label=row["bench_name"],
+            label=_label(row),
             model=row["model_name"],
             input_tokens=int(row["input_tokens"]),
             cached_input_tokens=int(row["cached_input_tokens"]),

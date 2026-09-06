@@ -23,7 +23,7 @@
 
 # Single-problem smoke tests (cached; regenerate with
 # `make regen-command-caches` after a prompt / strategy change).
-test: test-unit test-rocq test-standard test-agentic test-probing test-luna test-ace
+test: test-unit test-rocq test-standard test-agentic test-probing test-luna test-ace test-ace-trig
 
 # Pure Python: no API calls, no Rocq server. Guards the deterministic
 # merge and the generated adaptation pool against silent drift.
@@ -88,6 +88,15 @@ test-luna:
 
 test-ace:
 	delphyne run commands/prove_one_ace.exec.yaml --cache --no-header
+
+# Hint-on-error generator replayed against a COPY of the luna smoke's
+# cache: proves its prompts are byte-identical to the baseline's when
+# no hint fires (`cache_mode: replay` in the yaml raises on a miss).
+test-ace-trig:
+	delphyne run commands/prove_one_ace_triggered.exec.yaml --cache --no-header
+
+regen-ace-trig-cache:
+	cp commands/cache/prove_one_luna.exec.yaml commands/cache/prove_one_ace_triggered.exec.yaml
 
 # --- benchmark sweeps (real API calls) ---
 #

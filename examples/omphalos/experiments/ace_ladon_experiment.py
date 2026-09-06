@@ -67,7 +67,11 @@ configs = [_CLASS(**vars(c)) for c in ev.ace_x_configs(LADONX_PROBLEMS, SEEDS)]
 
 _OUTPUT_DIR = (
     f"experiments/output/ace_ladon_{_SEL.stem}_"
-    + (f"trig_k{_SEL.max_hints}" if _SEL.triggered else _SEL.injection)
+    + (
+        f"trig_k{_SEL.max_hints}_r{_SEL.selection_rule}"
+        if _SEL.triggered
+        else f"{_SEL.injection}_rv{_SEL.render_version}"
+    )
     + "_agentic"
 )
 
