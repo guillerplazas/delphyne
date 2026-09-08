@@ -21,9 +21,13 @@
 .PHONY: ace-adapt-variant defs-arm test-unit ace-report-data
 .PHONY: clean clean-experiments
 
+# Parallel streams per launch (memory-bound at 4 on the 7.4 GB WSL box; the
+# server has 219 GB, so `make WORKERS=16 sweep-...` or export WORKERS).
+WORKERS ?= 4
+
 # Single-problem smoke tests (cached; regenerate with
 # `make regen-command-caches` after a prompt / strategy change).
-test: test-unit test-rocq test-standard test-agentic test-probing test-luna test-ace test-ace-trig
+test: test-unit test-rocq test-standard test-agentic test-probing test-luna test-ace test-ace-trig test-stall
 
 # Pure Python: no API calls, no Rocq server. Guards the deterministic
 # merge and the generated adaptation pool against silent drift.
@@ -34,6 +38,7 @@ test-unit:
 	python tools/test_ace_triggers.py
 	python tools/test_ace_diagnosis.py
 	python tools/test_ace_repairs.py
+	python tools/test_stall.py
 	python tools/test_parse_problem.py
 	python tools/test_launch_state.py
 	python tools/test_ace_x_eval.py
@@ -98,6 +103,14 @@ test-ace-trig:
 regen-ace-trig-cache:
 	cp commands/cache/prove_one_luna.exec.yaml commands/cache/prove_one_ace_triggered.exec.yaml
 
+# Stall-rule prover with the rule off, replayed against a COPY of the
+# luna smoke's cache: byte-identical prompts when no rule is set.
+test-stall:
+	delphyne run commands/prove_one_stall.exec.yaml --cache --no-header
+
+regen-stall-cache:
+	cp commands/cache/prove_one_luna.exec.yaml commands/cache/prove_one_stall.exec.yaml
+
 # --- benchmark sweeps (real API calls) ---
 #
 # The benchmark is partitioned into train / validation / test (see
@@ -108,24 +121,24 @@ regen-ace-trig-cache:
 sweep-train: sweep-train-standard sweep-train-agentic
 
 sweep-train-standard:
-	python experiments/train_standard_experiment.py run --max_workers=4
+	python experiments/train_standard_experiment.py run --max_workers=$(WORKERS)
 
 sweep-train-agentic:
-	python experiments/train_agentic_experiment.py run --max_workers=4
+	python experiments/train_agentic_experiment.py run --max_workers=$(WORKERS)
 
 sweep-validation:
-	python experiments/validation_standard_experiment.py run --max_workers=4
-	python experiments/validation_agentic_experiment.py run --max_workers=4
+	python experiments/validation_standard_experiment.py run --max_workers=$(WORKERS)
+	python experiments/validation_agentic_experiment.py run --max_workers=$(WORKERS)
 
 sweep-test:
-	python experiments/test_standard_experiment.py run --max_workers=4
-	python experiments/test_agentic_experiment.py run --max_workers=4
+	python experiments/test_standard_experiment.py run --max_workers=$(WORKERS)
+	python experiments/test_agentic_experiment.py run --max_workers=$(WORKERS)
 
 sweep-probing-validation:
-	python experiments/validation_probing_experiment.py run --max_workers=4
+	python experiments/validation_probing_experiment.py run --max_workers=$(WORKERS)
 
 sweep-probing-test:
-	python experiments/test_probing_experiment.py run --max_workers=4
+	python experiments/test_probing_experiment.py run --max_workers=$(WORKERS)
 
 replay-train-standard:
 	python experiments/train_standard_experiment.py replay
@@ -209,14 +222,14 @@ probe-responses:
 	python tools/probe_responses_api.py
 
 sweep-responses-train:
-	python experiments/responses_train_experiment.py run --max_workers=4
-	python experiments/responses_train_standard_experiment.py run --max_workers=4
+	python experiments/responses_train_experiment.py run --max_workers=$(WORKERS)
+	python experiments/responses_train_standard_experiment.py run --max_workers=$(WORKERS)
 
 sweep-responses-validation:
-	python experiments/responses_validation_experiment.py run --max_workers=4
+	python experiments/responses_validation_experiment.py run --max_workers=$(WORKERS)
 
 sweep-responses-test:
-	python experiments/responses_test_experiment.py run --max_workers=4
+	python experiments/responses_test_experiment.py run --max_workers=$(WORKERS)
 
 # --- luna migration (real API calls, but luna is 10x cheaper) ---
 #
@@ -225,7 +238,7 @@ sweep-responses-test:
 # one to ship is derived afterwards from the recorded prices.
 
 sweep-luna-train:
-	python experiments/luna_train_experiment.py run --max_workers=4
+	python experiments/luna_train_experiment.py run --max_workers=$(WORKERS)
 
 luna-cap:
 	python tools/budget_ablation.py experiments/output/luna_train_agentic \
@@ -237,7 +250,7 @@ luna-cap:
 # -- read that, not the pooled totals.
 
 sweep-luna-cvt:
-	python experiments/luna_cvt_ablation.py run --max_workers=4
+	python experiments/luna_cvt_ablation.py run --max_workers=$(WORKERS)
 
 cvt-report:
 	python tools/cvt_report.py
@@ -261,11 +274,11 @@ ace-x-replay:
 
 ace-x-validation:
 	python experiments/ace_x_validation_experiment.py \
-	  --playbook=$(PLAYBOOK) --injection=$(or $(INJECTION),full) run --max_workers=4
+	  --playbook=$(PLAYBOOK) --injection=$(or $(INJECTION),full) run --max_workers=$(WORKERS)
 
 ace-x-test:
 	python experiments/ace_x_test_experiment.py \
-	  --playbook=$(PLAYBOOK) run --max_workers=4
+	  --playbook=$(PLAYBOOK) run --max_workers=$(WORKERS)
 
 # --- ACE v3 (reference-audit polish) ---
 #
@@ -281,11 +294,11 @@ ace-x3-adapt:
 
 ace-x3-validation:
 	python experiments/ace_x3_validation_experiment.py \
-	  --playbook=$(PLAYBOOK) --injection=$(or $(INJECTION),full) run --max_workers=4
+	  --playbook=$(PLAYBOOK) --injection=$(or $(INJECTION),full) run --max_workers=$(WORKERS)
 
 ace-x3-test:
 	python experiments/ace_x3_test_experiment.py \
-	  --playbook=$(PLAYBOOK) run --max_workers=4
+	  --playbook=$(PLAYBOOK) run --max_workers=$(WORKERS)
 
 # --- The ACE-X matrix (2026-08-26 rebuild) ---
 #
@@ -296,7 +309,7 @@ ace-x3-test:
 # each playbook at the version it was adapted under (ace_x_eval reads
 # the provenance sidecar) into `_rv{N}` directories. testX targets stay
 # OUT of the matrix: one look each, after the validationX readout.
-ACE_X_WORKERS ?= 4
+ACE_X_WORKERS ?= $(WORKERS)
 
 ace-x3-val-offline:
 	python experiments/ace_x3_validation_experiment.py \
@@ -383,6 +396,17 @@ REPAIR_OUT ?= ace_x6_repairs.yaml
 ace-repairs:
 	python experiments/ace_repairs_experiment.py --playbook=$(TRIG_PLAYBOOK) --out=$(REPAIR_OUT)
 
+# Stall rules (2026-09-06): exact offline replay; the live arm is the
+# parity proof of the mechanism.
+stall-tune:
+	python tools/stall_report.py --tune x_train_agentic --check x_validation_agentic --check x_ladon_agentic --json experiments/output/stall/tune_trainX.json
+
+stall-arm:
+	python experiments/x_stall_experiment.py --seeds=$(or $(SEEDS),0) run --max_workers=$(ACE_X_WORKERS) --wait
+
+stall-parity:
+	python tools/stall_report.py --rule seenstate --k 4 --parity x_validation_stall_seenstate4_agentic
+
 ace-diagnosis:
 	python tools/ace_diagnosis.py --baseline experiments/output/x_validation_agentic \
 	  $(foreach a,$(ARMS),--arm experiments/output/$(a)) \
@@ -414,17 +438,17 @@ ace-x4-test-offline:
 # sweep runs under a loose cap and `x-cap` derives the cap to ship.
 
 sweep-x-train:
-	python experiments/x_train_experiment.py run --max_workers=4
+	python experiments/x_train_experiment.py run --max_workers=$(WORKERS)
 
 x-cap:
 	python tools/budget_ablation.py experiments/output/x_train_agentic \
 	  --model gpt-5.6-luna
 
 sweep-x-validation:
-	python experiments/x_validation_experiment.py run --max_workers=4
+	python experiments/x_validation_experiment.py run --max_workers=$(WORKERS)
 
 sweep-x-test:
-	python experiments/x_test_experiment.py run --max_workers=4
+	python experiments/x_test_experiment.py run --max_workers=$(WORKERS)
 
 summary-x-train:
 	python experiments/x_train_experiment.py force-summary --add-timing
@@ -473,7 +497,7 @@ ace-adapt:
 	python experiments/ace_adaptation.py run
 
 ace-eval:
-	python experiments/ace_validation_experiment.py run --max_workers=4
+	python experiments/ace_validation_experiment.py run --max_workers=$(WORKERS)
 
 ace-report:
 	python tools/ace_report.py
@@ -488,7 +512,7 @@ ace-report-data:
 # luna_test_agentic seed-0 cells; see the script docstring for the
 # two-looks honesty note.
 ace-test:
-	python experiments/ace_test_experiment.py run --max_workers=4
+	python experiments/ace_test_experiment.py run --max_workers=$(WORKERS)
 
 # One adaptation variant (VARIANT=train|train-e3|pool|noreflect|mono).
 # Each writes its own output dir and freezes its own playbook, so
@@ -514,7 +538,7 @@ ace-failures:
 # problems reference symbols their prompt never showed, and 4 of them
 # are among the 9 the canonical config never solves.
 defs-arm:
-	python experiments/defs_experiment.py run --max_workers=4
+	python experiments/defs_experiment.py run --max_workers=$(WORKERS)
 
 # --- housekeeping ---
 

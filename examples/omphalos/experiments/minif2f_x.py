@@ -157,6 +157,37 @@ class XAgenticConfig(mf.ResponsesAgenticConfig):
         return args
 
 
+@dataclass
+class StallXAgenticConfig(XAgenticConfig):
+    """
+    `XAgenticConfig` with the stall rule of `stall.py` (2026-09-06):
+    `stall_rule` (one of `stall.RULES`, empty = the baseline strategy
+    prompt for prompt) and `stall_k`. Defaults keep every recorded X
+    config's identity; a live stall arm sets both explicitly and runs
+    `prove_stall.prove_theorem_agentic_stall`.
+    """
+
+    stall_rule: str = ""
+    stall_k: int = 0
+
+    def instantiate(self, context: object) -> dp.RunStrategyArgs:
+        args = super().instantiate(context)
+        args.strategy = "prove_theorem_agentic_stall"
+        args.policy = "prove_theorem_agentic_stall_policy"
+        args.args["stall_rule"] = self.stall_rule
+        args.args["stall_k"] = self.stall_k
+        return args
+
+
+def x_stall_config_name(cfg: StallXAgenticConfig, _uid: object) -> str:
+    """`{bench}__{toolset}-{effort}-stall-{rule}{k}__{model}__seed{n}`."""
+    tag = f"-stall-{cfg.stall_rule}{cfg.stall_k}" if cfg.stall_rule else ""
+    return (
+        f"{cfg.bench_name}__{cfg.toolset}-{cfg.reasoning_effort}{tag}"
+        f"__{cfg.model_name}__seed{cfg.seed}"
+    )
+
+
 def x_config(
     name: str,
     seed: int,

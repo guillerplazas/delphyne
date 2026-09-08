@@ -130,3 +130,16 @@ playbook must outlive the caches of the runs that produced it.
   evaluated under selection rule 2 (classes are a precondition when
   listed — `ace_triggers.DEFAULT_SELECTION_RULE`), its sidecar carries
   both coverages.
+
+## 2026-09-06 — the deterministic digest table
+
+- `ace_digest_table.yaml` (sha `ca62b40b`, 8 bullets, ~455 tokens) —
+  **no LLM**: `tools/make_digest_table.py` reads the trainX rejections
+  (`x_train_agentic` + the x5 chain's generators) and writes one bullet
+  per identifier Rocq did not know at least three times (`norm_num`,
+  `positivity`, `omega`, `by_contra`, `interval_cases`,
+  `functional_extensionality`) with the replacements the next accepted
+  proposal used, plus one line each for `ring-failure` and
+  `unify-failure`. The control arm for "does LLM curation add
+  anything"; evaluated at rendering 2. Provenance sidecar: counts,
+  replacements, pool.
