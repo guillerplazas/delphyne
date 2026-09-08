@@ -73,6 +73,9 @@ def failed_verdicts(bench: str, cache: Path) -> list[FailedVerdict]:
     applied cleanly but left goals open) carry no mechanical failure
     and are not evidence.
     """
+    from tools.ace_review_benchmark import assert_training_allowed
+
+    assert_training_allowed([bench])
     out: list[FailedVerdict] = []
     for fb in _feedback_entries(cache):
         if fb.get("success"):

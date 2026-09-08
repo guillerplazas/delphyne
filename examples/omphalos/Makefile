@@ -32,6 +32,9 @@ test: test-unit test-rocq test-standard test-agentic test-probing test-luna test
 # Pure Python: no API calls, no Rocq server. Guards the deterministic
 # merge and the generated adaptation pool against silent drift.
 test-unit:
+	python tools/test_campaign_budget.py
+	python tools/test_paired_evaluation.py
+	python tools/test_ace_repair_loop.py
 	python tools/test_ace_playbook.py
 	python tools/test_ace_driver.py
 	python tools/test_ace_evidence.py
@@ -309,7 +312,8 @@ ace-x3-test:
 # each playbook at the version it was adapted under (ace_x_eval reads
 # the provenance sidecar) into `_rv{N}` directories. testX targets stay
 # OUT of the matrix: one look each, after the validationX readout.
-ACE_X_WORKERS ?= $(WORKERS)
+# Explicit WORKERS/ACE_X_WORKERS wins; otherwise ACE uses available slots.
+ACE_X_WORKERS ?= $(if $(filter command line environment,$(origin WORKERS)),$(WORKERS),$(or $(OMPHALOS_MAX_STREAMS),$(WORKERS)))
 
 ace-x3-val-offline:
 	python experiments/ace_x3_validation_experiment.py \

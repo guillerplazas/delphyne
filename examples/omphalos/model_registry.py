@@ -363,15 +363,19 @@ def make_model(
     # today's rate. Historical rates are for `pricing_for(..., on=...)`
     # and offline analysis of runs that already happened.
     pricing = _require_exact_pricing(model_name, current_pricing_date())
-    return dp.openai_model(
-        model_name,
-        options,
-        pricing=pricing,
-        api_type=api,
-        use_reasoning_cache=(
-            use_reasoning_cache if api == "responses" else None
-        ),
-        convert_user_feedback_to_tool=(
-            convert_user_feedback_to_tool if api == "responses" else None
-        ),
+    from campaign_budget import for_campaign
+
+    return for_campaign(
+        dp.openai_model(
+            model_name,
+            options,
+            pricing=pricing,
+            api_type=api,
+            use_reasoning_cache=(
+                use_reasoning_cache if api == "responses" else None
+            ),
+            convert_user_feedback_to_tool=(
+                convert_user_feedback_to_tool if api == "responses" else None
+            ),
+        )
     )

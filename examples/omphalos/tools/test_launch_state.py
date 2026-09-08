@@ -129,11 +129,16 @@ def test_retry_failed_sets_exception_aside() -> None:
         cfg = out / "configs" / name
         cfg.mkdir(parents=True)
         (cfg / "exception.txt").write_text("Traceback ...")
+        (cfg / "cache.yaml").write_text("paid attempt\n")
         assert exp.rebuild(write=True).counts.get("failed") == 1
         assert exp.retry_failed() == 1
         assert ol.ground_truth(cfg) == "todo"
         assert list(cfg.glob("exception.txt.bak-*"))
         assert exp.get_status()["todo"] == 1
+        (cfg / "cache.yaml").write_text("fresh attempt\n")
+        backups = list(cfg.glob("attempts/*/cache.yaml"))
+        assert len(backups) == 1
+        assert backups[0].read_text() == "paid attempt\n"
 
 
 def test_launch_lock_is_exclusive_across_processes() -> None:

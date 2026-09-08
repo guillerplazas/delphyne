@@ -54,6 +54,7 @@ import json
 import multiprocessing as mp
 import os
 import shlex
+import shutil
 import signal
 import socket
 import sys
@@ -731,24 +732,39 @@ class OmphalosExperiment[C: dp.ExperimentConfig](dp.Experiment[C]):
     def rebuild(self, *, write: bool = True) -> StatusDelta:
         return rebuild_statuses(self, write=write)
 
-    def retry_failed(self) -> int:
+    def retry_failed(self, names: set[str] | None = None) -> int:
         """
         Make every failed cell retryable: its `exception.txt` is set
         aside as a dated `.bak` (the record survives) so the ground
         truth becomes `todo`, then the state is rebuilt. The stdlib's
         `mark_errors_as_todos` alone is undone by the next rebuild.
+        Preserve paid caches before the stdlib starts a fresh attempt
+        (it deletes the active cache file at launch).
         Returns the number of cells queued for retry.
         """
         state = self._load_state()  # pyright: ignore[reportPrivateUsage]
         if state is None:
             return 0
         out_dir = self.absolute_output_dir
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         n = 0
         for name in state.configs:
+            if names is not None and name not in names:
+                continue
             cfg = out_dir / "configs" / name
             if ground_truth(cfg) != "failed":
                 continue
+            previous = cfg / "attempts" / stamp
+            previous.mkdir(parents=True)
+            for filename in (
+                "cache.yaml",
+                "embeddings.cache.h5",
+                "statuses.txt",
+                EXCEPTION_FILE,
+            ):
+                source = cfg / filename
+                if source.exists():
+                    shutil.copy2(source, previous / filename)
             exc = cfg / EXCEPTION_FILE
             exc.rename(cfg / f"{EXCEPTION_FILE}.bak-{stamp}")
             n += 1

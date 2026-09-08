@@ -37,7 +37,6 @@ from typing import Protocol
 import numpy as np
 from numpy.typing import NDArray
 
-import delphyne as dp
 from delphyne.stdlib.embeddings import EmbeddingsCache
 from delphyne.utils.caching import CacheMode
 
@@ -198,7 +197,9 @@ class EmbeddingDeduper:
         assert self._cache is not None, (
             "use EmbeddingDeduper as a context manager"
         )
-        model = dp.standard_openai_embedding_model(self.model_name)
+        from campaign_embeddings import embedding_model
+
+        model = embedding_model(self.model_name)
         for text, resp in zip(missing, model.embed(missing, self._cache)):
             v = resp.embedding.astype(np.float32)
             norm = float(np.linalg.norm(v))

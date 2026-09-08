@@ -91,6 +91,9 @@ class Repair:
 
 
 def attempts_of_cache(cache: Path) -> list[Attempt]:
+    from tools.ace_review_benchmark import assert_training_allowed
+
+    assert_training_allowed([cache.parent.name.split("__")[0]])
     loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
     raw: Any = yaml.load(cache.read_text(), Loader=loader)
     out: list[Attempt] = []

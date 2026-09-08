@@ -56,13 +56,14 @@ Usage:
 # pyright: strict
 
 import hashlib
+import os
 import random
 import re
 import shutil
 import sys
 import uuid
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -255,6 +256,10 @@ class AdaptVariant:
     audit: bool = False
     audit_max_additions: int = 6
     preaudit_playbook: str | None = None
+    repair_rounds: int = 0
+    repair_requests: int = 16
+    repair_cap: float = 0.05
+    campaign_runtime: str = ""
     """
     v5 (2026-09-02). `reducer_contract=2` shows the reducer the pool's
     failure digest (needs `curator_contract >= 4`, which computes it).
@@ -268,6 +273,13 @@ class AdaptVariant:
     """
 
     def __post_init__(self) -> None:
+        if self.repair_rounds < 0 or (
+            self.repair_rounds
+            and (self.reflector != "on" or self.mode != "offline")
+        ):
+            raise ValueError(
+                "repair requires offline adaptation with reflection"
+            )
         assert self.pool in POOLS, (
             f"unknown pool {self.pool!r}; known: {', '.join(POOLS)}"
         )
@@ -607,6 +619,18 @@ VARIANTS: Mapping[str, AdaptVariant] = {
 
 
 def _variant(name: str) -> AdaptVariant:
+    if name in {"review-repair-s0", "review-repair-s1"}:
+        from ace_review_experiment import campaign_profile
+
+        seed = int(name[-1])
+        return replace(
+            VARIANTS["x3-offline"],
+            name=name,
+            seed=seed,
+            final_playbook=f"ace_review_repair_s{seed}.yaml",
+            repair_rounds=2,
+            campaign_runtime=campaign_profile().digest(),
+        )
     assert name in VARIANTS, (
         f"unknown variant {name!r}; known: {', '.join(VARIANTS)}"
     )
@@ -726,6 +750,9 @@ def cited_bullet_ids(
     citation. The `render_version >= 3` prompt asks the model to name
     the ids it relies on before its first tool call (or "none apply").
     """
+    from tools.ace_review_benchmark import assert_training_allowed
+
+    assert_training_allowed([theorem_name])
     chat, last = _final_chat(config_dir, theorem_name)
     texts: list[str] = []
     for m in chat:
@@ -830,7 +857,8 @@ _NO_UID = uuid.UUID(int=0)
 
 
 def _config_name(cfg: "ACEAdaptStepConfig", _uid: uuid.UUID) -> str:
-    return f"step{cfg.step:02d}_{cfg.role}_{cfg.bench_name}"
+    suffix = f"_round{cfg.repair_round}" if cfg.repair_round else ""
+    return f"step{cfg.step:02d}_{cfg.role}_{cfg.bench_name}{suffix}"
 
 
 def _config_dir(variant: str, name: str) -> Path:
@@ -916,6 +944,12 @@ class ACEAdaptStepConfig:
     audit_max_additions: int = 0
     """Auditor input: the rendered per-bullet provenance block and the
     additions cap."""
+    repair_round: int = 0
+    episode_guidance: str = ""
+    trajectory_override: str = ""
+    reflector_dir: str = ""
+    repair_evidence: str = ""
+    campaign_runtime: str = ""
 
     # --- inputs ---------------------------------------------------
 
@@ -978,6 +1012,8 @@ class ACEAdaptStepConfig:
             args["show_definitions"] = True
         if self.render_version != 1:
             args["render_version"] = self.render_version
+        if self.episode_guidance:
+            args["episode_guidance"] = self.episode_guidance
         return dp.RunStrategyArgs(
             strategy="prove_theorem_ace",
             args=args,
@@ -999,7 +1035,9 @@ class ACEAdaptStepConfig:
     def _reflector_args(self) -> dp.RunStrategyArgs:
         problem_file, theorem_name = self._problem()
         gen_dir = self._gen_dir()
-        trajectory = extract_trajectory(gen_dir, theorem_name)
+        trajectory = self.trajectory_override or extract_trajectory(
+            gen_dir, theorem_name
+        )
         assert _sha256(trajectory) == self.upstream_sha256, (
             f"trajectory for step {self.step} drifted from the hash"
             " recorded at config-creation time"
@@ -1053,10 +1091,14 @@ class ACEAdaptStepConfig:
             digest = reflection_digest(refl)
             return digest, digest
         _, theorem_name = self._problem()
-        trajectory = extract_trajectory(self._gen_dir(), theorem_name)
+        trajectory = self.trajectory_override or extract_trajectory(
+            self._gen_dir(), theorem_name
+        )
         return trajectory, trajectory
 
     def _refl_dir(self) -> Path:
+        if self.reflector_dir:
+            return _OMPHALOS_DIR / self.reflector_dir
         return _config_dir(
             self.variant, f"step{self.step:02d}_reflector_{self.bench_name}"
         )
@@ -1131,7 +1173,13 @@ class ACEAdaptStepConfig:
                 "error_identification": reflection.error_identification,
                 "root_cause_analysis": reflection.root_cause_analysis,
                 "correct_approach": reflection.correct_approach,
-                "key_insight": reflection.key_insight,
+                "key_insight": reflection.key_insight
+                + (
+                    "\n\nVerified episode evidence (distinguish original failure "
+                    "from later recovery):\n" + self.repair_evidence
+                    if self.repair_evidence
+                    else ""
+                ),
                 "max_new_bullets": self.max_new_bullets,
                 **contract,
                 **v3,
@@ -1223,6 +1271,10 @@ class ACEAdaptStepConfig:
         )
 
     def instantiate(self, context: object) -> dp.RunStrategyArgs:
+        if self.campaign_runtime:
+            os.environ["OMPHALOS_CAMPAIGN_CELL"] = (
+                self.variant + ":" + _config_name(self, _NO_UID)
+            )
         if self.role == "generator":
             return self._generator_args()
         if self.role == "reflector":
@@ -1399,7 +1451,7 @@ class RoleRunner[C: dp.ExperimentConfig]:
 
     def _experiment(
         self, configs: Sequence[C], needs_rocq: bool = True
-    ) -> dp.Experiment[C]:
+    ) -> ol.OmphalosExperiment[C]:
         return ol.OmphalosExperiment(
             config_class=self.config_class,
             context=dp.workspace_execution_context(__file__),
@@ -1449,6 +1501,10 @@ class RoleRunner[C: dp.ExperimentConfig]:
             old = pydantic_load(self.config_class, info["params"])
             if _config_unique_repr(old) == _config_unique_repr(c):
                 continue
+            if getattr(c, "campaign_runtime", ""):
+                raise ValueError(
+                    f"campaign input drift for {name}; use a new variant"
+                )
             target = self.config_dir(name)
             if target.exists():
                 shutil.rmtree(target)
@@ -1478,6 +1534,17 @@ class RoleRunner[C: dp.ExperimentConfig]:
             exp.resume(max_workers=max_workers, log_progress=False)
             statuses = self.statuses(names)
             failed = [n for n, s in statuses.items() if s != "done"]
+            if any(
+                "CampaignExhausted"
+                in (self.config_dir(n) / "exception.txt").read_text()
+                for n in failed
+                if (self.config_dir(n) / "exception.txt").exists()
+            ):
+                from campaign_budget import CampaignExhausted
+
+                raise CampaignExhausted(
+                    "adaptation allocation exhausted; no artifact frozen"
+                )
             if not failed:
                 return statuses
             if attempt < MAX_RETRIES:
@@ -1485,7 +1552,7 @@ class RoleRunner[C: dp.ExperimentConfig]:
                     f"  retrying {len(failed)} failed config(s)"
                     f" ({attempt + 1}/{MAX_RETRIES}): {', '.join(failed)}"
                 )
-                exp.mark_errors_as_todos()
+                exp.retry_failed(names=set(failed))
         return statuses
 
     def config_dir(self, name: str) -> Path:
@@ -1651,6 +1718,7 @@ def _make_step_config(
         environments=environments,
         provenance=provenance,
         audit_max_additions=audit_max_additions,
+        campaign_runtime=v.campaign_runtime,
     )
 
 
@@ -1955,6 +2023,141 @@ def _provenance_block(
     return "\n".join(lines)
 
 
+@dataclass
+class RepairEvidence:
+    reflection: Reflection | None
+    generator_dir: str = ""
+    reflector_dir: str = ""
+    trajectory: str = ""
+    episodes: str = ""
+    records: list[dict[str, Any]] = field(default_factory=lambda: [])
+
+
+def _repair_batch(
+    v: AdaptVariant,
+    batch: Sequence[StepPlan],
+    sha: str,
+    roles: _Roles,
+    gen_dirs: Sequence[Path | None],
+    trajectories: Sequence[str | None],
+    reflections: Sequence[Reflection | None],
+    *,
+    max_workers: int,
+) -> list[RepairEvidence]:
+    """Reflect -> fresh regeneration -> reflect, stopping on verification.
+
+    The original generator remains the measured training episode. Repairs
+    are adaptation work; their evidence and cost are separate. Every round
+    has a distinct config identity, and final curation sees every episode.
+    """
+    result = [RepairEvidence(r) for r in reflections]
+    eligible: set[int] = set()
+    for i, (directory, trajectory, reflection) in enumerate(
+        zip(gen_dirs, trajectories, reflections)
+    ):
+        if directory is None or trajectory is None or reflection is None:
+            continue
+        if read_result(directory)[0]:
+            continue
+        eligible.add(i)
+        result[i].episodes = (
+            "## Original episode\nOutcome: "
+            + read_outcome(directory)
+            + "\n"
+            + trajectory
+        )
+    for round_no in range(1, v.repair_rounds + 1):
+        if not eligible:
+            break
+        generators: dict[int, ACEAdaptStepConfig] = {}
+        for i in sorted(eligible):
+            reflection = result[i].reflection
+            assert reflection is not None
+            diagnosis = reflection_digest(reflection)
+            generators[i] = replace(
+                _make_step_config(
+                    v, "generator", batch[i], sha, _sha256(diagnosis)
+                ),
+                repair_round=round_no,
+                episode_guidance=diagnosis,
+                num_requests=v.repair_requests,
+                max_dollar_budget=v.repair_cap,
+            )
+        statuses = roles.adapt.run(
+            list(generators.values()), max_workers=max_workers
+        )
+        reflectors: dict[int, ACEAdaptStepConfig] = {}
+        recovered: set[int] = set()
+        for i, cfg in generators.items():
+            name = _config_name(cfg, _NO_UID)
+            record: dict[str, Any] = dict(
+                step=batch[i].step,
+                bench=batch[i].bench,
+                round=round_no,
+                generator=name,
+                status=statuses[name],
+            )
+            result[i].records.append(record)
+            if statuses[name] != "done":
+                eligible.discard(i)
+                continue
+            directory = roles.adapt.config_dir(name)
+            solved = read_result(directory)[0]
+            record["solved"] = solved
+            record["requests"] = read_requests(directory)
+            if solved:
+                recovered.add(i)
+            trajectory = extract_trajectory(
+                directory, ALL_PROBLEMS[batch[i].bench][1]
+            )
+            result[i].generator_dir = str(directory.relative_to(_OMPHALOS_DIR))
+            result[i].trajectory = trajectory
+            result[i].episodes += (
+                f"\n\n## Reflection before repair {round_no}\n"
+                + cfg.episode_guidance
+                + f"\n\n## Repair episode {round_no}\nOutcome: "
+                + read_outcome(directory)
+                + "\n"
+                + trajectory
+            )
+            reflectors[i] = replace(
+                _make_step_config(
+                    v,
+                    "reflector",
+                    batch[i],
+                    sha,
+                    _sha256(result[i].episodes),
+                    result[i].generator_dir,
+                ),
+                repair_round=round_no,
+                trajectory_override=result[i].episodes,
+            )
+        if reflectors:
+            statuses = roles.adapt.run(
+                list(reflectors.values()),
+                max_workers=max_workers,
+                needs_rocq=False,
+            )
+        for i, cfg in reflectors.items():
+            name = _config_name(cfg, _NO_UID)
+            reflection = (
+                load_reflection(roles.adapt.config_dir(name))
+                if statuses[name] == "done"
+                else None
+            )
+            if reflection is None:
+                # Never curate a recovered attempt using a stale diagnosis.
+                result[i].reflection = None
+                eligible.discard(i)
+            else:
+                result[i].reflection = reflection
+                result[i].reflector_dir = str(
+                    roles.adapt.config_dir(name).relative_to(_OMPHALOS_DIR)
+                )
+        eligible -= recovered
+    return result
+
+
 def execute(
     v: AdaptVariant,
     batches: Sequence[Sequence[StepPlan]],
@@ -1979,6 +2182,7 @@ def execute(
     merged_steps = 0
     evidence_digest = _Evidence()
     prov: dict[str, dict[str, Any]] = {}
+    repair_records: list[dict[str, Any]] = []
 
     for batch in batches:
         sha = store.put(pb)
@@ -2081,6 +2285,29 @@ def execute(
                         f"  {batch[i].bench}: reflector produced nothing usable"
                     )
 
+        repairs = [RepairEvidence(r) for r in reflections]
+        if v.repair_rounds:
+            repairs = _repair_batch(
+                v,
+                batch,
+                sha,
+                roles,
+                gen_dirs,
+                trajectories,
+                reflections,
+                max_workers=max_workers,
+            )
+            for i, repair in enumerate(repairs):
+                repair_records.extend(repair.records)
+                if repair.generator_dir:
+                    generator_dir[i] = repair.generator_dir
+                    reflections[i] = repair.reflection
+                    trajectories[i] = repair.episodes
+            repair_path = _OMPHALOS_DIR / _output_dir(v.name) / "repairs.yaml"
+            repair_path.write_text(
+                yaml.safe_dump(repair_records, sort_keys=False)
+            )
+
         # --- v5 evidence (curator contract 4) ----------------------
         evidence = guidance = ""
         if v.curator_contract >= 4:
@@ -2127,6 +2354,18 @@ def execute(
                     guidance=guidance,
                 )
             )
+        if v.repair_rounds:
+            cfgs_c = [
+                replace(
+                    c,
+                    reflector_dir=repairs[i].reflector_dir,
+                    repair_evidence=repairs[i].episodes,
+                    trajectory_override=repairs[i].episodes,
+                )
+                if c is not None
+                else None
+                for i, c in enumerate(cfgs_c)
+            ]
         live = [c for c in cfgs_c if c is not None]
         st = (
             roles.adapt.run(live, max_workers=max_workers, needs_rocq=False)
@@ -2674,6 +2913,14 @@ class CLI:
         n_epochs = v.epochs if epochs is None else int(epochs)
         complete = limit is None and epochs is None
         batches = plan(v, n_epochs, limit)
+        from tools.ace_review_benchmark import assert_training_allowed
+
+        assert_training_allowed([s.bench for b in batches for s in b])
+        if v.campaign_runtime:
+            from ace_review_experiment import activate_budget
+
+            activate_budget("adaptation")
+            os.environ["OMPHALOS_CAMPAIGN_CELL"] = v.name + ":embeddings"
         store = PlaybookStore(v.name)
         deduper = _make_deduper(v, store, replay=False)
         try:
@@ -2721,6 +2968,13 @@ class CLI:
             "reflector_model": v.role_model("reflector"),
             "curator_model": v.role_model("curator"),
         }
+        if v.repair_rounds:
+            provenance.update(
+                repair_rounds=v.repair_rounds,
+                repair_requests=v.repair_requests,
+                repair_cap=v.repair_cap,
+                runtime_sha256=v.campaign_runtime,
+            )
         if v.audit:
             assert v.preaudit_playbook is not None
             _freeze(

@@ -114,6 +114,13 @@ class ProposeProofScriptACE(ProposeProofScriptAgentic):
     """
 
 
+@dataclass
+class ProposeProofScriptACERepair(ProposeProofScriptACE):
+    """Fresh proof episode conditioned on the preceding reflection."""
+
+    episode_guidance: str = ""
+
+
 @strategy
 def prove_theorem_ace(
     problem_file: str,
@@ -124,6 +131,7 @@ def prove_theorem_ace(
     show_definitions: bool = False,
     render_version: int = 1,
     goal_caps: pt.GoalCaps | None = None,
+    episode_guidance: str = "",
 ) -> Strategy[Branch, dp.PromptingPolicy, ProofScript]:
     """
     ACE generator: `prove_theorem_agentic` with a playbook.
@@ -138,10 +146,13 @@ def prove_theorem_ace(
     available = sk.list_skills()
     script = yield from dp.interact(
         step=lambda prefix, _:
-            ProposeProofScriptACE(
+            (ProposeProofScriptACERepair(
+                spec, available, toolset, turn_budget, prefix, playbook,
+                render_version, episode_guidance,
+            ) if episode_guidance else ProposeProofScriptACE(
                 spec, available, toolset, turn_budget, prefix, playbook,
                 render_version,
-            ).using(dp.ambient_pp),
+            )).using(dp.ambient_pp),
         process=lambda s, _:
             check_proof_assisted(problem_file, theorem_name, s, goal_caps)
               .using(dp.just_compute),

@@ -420,6 +420,9 @@ class Turn:
 
 
 def turns_of_cache(cache: Path) -> list[Turn]:
+    from ace_review_benchmark import assert_training_allowed
+
+    assert_training_allowed([cache.parent.name.split("__")[0]])
     loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
     raw: Any = yaml.load(cache.read_text(), Loader=loader)
     turns: list[Turn] = []
@@ -598,6 +601,9 @@ def transitions_of_cache(cache: Path) -> list[Transition]:
     feedback for verdict t is the last user/tool message of the next
     generator request.
     """
+    from ace_review_benchmark import assert_training_allowed
+
+    assert_training_allowed([cache.parent.name.split("__")[0]])
     loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
     raw: Any = yaml.load(cache.read_text(), Loader=loader)
     events: list[tuple[str, Any]] = []
