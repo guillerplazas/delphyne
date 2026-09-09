@@ -9,13 +9,13 @@ $$1.7 and 2.5 h (screen tier 40 cells ≈ 1 h, select tier +40 cells
 ## Classes
 
 - **A — offline analysis**: answerable from archived cells and caches
-  with the existing tools (`tools/ace_cap_report.py`,
-  `tools/budget_ablation.py`, `tools/replay_with_budget.py`,
-  `tools/failure_analysis.py`). Zero spend; the outcome is always an
+  with the existing tools (`tools/reports/ace_cap_report.py`,
+  `tools/analysis/budget_ablation.py`, `tools/analysis/replay_with_budget.py`,
+  `tools/analysis/failure_analysis.py`). Zero spend; the outcome is always an
   artifact plus a recommendation (INSPECT).
 - **B — knob**: an existing config field, flag, constant or template
   switch reachable by subclassing `ladon.bench.LadonConfig` in the arm
-  script (precedent: `experiments/x_goalcap_experiment.py` flips
+  script (precedent: `experiments/ablations/x_goalcap_experiment.py` flips
   `goal_caps`). About 60 turns of a Sonnet session.
 - **C — design**: new policy or search logic, a new tool, a new prompt
   block behind a version field, verifier changes. About 120 turns of

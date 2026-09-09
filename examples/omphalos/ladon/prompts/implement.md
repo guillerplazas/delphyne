@@ -20,8 +20,8 @@ $plan_entry
    docstring: idea, the one change, expected effect, expected spend).
 4. Check: `ruff format $script` and every file you touched, `ruff
    check` on them, `make test-unit` (in `examples/omphalos`), `make
-   pyright` (repository root). If you touched `pytanque_utils.py`,
-   `rocq_server.py` or `prove_agentic.py`: also `make test-rocq` and
+   pyright` (repository root). If you touched `runtime/pytanque_utils.py`,
+   `runtime/rocq_server.py` or `prove_agentic.py`: also `make test-rocq` and
    `make bridge-parity`.
 5. Smoke: `LADON_SMOKE=1 LADON_SEEDS=0 python $script run
    --max_workers=2 --wait` — three trainX cells (about a cent). Then

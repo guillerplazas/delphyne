@@ -44,7 +44,7 @@ ladon-partition:
 # The canonical baseline on ladonX (Ladon launches it itself when
 # missing; by hand for a fresh baseline after a canonical change).
 sweep-x-ladon:
-	python experiments/x_ladon_experiment.py run --max_workers=4 --wait
+	python -m experiments.ladon.x_ladon_experiment run --max_workers=4 --wait
 
 summary-x-ladon:
-	python experiments/x_ladon_experiment.py force_summary --add-timing
+	python -m experiments.ladon.x_ladon_experiment force_summary --add-timing

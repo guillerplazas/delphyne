@@ -11,12 +11,12 @@ Metrics (the house conventions, `examples/omphalos/CLAUDE.md`):
 
 - **Primary**: solves, paired per (problem, seed) cell against the
   baseline; exact sign test on the discordant cells
-  (`tools/decision_audit.sign_test`). A platform-failed cell scores
+  (`tools.analysis.decision_audit.sign_test`). A platform-failed cell scores
   unsolved (HINTS #59); an arm solve counts only if the pristine
   verifier accepted the recorded proof (`ladon/reverify.py`).
 - **Secondary**: spend among the jointly-solved cells, cheaper/dearer
   with a 2 % tie band, median ratio, sign test — the shape of
-  `tools/ace_report.py` (lines 143-195), re-implemented here because
+  `tools/reports/ace_report.py` (lines 143-195), re-implemented here because
   that script keeps it inline in `main()`.
 - Never pooled sums: the cost distribution is heavy-tailed and pooled
   signs flip between seeds.
@@ -27,27 +27,28 @@ never implemented by the loop). A screen-tier judgement (seed 0 only)
 returns PROMOTE unless the arm is clearly harmful.
 """
 
+from runtime.paths import OMPHALOS_ROOT
+
 # pyright: strict
 
 import statistics
-import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-_OMPHALOS_DIR = Path(__file__).resolve().parent.parent
-for _sub in ("", "experiments", "tools"):
-    _p = str(_OMPHALOS_DIR / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
 
-from cell_records import CellRecord, cells_of_run  # noqa: E402
-from decision_audit import (  # noqa: E402
-    MIN_DISCORDANT_FOR_SIG,
-    SIGNIFICANCE,
+from tools.analysis.cell_records import CellRecord, cells_of_run  # noqa: E402
+from tools.analysis.decision_audit import (  # noqa: E402
     sign_test,
 )
+
+_OMPHALOS_DIR = OMPHALOS_ROOT
+
+# Deliberately pinned: Guille deferred Ladon's statistical migration on
+# 2026-09-09 until theorem/family clustering is corrected (HINTS #120).
+SIGNIFICANCE = 0.05
+MIN_DISCORDANT_FOR_SIG = 6
 
 TIE = 0.02
 """Relative band inside which two jointly-solved cells tie on spend."""

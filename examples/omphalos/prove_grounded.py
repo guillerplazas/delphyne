@@ -16,15 +16,15 @@ from delphyne.stdlib.policies import search_policy
 from delphyne.stdlib.streams import SpendingDeclined, spend_on
 from delphyne.stdlib.queries import SelectedExample, ExampleSelector
 
-import ace_grounded as ag
-import pytanque_utils as pt
-import skills as sk
-from ace_evidence import import_signature, unknown_identifier
-from model_registry import ApiType, OmphalosReasoningEffort, make_model
+import ace.ace_grounded as ag
+import runtime.pytanque_utils as pt
+import runtime.skills as sk
+from ace.ace_evidence import import_signature, unknown_identifier
+from runtime.model_registry import ApiType, OmphalosReasoningEffort, make_model
 from prove_agentic import ReadSkill, SearchRocq
 from prove_ace import _ace_examples  # pyright: ignore[reportPrivateUsage]
-from stall import stalled, view_of_feedback
-from tool_budget import ToolLimits, clip_utf8
+from runtime.stall import stalled, view_of_feedback
+from runtime.tool_budget import ToolLimits, clip_utf8
 
 
 @search_policy

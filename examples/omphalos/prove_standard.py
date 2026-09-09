@@ -18,8 +18,8 @@ from typing import Never
 import delphyne as dp
 from delphyne import Branch, Compute, Strategy, dfs, strategy
 
-import pytanque_utils as pt
-from model_registry import ApiType, OmphalosReasoningEffort, make_model
+import runtime.pytanque_utils as pt
+from runtime.model_registry import ApiType, OmphalosReasoningEffort, make_model
 
 # fmt: off
 

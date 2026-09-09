@@ -100,10 +100,10 @@ unchanged. Paid adaptation cost: $0.0082396 (seven HTTP attempts).
 
 | Change | Main implementation | Verification |
 |---|---|---|
-| Atomic advice admission | `ace_grounded.py`: replay prefix, locate references, check the exact action; render only checked action | Mixed valid/invalid clauses and unchanged goals rejected; eight trainX transitions checked in live Rocq |
+| Atomic advice admission | `ace/ace_grounded.py`: replay prefix, locate references, check the exact action; render only checked action | Mixed valid/invalid clauses and unchanged goals rejected; eight trainX transitions checked in live Rocq |
 | Composed adaptation | `prove_grounded.py`: reflector → checked correction → curator → auditor; immutable states, batch and iterate wrappers | Mock-oracle/live-Rocq checks; four paid episodes including three YAML failures |
 | Focused decisions | Reference, bridge and structure query types; new grounded demos; current-state inspection | Demos parse; focused routing regression; bridge demos not yet covered by evidence |
-| Whole-operation control | `tool_budget.py`, opt-in Rocq bridge integration, shared `rocq_seconds` admission | Zero-budget test, 12/12 bridge tests, 18/18 sampled legacy parity |
+| Whole-operation control | `runtime/tool_budget.py`, opt-in Rocq bridge integration, shared `rocq_seconds` admission | Zero-budget test, 12/12 bridge tests, 18/18 sampled legacy parity |
 | Repair and restart | One local repair, then one new plan; existing seenstate k=4 trigger, no budget reset | Repeated-failure regression stops after 11 proposals under one shared budget |
 | Money control | Opt-in `estimate_budget` price bound plus existing process-safe campaign ledger | Positive preflight-price regression; paid contrast in fixed training panel |
 | Measurement | Complete cell identities, receipt costs, family sign-flip tests, 90% descriptive intervals | Mixed-arm/seed label and clustered inference regressions |

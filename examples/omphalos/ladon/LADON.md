@@ -15,15 +15,15 @@ abandoned.
 - Edit files only under `examples/omphalos/`. Read anything you like
   (the stdlib under `src/delphyne` is readable, never writable).
 - **Frozen, never modify**: `benchmarks/*.txt`, `ladon/**` (except your
-  own night directory), `tools/decision_audit.py`, `tools/ace_report.py`,
-  `tools/cell_records.py`, `tools/reprice.py`, `tools/make_*.py`,
-  `tools/test_*.py`, `experiments/minif2f_x.py`,
-  `experiments/miniF2F_bench.py`, `experiments/x_*_experiment.py`,
+  own night directory), `tools/analysis/decision_audit.py`, `tools/reports/ace_report.py`,
+  `tools/analysis/cell_records.py`, `tools/analysis/reprice.py`, `tools/make_*.py`,
+  `tools/test_*.py`, `experiments/common/minif2f_x.py`,
+  `experiments/common/miniF2F_bench.py`, `experiments/x_*_experiment.py`,
   `experiments/playbooks/`, `experiments/output/` (every directory that
   already exists), `miniF2F/`, `rocq_skills_data/`, `commands/`,
   `pyrightconfig.json`, `delphyne.yaml`, `README.md`, `PROGRESS.md`,
-  `HINTS.md`, `LINKS.md`, `CLAUDE.md`, `papers/`, the pricing table in
-  `model_registry.py`. `Makefile` and `.gitignore` are append-only.
+  `HINTS.md`, `docs/LINKS.md`, `CLAUDE.md`, `papers/`, the pricing table in
+  `runtime/model_registry.py`. `Makefile` and `.gitignore` are append-only.
 - Do not create or modify any experiment output directory other than
   the arm and smoke directories Ladon assigned to you.
 - **Never launch the full experiment** (ladonX). Ladon launches it
@@ -38,17 +38,22 @@ abandoned.
   `experiments/output/ace_x_test_*`); testX is the clean partition and
   its failures are never mined.
 - Never edit a Jinja template while a run is live — templates are read
-  at render time (`python tools/stop_launches.py list` must print
+  at render time (`python -m tools.maintenance.stop_launches list` must print
   nothing before you touch `prompts/`).
 - **One change per arm.** Pre-register the metric and the decision
   rule in the arm script's docstring before the smoke runs.
 
-## How omphalos measures (so your pre-registration means something)
+## Ladon's deferred measurement rule
+
+These are the legacy loop rules, pinned at p<0.05 pending the grouping fix
+in HINTS #120. Future non-Ladon work uses p<0.10 and theorem/family grouping.
+The discordance count below is a significance minimum, not statistical power.
+
 
 - Primary metric: paired solves per (problem, seed) cell against the
   canonical baseline (`experiments/output/x_ladon_agentic`, two seeds,
   80 cells), exact sign test on the discordant cells. Power floor: six
-  one-sided discordant cells for p < 0.05; identical configurations
+  all-favorable discordant cells for two-sided p < 0.05; identical configurations
   disagree on 1–3 of 20 cells run to run. Never read pooled sums.
 - Secondary metric: spend among the jointly-solved cells (median
   ratio, sign test at a 2 % tie band), costs recomputed from tokens at
@@ -63,18 +68,25 @@ abandoned.
 
 ## Conventions
 
+- HINTS contains unresolved work only. KEEP/DISCARD move to the local
+  `docs/CLOSED_HINTS.md` archive; INSPECT/HUMAN stay pending. Keep IDs stable
+  and allocate new numbers across both files. PROGRESS holds the important
+  dated outcomes. Neither active notes nor their archive may be edited by
+  an arm or during a night in flight.
+
+
 - `# pyright: strict`, ruff at 79 columns, docstring-first modules that
   say *why*. `make pyright` at the repository root and `make test-unit`
   in `examples/omphalos` must pass before you finish.
 - New knob: subclass `ladon.bench.LadonConfig` **in your arm script**
   with a defaulted dataclass field, pass it through `instantiate`
   (precedent: `minif2f_x.XAgenticConfig.goal_caps` and
-  `experiments/x_goalcap_experiment.py`). Never add fields to the
+  `experiments/ablations/x_goalcap_experiment.py`). Never add fields to the
   frozen config classes.
 - Prompt changes: keep the frozen strategies byte-identical — put new
   text behind a new query field or template variable so the archived
   caches replay (the KEEP gate replays the cached smoke suites).
-- Bridge changes (`pytanque_utils.py`, `rocq_server.py`): `make
+- Bridge changes (`runtime/pytanque_utils.py`, `runtime/rocq_server.py`): `make
   test-rocq` and `make bridge-parity` must stay green.
 - LLM caches are keyed by the rendered prompt and located by config
   directory: prompt changes invalidate them, identifier renames do not.

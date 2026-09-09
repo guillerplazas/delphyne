@@ -11,9 +11,9 @@ $plan_entry
 ## Your task
 
 This hint is answerable offline: from archived cells, caches and the
-existing tools (`tools/ace_cap_report.py`, `tools/budget_ablation.py`,
-`tools/replay_with_budget.py`, `tools/failure_analysis.py`,
-`tools/decision_audit.py`, `tools/cell_records.py`) — no API spend, no
+existing tools (`tools/reports/ace_cap_report.py`, `tools/analysis/budget_ablation.py`,
+`tools/analysis/replay_with_budget.py`, `tools/analysis/failure_analysis.py`,
+`tools/analysis/decision_audit.py`, `tools/analysis/cell_records.py`) — no API spend, no
 Rocq launch. Do the analysis, write the artifact, and stop.
 
 1. Run the relevant tools (read their module docstrings first). Write

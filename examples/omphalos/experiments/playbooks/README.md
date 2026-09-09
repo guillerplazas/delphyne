@@ -1,6 +1,6 @@
 # Frozen ACE playbooks
 
-Artifacts of `experiments/ace_adaptation.py` (ACE context adaptation,
+Artifacts of `experiments/ace/ace_adaptation.py` (ACE context adaptation,
 arXiv:2510.04618, adapted to miniF2F-Rocq — see that script's
 docstring for the method and deviations).
 
@@ -68,7 +68,7 @@ playbook must outlive the caches of the runs that produced it.
   (the reference's attribution channel), frozen by `make
   ace-x4-val-offline`. `steps.csv` schema 3 adds `cited_count` and
   `tags_dropped`.
-- Hashes of the other frozen files (migrated from HANDOFF.md, 2026-09-02):
+- Hashes of the other frozen files (recorded 2026-09-02):
   v2 `ace_x_offline.yaml` (sha `1ac8a092`, 49 bullets),
   `ace_x_noreflect.yaml` (`d56da056`, 52), `ace_x_mono.yaml`
   (`fa985e70`, 40), `ace_x_offline_e3.yaml` (`07ee107d`, 44); v3
@@ -80,7 +80,7 @@ playbook must outlive the caches of the runs that produced it.
 
 - `ace_x3_strong.yaml` — `x3-offline` with gpt-5.6-terra as Reflector
   and as every curation role (curator, reducer); the Generator stays
-  luna (HINTS #49's minimal pair). Frozen 2026-09-02 (sha `b596e7df`,
+  luna (the strong-role minimal pair (closed hint #49)). Frozen 2026-09-02 (sha `b596e7df`,
   28 bullets, ~2.4k tokens).
 - `ace_x5_offline_preaudit.yaml` / `ace_x5_offline.yaml` — v5: the
   playbook after the 40th step, and the same playbook after the one
@@ -105,7 +105,7 @@ playbook must outlive the caches of the runs that produced it.
   section, content (copied, so the file is self-contained and an
   evaluation cell replays without reading the playbook), `classes`,
   `names`, `patterns`, `goal_patterns`, plus the playbook's sha256.
-  Written once per playbook by `experiments/ace_triggers_experiment.py`
+  Written once per playbook by `experiments/ace/ace_triggers_experiment.py`
   (one terra call), validated and replayed over the trainX rejections;
   its own sha256 is part of every `ACETriggeredConfig` cell's identity
   (arm `acet-<playbook sha8>-<table sha8>-k<K>-…`). Never edit in
@@ -122,7 +122,7 @@ playbook must outlive the caches of the runs that produced it.
 - `ace_x6_repairs.yaml` (sha `1d2bc630`, 2026-09-05, 31 bullets, ~2.6k
   tokens) — `ace_x5_offline.yaml` plus six **repair bullets** written
   by gpt-5.6-terra from the verifier-accepted repairs mined on the
-  trainX runs (`ace_repairs.py`, `experiments/ace_repairs_experiment.
+  trainX runs (`ace/ace_repairs.py`, `experiments/ace_repairs_experiment.
   py`; 379 repairs from 120 cells), both referenced lemmas grounded.
   Provenance sidecar: writer config, reasoning, per-bullet rationales,
   grounding outcome. `ace_x6_repairs.triggers.yaml` (`30d3e288`) = the
@@ -134,7 +134,7 @@ playbook must outlive the caches of the runs that produced it.
 ## 2026-09-06 — the deterministic digest table
 
 - `ace_digest_table.yaml` (sha `ca62b40b`, 8 bullets, ~455 tokens) —
-  **no LLM**: `tools/make_digest_table.py` reads the trainX rejections
+  **no LLM**: `tools/data/make_digest_table.py` reads the trainX rejections
   (`x_train_agentic` + the x5 chain's generators) and writes one bullet
   per identifier Rocq did not know at least three times (`norm_num`,
   `positivity`, `omega`, `by_contra`, `interval_cases`,

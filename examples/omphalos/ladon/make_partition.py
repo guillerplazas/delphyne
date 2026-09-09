@@ -12,7 +12,7 @@ The rule, in order (all executable; `--check` proves the file matches):
 
 1. **Universe** — the X universe (`miniF2F/valid/` + `miniF2F/test/`
    minus the original partitions, the ACE adaptation pool and the
-   demos, `parse` screen; `tools/make_partitions.py`) minus the three
+   demos, `parse` screen; `tools/data/make_partitions.py`) minus the three
    X partitions themselves. 205 problems on 2026-09-02.
 2. **Family mix** — `LADON_MIX`: every remaining `imo` (5) and `aime`
    (3), then `amc` 14, `mathd/algebra` 9, `mathd/numbertheory` 9 = 40.
@@ -27,7 +27,7 @@ The rule, in order (all executable; `--check` proves the file matches):
    that each burn the whole budget.
 
 The three X files are not read for anything but exclusion and are
-never rewritten here; `tools/make_partitions.py --check` stays the
+never rewritten here; `tools/data/make_partitions.py --check` stays the
 guard for them.
 
 Usage:
@@ -36,30 +36,28 @@ Usage:
     python -m ladon.make_partition --report   # print, write nothing
 """
 
+from runtime.paths import OMPHALOS_ROOT
+
 # pyright: strict
 
 import argparse
-import sys
 from collections.abc import Mapping, Sequence
 from datetime import date
 from pathlib import Path
 
-_OMPHALOS_DIR = Path(__file__).resolve().parent.parent
-for _sub in ("", "tools"):
-    _p = str(_OMPHALOS_DIR / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
 
-from make_partitions import (  # noqa: E402
+from tools.data.make_partitions import (  # noqa: E402
     X_FILES,
     _same_modulo_date,  # pyright: ignore[reportPrivateUsage]
     excluded_stems,
 )
-from make_pool import (  # noqa: E402
+from tools.data.make_pool import (  # noqa: E402
     _candidates,  # pyright: ignore[reportPrivateUsage]
     _category,  # pyright: ignore[reportPrivateUsage]
     _quotas,  # pyright: ignore[reportPrivateUsage]
 )
+
+_OMPHALOS_DIR = OMPHALOS_ROOT
 
 LADON_FILE = "ladon/ladonX.txt"
 

@@ -19,11 +19,13 @@ frozen X registry (`minif2f_x.py`, `miniF2F_bench.py` — an arm adds a
 knob by subclassing `ladon.bench.LadonConfig` in its own script), the
 benchmark and vendored trees, the cached smoke suites, the local
 knowledge files, the frozen playbooks, and Ladon itself. Block-frozen:
-the pricing table in `model_registry.py`. Append-only: `Makefile`,
+the pricing table in `runtime/model_registry.py`. Append-only: `Makefile`,
 `.gitignore`. Outputs: every pre-existing directory under
 `experiments/output/` must be untouched and a new one must carry the
 night's arm name.
 """
+
+from runtime.paths import OMPHALOS_ROOT
 
 # pyright: strict
 
@@ -36,25 +38,27 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-OMPHALOS = Path(__file__).resolve().parent.parent
+OMPHALOS = OMPHALOS_ROOT
 REPO = OMPHALOS.parent.parent
 REL = "examples/omphalos"
 
 FROZEN_GLOBS: tuple[str, ...] = (
     "benchmarks/*.txt",
-    "tools/decision_audit.py",
-    "tools/ace_report.py",
-    "tools/cell_records.py",
-    "tools/reprice.py",
-    "tools/make_partitions.py",
-    "tools/make_pool.py",
-    "tools/test_*.py",
-    "experiments/minif2f_x.py",
-    "experiments/miniF2F_bench.py",
-    "experiments/x_ladon_experiment.py",
-    "experiments/x_validation_experiment.py",
-    "experiments/x_test_experiment.py",
-    "experiments/x_train_experiment.py",
+    "tools/analysis/decision_audit.py",
+    "tools/reports/ace_report.py",
+    "tools/analysis/cell_records.py",
+    "tools/analysis/reprice.py",
+    "tools/data/make_partitions.py",
+    "tools/data/make_pool.py",
+    "tests/*",
+    "runtime/paths.py",
+    "docs/*",
+    "experiments/common/minif2f_x.py",
+    "experiments/common/miniF2F_bench.py",
+    "experiments/ladon/x_ladon_experiment.py",
+    "experiments/baselines/x_validation_experiment.py",
+    "experiments/baselines/x_test_experiment.py",
+    "experiments/baselines/x_train_experiment.py",
     "experiments/playbooks/*",
     "experiments/playbooks/*/*",
     "miniF2F/*",
@@ -65,23 +69,23 @@ FROZEN_GLOBS: tuple[str, ...] = (
     "README.md",
     "PROGRESS.md",
     "HINTS.md",
-    "LINKS.md",
+    "docs/LINKS.md",
     "CLAUDE.md",
     "AGENTS.md",
     ".codex/*",
     "memory/*",
-    "master_arbeit_plan.md",
+    "docs/thesis_proposal.md",
     "papers/*",
     "ladon/*",
 )
 FROZEN_EXCEPT: tuple[str, ...] = ("ladon/nights/*",)
 APPEND_ONLY: tuple[str, ...] = ("Makefile", ".gitignore")
 BLOCK_FROZEN: dict[str, tuple[str, str]] = {
-    "model_registry.py": ("# fmt: off", "# fmt: on"),
+    "runtime/model_registry.py": ("# fmt: off", "# fmt: on"),
 }
 VERIFIER_FILES: tuple[str, ...] = (
-    "pytanque_utils.py",
-    "rocq_server.py",
+    "runtime/pytanque_utils.py",
+    "runtime/rocq_server.py",
     "prove_agentic.py",
 )
 SNAPSHOT_EXCLUDE: frozenset[str] = frozenset(
@@ -108,7 +112,7 @@ ARM_DIR_RE = re.compile(
     r"^ladon_\d{4}-\d{2}-\d{2}(-[a-z0-9]+)?_h\d+_(agentic|smoke)$"
 )
 ARM_SCRIPT_RE = re.compile(
-    r"^experiments/ladon_\d{4}-\d{2}-\d{2}(-[a-z0-9]+)?_h\d+_experiment\.py$"
+    r"^experiments/ladon/ladon_\d{4}-\d{2}-\d{2}(-[a-z0-9]+)?_h\d+_experiment\.py$"
 )
 
 

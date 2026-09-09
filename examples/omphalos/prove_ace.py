@@ -46,11 +46,15 @@ import delphyne as dp
 from delphyne import Branch, Compute, Strategy, dfs, strategy
 from delphyne.stdlib.queries import ExampleSelector, SelectedExample
 
-import pytanque_utils as pt
-import skills as sk
-from ace_evidence import GroundingVerdict, grounding_verdict, locate_command
-from ace_playbook import AddOp, AuditDecision, BulletTag, RewriteBullet
-from ace_triggers import (
+import runtime.pytanque_utils as pt
+import runtime.skills as sk
+from ace.ace_evidence import (
+    GroundingVerdict,
+    grounding_verdict,
+    locate_command,
+)
+from ace.ace_playbook import AddOp, AuditDecision, BulletTag, RewriteBullet
+from ace.ace_triggers import (
     DEFAULT_MAX_HINTS,
     DEFAULT_SELECTION_RULE,
     Hint,
@@ -58,7 +62,7 @@ from ace_triggers import (
     parse_table,
     select_hints,
 )
-from model_registry import ApiType, OmphalosReasoningEffort, make_model
+from runtime.model_registry import ApiType, OmphalosReasoningEffort, make_model
 from prove_agentic import (
     InspectAt,
     ProposeProofScriptAgentic,
@@ -94,7 +98,7 @@ class ProposeProofScriptACE(ProposeProofScriptAgentic):
     the class name, so the frozen `ProposeProofScriptAgentic` prompts
     and caches cannot be perturbed by anything this class does. The
     ACE templates `{% include %}` the agentic ones and append a
-    playbook section (see `prompts/ProposeProofScriptACE.system.jinja`).
+    playbook section (see `prompts/ace/generation/ProposeProofScriptACE.system.jinja`).
 
     `playbook` is the *rendered* playbook (`Playbook.render_markdown`
     for v1, `Playbook.render_prompt` for v2), not a file path: the
@@ -290,7 +294,7 @@ class ReflectOnTrajectory(dp.Query[Reflection]):
     keys must not depend on external files): `outcome` is the verdict
     line ("SOLVED ..." / "NOT SOLVED ..."), `playbook` the rendered
     markdown with bullet ids, `trajectory` the rendered transcript of
-    the attempt (see `experiments/ace_adaptation.py` for the exact
+    the attempt (see `experiments/ace/ace_adaptation.py` for the exact
     rendering). There are no ground-truth labels in this domain; the
     Rocq verifier's feedback inside the trajectory is the only
     supervision (the paper's "offline, no GT labels" setting).
@@ -935,7 +939,7 @@ class AssignTriggers(dp.Query[TriggerAssignment]):
     names Rocq did not know, the failing tactic heads). Run once per
     playbook, by a stronger model than the generator if wanted; the
     answer is validated and frozen by
-    `experiments/ace_triggers_experiment.py`.
+    `experiments/ace/ace_triggers_experiment.py`.
     """
 
     playbook: str

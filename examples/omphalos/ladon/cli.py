@@ -23,6 +23,8 @@ verdicts are never followed up by the loop: they are marked "inspect
 with Fable" for a human-driven session (Guille's rule, 2026-09-02).
 """
 
+from runtime.paths import OMPHALOS_ROOT
+
 # pyright: strict
 
 import json
@@ -45,14 +47,9 @@ from typing import Any, cast
 import fire  # type: ignore
 import yaml
 
-_OMPHALOS_DIR = Path(__file__).resolve().parent.parent
-for _sub in ("", "experiments", "tools"):
-    _p = str(_OMPHALOS_DIR / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
 
-import omphalos_launch as ol  # noqa: E402
-import stop_launches as sl  # noqa: E402
+import experiments.common.omphalos_launch as ol  # noqa: E402
+import tools.maintenance.stop_launches as sl  # noqa: E402
 
 from ladon import bench  # noqa: E402
 from ladon import claude_driver as C  # noqa: E402
@@ -64,6 +61,8 @@ from ladon import reverify as RV  # noqa: E402
 from ladon import state as S  # noqa: E402
 from ladon import verdict as V  # noqa: E402
 
+_OMPHALOS_DIR = OMPHALOS_ROOT
+
 LADON_DIR = _OMPHALOS_DIR / "ladon"
 NIGHTS_DIR = LADON_DIR / "nights"
 LEDGER = LADON_DIR / "ledger.tsv"
@@ -72,7 +71,8 @@ PROMPTS = LADON_DIR / "prompts"
 SYSTEM_FILE = LADON_DIR / "LADON.md"
 PROGRESS = _OMPHALOS_DIR / "PROGRESS.md"
 HINTS = _OMPHALOS_DIR / "HINTS.md"
-BASELINE_SCRIPT = _OMPHALOS_DIR / "experiments" / "x_ladon_experiment.py"
+CLOSED_HINTS = "docs/CLOSED_HINTS.md"
+BASELINE_SCRIPT = _OMPHALOS_DIR / "experiments/ladon/x_ladon_experiment.py"
 BASELINE_DIR = _OMPHALOS_DIR / bench.BASELINE_DIR
 DRY_BASELINE_DIR = _OMPHALOS_DIR / "experiments" / "output" / "x_train_agentic"
 COMMANDS_DIR = _OMPHALOS_DIR / "commands"
@@ -395,7 +395,7 @@ class Ladon:
         return DRY_BASELINE_DIR if self.night.dry else BASELINE_DIR
 
     def knowledge_file(self, name: str) -> Path:
-        """`PROGRESS.md` / `HINTS.md`, or their dry-night copies."""
+        """Knowledge documents, including the archive, or dry-night copies."""
         real = _OMPHALOS_DIR / name
         if not self.night.dry:
             return real
@@ -408,7 +408,7 @@ class Ladon:
     def arm_names(self, n: int) -> tuple[str, str, str]:
         stem = f"ladon_{self.night.date}_h{n}"
         return (
-            f"experiments/{stem}_experiment.py",
+            f"experiments/ladon/{stem}_experiment.py",
             f"experiments/output/{stem}_agentic",
             f"experiments/output/{stem}_smoke",
         )
@@ -1586,7 +1586,12 @@ class Ladon:
         if new_hints:
             hints_file = self.knowledge_file("HINTS.md")
             hints_file.write_text(
-                H.append_hints(hints_file.read_text(), n.date, new_hints)
+                H.append_hints(
+                    hints_file.read_text(),
+                    n.date,
+                    new_hints,
+                    closed_text=self.knowledge_file(CLOSED_HINTS).read_text(),
+                )
             )
         bullet = textwrap.fill(
             " ".join(str(h.evaluation.get("progress_bullet", "")).split()),
@@ -1605,10 +1610,19 @@ class Ladon:
 
     def mark_hint(self, k: int, marker: str) -> None:
         hints_file = self.knowledge_file("HINTS.md")
+        closed_file = self.knowledge_file(CLOSED_HINTS)
         text = hints_file.read_text()
-        if H.find_hint(text, k) is None:
-            return
-        hints_file.write_text(H.mark_hint(text, k, marker.replace("]", ")")))
+        closed = closed_file.read_text()
+        text, closed = H.record_outcome(
+            text, closed, k, marker.replace("]", ")")
+        )
+        # Archive first: a crash between replacements leaves a recoverable
+        # duplicate, never a lost record. record_outcome handles that retry.
+        for path, content in ((closed_file, closed), (hints_file, text)):
+            if path.read_text() != content:
+                temporary = path.with_suffix(path.suffix + ".tmp")
+                temporary.write_text(content)
+                temporary.replace(path)
 
     # ---- gates and commit ------------------------------------------------
 

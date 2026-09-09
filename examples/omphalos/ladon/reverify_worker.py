@@ -12,6 +12,7 @@ first on `sys.path`, and refuses to run if `pytanque_utils` or
 # pyright: strict
 
 import argparse
+import importlib
 import json
 import os
 import signal
@@ -37,13 +38,22 @@ def main() -> int:
     ap.add_argument("--timeout", type=int, default=900)
     args = ap.parse_args()
     pristine = Path(args.pristine).resolve()
-    if not (pristine / "pytanque_utils.py").exists():
-        print(f"no pytanque_utils.py under {pristine}", file=sys.stderr)
+    module_prefix = (
+        "runtime." if (pristine / "runtime/pytanque_utils.py").exists() else ""
+    )
+    if not (
+        pristine / (module_prefix.replace(".", "/") + "pytanque_utils.py")
+    ).exists():
+        print(
+            f"no runtime/pytanque_utils.py under {pristine}", file=sys.stderr
+        )
         return 2
     sys.path.insert(0, str(pristine))
     os.chdir(pristine)
-    import pytanque_utils as pt  # noqa: E402
-    import rocq_server  # noqa: E402
+    # Older frozen night commits use the pre-package layout. In either
+    # case both checker modules must resolve inside this pristine tree.
+    pt: Any = importlib.import_module(module_prefix + "pytanque_utils")
+    rocq_server: Any = importlib.import_module(module_prefix + "rocq_server")
 
     for mod in (pt, rocq_server):
         f = Path(str(mod.__file__)).resolve()

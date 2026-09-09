@@ -5,7 +5,8 @@ hints from `HINTS.md`, implements each as one isolated experiment arm,
 measures the arm against the canonical pipeline with the house
 statistics, and decides **KEEP / DISCARD / INSPECT / HUMAN**. A KEEP is
 committed as a single `Hint N: …` commit signed by you and Ladon;
-everything is written to `PROGRESS.md`, `HINTS.md`, a ledger and a
+outcomes go to `PROGRESS.md` and `docs/CLOSED_HINTS.md`; unresolved work
+stays in `HINTS.md`, alongside a ledger and a
 morning report. Nothing needs your input until the morning.
 
 Named after the dragon that never slept while guarding the garden.
@@ -52,7 +53,22 @@ OpenAI, $25 Claude estimate, 4 Rocq workers. A hint you pin with
 So a night fits about three arms. Offline hints (class A) cost nothing
 and always end as INSPECT with an artifact.
 
+## Hint lifecycle
+
+`HINTS.md` contains unresolved work only. KEEP and DISCARD move the entry to
+`docs/CLOSED_HINTS.md` with its original ID; INSPECT/HUMAN remain pending.
+PROGRESS records the research outcome. New IDs exceed the maximum in both
+files. Archival saves the closed record first and tolerates an interrupted
+retry. Dry nights edit copies of all three documents. Both interactive
+harnesses follow the same convention.
+
 ## The decision rule (pre-registered, `ladon/verdict.py`)
+
+Guille deferred Ladon's alpha/grouping migration on 2026-09-09 (HINTS #120).
+Its existing p<0.05 rules stay pinned. Repeated seeds are still pooled here;
+do not present these legacy verdicts as family-clustered confirmation.
+Future non-Ladon decisions use p<0.10 through the grouped evaluator.
+
 
 Paired per (problem, seed) against `experiments/output/x_ladon_agentic`:
 
@@ -130,7 +146,7 @@ the patch under the night directory.
 - `make ladon-selftest` (≈ 1 min): preflight, one structured Sonnet
   call, one archived proof re-checked in a pristine worktree.
 - `make ladon-dry` (≈ $0.05): a synthetic hint through every
-  transition; `PROGRESS.md` / `HINTS.md` edits go to copies under the
+  transition; `PROGRESS.md` / `HINTS.md` / `docs/CLOSED_HINTS.md` edits go to copies under the
   night directory; nothing is committed.
 - `make ladon-resume` continues the latest night after a crash, a
   usage-limit halt or a reboot; every step is idempotent.
@@ -145,5 +161,5 @@ the patch under the night directory.
   every session turns; `--strict_permissions` restores the allowlist.
 - `--no_analysis` asks the planner for arms only (no class A) — for a
   night meant to exercise the arm-to-commit path.
-- Never edit `HINTS.md` while a night is running (Ladon rewrites the
+- Never edit HINTS, PROGRESS or CLOSED_HINTS while a night is running (Ladon rewrites the
   entry it judges); the rest of the file is untouched.

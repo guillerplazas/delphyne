@@ -2,7 +2,7 @@
 Re-verification of an arm's claimed solves by pristine code.
 
 A hint may legitimately touch the verifier, the bridge or the strategy
-(class B/C work on `pytanque_utils.py` is exactly what HINTS #64
+(class B/C work on `runtime/pytanque_utils.py` is exactly what HINTS #64
 asks for) — and a hint that weakens the checker would manufacture
 solves the paired test cannot tell from real ones. So before a
 verdict, every proof script the arm recorded as a success is replayed
@@ -17,6 +17,8 @@ process (`ladon/reverify_worker.py`) whose `sys.path[0]` is the
 pristine tree, under one machine-wide Rocq stream slot so it queues
 behind launches like any other Rocq consumer.
 """
+
+from runtime.paths import OMPHALOS_ROOT
 
 # pyright: strict
 
@@ -33,15 +35,12 @@ from typing import Any, cast
 
 import yaml
 
-_OMPHALOS_DIR = Path(__file__).resolve().parent.parent
-for _sub in ("", "experiments"):
-    _p = str(_OMPHALOS_DIR / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
 
-import omphalos_launch as ol  # noqa: E402
+import experiments.common.omphalos_launch as ol  # noqa: E402
 
 from ladon import guard  # noqa: E402
+
+_OMPHALOS_DIR = OMPHALOS_ROOT
 
 PRISTINE_ROOT = Path(
     os.environ.get("LADON_PRISTINE_ROOT", "~/.cache/omphalos/ladon")

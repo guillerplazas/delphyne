@@ -3,8 +3,10 @@ Unit tests for the Ladon loop: pure Python, no API calls, no Rocq.
 
 Run as `python -m ladon.test_ladon` (part of `make test-unit`). Tests
 that need archived runs skip themselves when the directories are
-absent, like `tools/test_launch_state.py`.
+absent, like `tests/test_launch_state.py`.
 """
+
+from runtime.paths import OMPHALOS_ROOT
 
 # pyright: strict
 
@@ -19,14 +21,10 @@ from pathlib import Path
 from string import Template
 from typing import Any
 
-_OMPHALOS_DIR = Path(__file__).resolve().parent.parent
-for _sub in ("", "experiments", "tools"):
-    _p = str(_OMPHALOS_DIR / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
 
-from cell_records import CellRecord  # noqa: E402
-from decision_audit import MIN_DISCORDANT_FOR_SIG, sign_test  # noqa: E402
+from tools.analysis.cell_records import CellRecord  # noqa: E402
+from ladon.verdict import MIN_DISCORDANT_FOR_SIG
+from tools.analysis.decision_audit import sign_test  # noqa: E402
 
 from ladon import bench  # noqa: E402
 from ladon import claude_driver as C  # noqa: E402
@@ -37,6 +35,8 @@ from ladon import make_partition  # noqa: E402
 from ladon import report as RP  # noqa: E402
 from ladon import state as S  # noqa: E402
 from ladon import verdict as V  # noqa: E402
+
+_OMPHALOS_DIR = OMPHALOS_ROOT
 
 HINTS_FILE = _OMPHALOS_DIR / "HINTS.md"
 PROGRESS_FILE = _OMPHALOS_DIR / "PROGRESS.md"
@@ -117,23 +117,31 @@ def _hint(text: str, n: int) -> H.Hint:
 
 
 def test_parse_real_hints() -> None:
-    text = HINTS_FILE.read_text()
-    hs = H.parse_hints(text)
-    assert len(hs) >= 60, len(hs)
-    by = {h.n: h for h in hs}
-    assert by[54].status == "done" and by[49].status == "done"
-    assert by[55].status == "partial"
-    # Live statuses of open hints change as Ladon judges them; only the
-    # frozen DONE markers and the tag parse are stable facts.
-    assert any(h.open for h in hs)
-    assert by[28].status == "done"  # suffix-style ✅
-    assert by[67].tag == "experiment" and by[54].tag == "tool"
-    assert any(h.tag == "method" for h in hs)
-    assert all(h.title for h in hs)
+    hs = H.parse_hints(HINTS_FILE.read_text())
+    closed = H.parse_hints(
+        (_OMPHALOS_DIR / "docs/CLOSED_HINTS.md").read_text()
+    )
+    assert hs and closed
+    assert len({h.n for h in hs}) == len(hs)
+    assert len({h.n for h in closed}) == len(closed)
+    assert all(h.status not in ("done", "discarded") for h in hs)
+    assert all(h.title and h.tag for h in hs + closed)
+
+
+_HINT_FIXTURE = """# Hints
+
+## From 2099-01-01
+
+67. **[experiment] First** — investigate.
+
+66. **[policy] Second** — investigate.
+
+65. **[tool] Third** — investigate.
+"""
 
 
 def test_mark_hint_touches_one_line() -> None:
-    text = HINTS_FILE.read_text()
+    text = _HINT_FIXTURE
     marked = H.mark_hint(
         text, 67, "LADON INSPECT 2026-09-03 — 55 vs 54; inspect with Fable"
     )
@@ -157,18 +165,83 @@ def test_append_hints_numbering_and_section() -> None:
         H.NewHint("tool", "A second", "short body"),
     ]
     day = "2099-01-01"  # no section for it yet: entries land on top
-    out = H.append_hints(text, day, new)
+    out = H.append_hints(text, day, new, closed_text="")
     hs = H.parse_hints(out)
     assert hs[0].n == top + 2 and hs[1].n == top + 1
     assert hs[0].section == H.ladon_section_heading(day)[3:]
     assert hs[0].status == "open" and hs[1].tag == "tool"
-    out2 = H.append_hints(out, day, [H.NewHint("tactic", "Third", "x")])
+    out2 = H.append_hints(
+        out, day, [H.NewHint("tactic", "Third", "x")], closed_text=""
+    )
     hs2 = H.parse_hints(out2)
     assert hs2[0].n == top + 3 and hs2[0].section == hs[0].section
     assert hs2[0].tag == "experiment"  # unknown tags fall back to the legend
     assert out2.count(H.ladon_section_heading(day)) == 1
     block = out.splitlines()[hs[0].first_line : hs[0].last_line + 1]
     assert all(ln.startswith("   ") for ln in block[1:])
+
+
+def test_close_hints_and_preserve_ids() -> None:
+    original = _HINT_FIXTURE
+    closed = "# Closed hints\n"
+    marker = "DONE 2099-01-02 — verified"
+    opened, closed = H.record_outcome(original, closed, 67, marker)
+    assert H.find_hint(opened, 67) is None
+    assert _hint(closed, 67).status == "done"
+    assert H.record_outcome(opened, closed, 67, marker) == (opened, closed)
+    # Resume after saving the archive but before saving the open file.
+    assert H.record_outcome(original, closed, 67, marker) == (opened, closed)
+    for n in (66, 65):
+        opened, closed = H.record_outcome(
+            opened, closed, n, "LADON DISCARD 2099-01-02 — null"
+        )
+    assert not H.parse_hints(opened)
+    assert "## From" not in opened
+    added = H.append_hints(
+        opened,
+        "2099-01-03",
+        [H.NewHint("tool", "New", "body")],
+        closed_text=closed,
+    )
+    assert H.parse_hints(added)[0].n == 68
+    for marker in (
+        "LADON INSPECT 2099-01-02 — review",
+        "LADON HUMAN 2099-01-02 — decision",
+    ):
+        kept, archive = H.record_outcome(original, "# Closed", 67, marker)
+        assert H.find_hint(kept, 67) is not None and archive == "# Closed"
+    # A reopening preserves its previous outcome; retries remain idempotent.
+    newer = "DONE 2099-01-04 — verified again"
+    reopened, archive = H.record_outcome(original, closed, 67, newer)
+    assert "verified" in archive and "verified again" in archive
+    assert H.record_outcome(original, archive, 67, newer) == (
+        reopened,
+        archive,
+    )
+
+
+def test_closed_hints_dry_run_isolation() -> None:
+    from ladon import cli
+
+    real_open = HINTS_FILE.read_text()
+    real_closed = (_OMPHALOS_DIR / cli.CLOSED_HINTS).read_text()
+    with tempfile.TemporaryDirectory() as tmp:
+        runner = cli.Ladon(
+            S.Night(date="2099-01-01", dry=True),
+            root=Path(tmp),
+            no_claude=True,
+        )
+        local_open = runner.knowledge_file("HINTS.md")
+        local_closed = runner.knowledge_file(cli.CLOSED_HINTS)
+        local_open.write_text(_HINT_FIXTURE)
+        local_closed.write_text("# Closed hints\n")
+        runner.mark_hint(67, "DONE 2099-01-02 — verified")
+        assert H.find_hint(local_open.read_text(), 67) is None
+        assert H.find_hint(local_closed.read_text(), 67) is not None
+        runner.mark_hint(67, "DONE 2099-01-02 — verified")
+        assert len(H.parse_hints(local_closed.read_text())) == 1
+    assert HINTS_FILE.read_text() == real_open
+    assert (_OMPHALOS_DIR / cli.CLOSED_HINTS).read_text() == real_closed
 
 
 def test_progress_section_roundtrip() -> None:
@@ -314,9 +387,9 @@ def test_pair_archived_baseline_with_itself() -> None:
 
 def test_frozen_rules() -> None:
     assert guard.is_frozen("benchmarks/ladonX.txt")
-    assert guard.is_frozen("tools/decision_audit.py")
-    assert guard.is_frozen("experiments/minif2f_x.py")
-    assert guard.is_frozen("experiments/x_ladon_experiment.py")
+    assert guard.is_frozen("tools/analysis/decision_audit.py")
+    assert guard.is_frozen("experiments/common/minif2f_x.py")
+    assert guard.is_frozen("experiments/ladon/x_ladon_experiment.py")
     assert guard.is_frozen("miniF2F/valid/a.v")
     assert guard.is_frozen("ladon/cli.py") and guard.is_frozen("HINTS.md")
     # The dual-harness surface: instructions, shared memory and the
@@ -327,8 +400,10 @@ def test_frozen_rules() -> None:
     assert guard.is_frozen(".codex/config.toml")
     assert ".codex" not in guard.SNAPSHOT_EXCLUDE
     assert not guard.is_frozen("ladon/nights/2026-09-03/hints/h1/arm.yaml")
-    assert not guard.is_frozen("experiments/ladon_2026-09-03_h1_experiment.py")
-    assert not guard.is_frozen("pytanque_utils.py")
+    assert not guard.is_frozen(
+        "experiments/ladon/ladon_2026-09-03_h1_experiment.py"
+    )
+    assert not guard.is_frozen("runtime/pytanque_utils.py")
     assert not guard.is_frozen("prompts/x.jinja")
     assert guard.ARM_DIR_RE.match("ladon_2026-09-03_h58_agentic")
     assert not guard.ARM_DIR_RE.match("x_ladon_agentic")
@@ -341,14 +416,14 @@ def test_manifest_from_snapshots() -> None:
             "Makefile": guard.FileStat(1, 1, "m"),
         },
         outputs={"x_ladon_agentic": "1:1"},
-        blocks={"model_registry.py": "h1"},
+        blocks={"runtime/model_registry.py": "h1"},
         head="abc",
         git_status=(),
     )
     after = guard.Snapshot(
         files={
             "a.py": guard.FileStat(2, 2, "y"),
-            "experiments/ladon_2026-09-03_h1_experiment.py": guard.FileStat(
+            "experiments/ladon/ladon_2026-09-03_h1_experiment.py": guard.FileStat(
                 1, 1, "n"
             ),
         },
@@ -357,15 +432,17 @@ def test_manifest_from_snapshots() -> None:
             "ladon_2026-09-03_h1_agentic": "1:1",
             "rogue": "1:1",
         },
-        blocks={"model_registry.py": "h2"},
+        blocks={"runtime/model_registry.py": "h2"},
         head="abc",
         git_status=("?? src/x.py",),
     )
     m = guard.manifest(before, after)
     assert m.modified == ("a.py",)
-    assert m.created == ("experiments/ladon_2026-09-03_h1_experiment.py",)
+    assert m.created == (
+        "experiments/ladon/ladon_2026-09-03_h1_experiment.py",
+    )
     assert m.deleted == ("Makefile",)
-    assert m.blocks_changed == ("model_registry.py",)
+    assert m.blocks_changed == ("runtime/model_registry.py",)
     assert m.outputs_changed == ("x_ladon_agentic",)
     assert set(m.outputs_new) == {"ladon_2026-09-03_h1_agentic", "rogue"}
     assert m.out_of_scope == ("?? src/x.py",)
@@ -380,7 +457,7 @@ def test_manifest_from_snapshots() -> None:
     assert "outside examples/omphalos" in joined
     assert guard.touched_python(m) == [
         "a.py",
-        "experiments/ladon_2026-09-03_h1_experiment.py",
+        "experiments/ladon/ladon_2026-09-03_h1_experiment.py",
     ]
 
 
@@ -652,13 +729,16 @@ def test_arm_template_renders_and_runs() -> None:
         hint_n=1,
         title="t",
         date="2026-09-03",
-        script="experiments/ladon_2026-09-03_h1_experiment.py",
+        script="experiments/ladon/ladon_2026-09-03_h1_experiment.py",
         smoke_dir="experiments/output/ladon_2026-09-03_h1_smoke",
         output_dir="experiments/output/ladon_2026-09-03_h1_agentic",
     )
     compile(text, "arm_template", "exec")
     script = (
-        _OMPHALOS_DIR / "experiments" / "ladon_0000-00-00_h0_experiment.py"
+        _OMPHALOS_DIR
+        / "experiments"
+        / "ladon"
+        / "ladon_0000-00-00_h0_experiment.py"
     )
     script.write_text(text)
     try:

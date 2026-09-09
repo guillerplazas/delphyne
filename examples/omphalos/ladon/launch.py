@@ -23,6 +23,8 @@ interrupted. `LADON_SEEDS` selects the seeds an arm script registers
 the stdlib launcher adds new configs as `todo` and skips done cells.
 """
 
+from runtime.paths import OMPHALOS_ROOT
+
 # pyright: strict
 
 import os
@@ -38,13 +40,10 @@ from typing import Any, cast
 
 import yaml
 
-_OMPHALOS_DIR = Path(__file__).resolve().parent.parent
-for _sub in ("", "experiments"):
-    _p = str(_OMPHALOS_DIR / _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
 
-import omphalos_launch as ol  # noqa: E402
+import experiments.common.omphalos_launch as ol  # noqa: E402
+
+_OMPHALOS_DIR = OMPHALOS_ROOT
 
 MIN_EXPECTED_S = 45 * 60.0
 SLACK = 1.3
@@ -203,7 +202,15 @@ def run_script(
         )
         out.flush()
         proc = subprocess.Popen(
-            [sys.executable, str(script), *args],
+            [
+                sys.executable,
+                "-m",
+                script.relative_to(_OMPHALOS_DIR)
+                .with_suffix("")
+                .as_posix()
+                .replace("/", "."),
+                *args,
+            ],
             cwd=_OMPHALOS_DIR,
             env=dict(env),
             stdin=subprocess.DEVNULL,
@@ -295,7 +302,15 @@ def launch_arm(
 def rebuild(script: Path, *, env: Mapping[str, str] | None = None) -> int:
     """`python script rebuild` — statuses from the per-config files."""
     proc = subprocess.run(
-        [sys.executable, str(script), "rebuild"],
+        [
+            sys.executable,
+            "-m",
+            script.relative_to(_OMPHALOS_DIR)
+            .with_suffix("")
+            .as_posix()
+            .replace("/", "."),
+            "rebuild",
+        ],
         cwd=_OMPHALOS_DIR,
         env=dict(env if env is not None else os.environ),
         stdin=subprocess.DEVNULL,

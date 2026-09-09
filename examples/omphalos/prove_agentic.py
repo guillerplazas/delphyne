@@ -63,9 +63,9 @@ import delphyne as dp
 from delphyne import Branch, Compute, Strategy, dfs, strategy
 from delphyne.stdlib.queries import SelectedExample
 
-import pytanque_utils as pt
-import skills as sk
-from model_registry import ApiType, OmphalosReasoningEffort, make_model
+import runtime.pytanque_utils as pt
+import runtime.skills as sk
+from runtime.model_registry import ApiType, OmphalosReasoningEffort, make_model
 from prove_standard import ProofScript
 
 # fmt: off
@@ -321,7 +321,7 @@ def prove_theorem_agentic(
     # prompt section. It defaults to False so every archived run keeps
     # its exact prompt (and therefore its cache); see
     # `pytanque_utils._preamble_definitions` for why the omission
-    # matters. New pipelines (`experiments/minif2f_x.py`) turn it on.
+    # matters. New pipelines (`experiments/common/minif2f_x.py`) turn it on.
     spec = pt.parse_problem(problem_file, show_definitions)
     available = sk.list_skills()
     script = yield from dp.interact(

@@ -1,11 +1,11 @@
 """
-Pure parsers and rewriters for `HINTS.md` and `PROGRESS.md`.
+Pure parsers and rewriters for open hints, their archive and progress.
 
 Ladon reads the backlog and writes its verdicts back without ever
-letting a language model edit the two files directly: the model
+letting a language model edit the knowledge files directly: the model
 returns text, this module places it. That keeps the house conventions
 (numbered entries, newest first, status inside the bold title,
-3-space continuation indent, corrections appended never deleted) a
+3-space continuation indent, stable IDs and archived closure records) a
 property of code rather than of a prompt.
 
 `HINTS.md` entry shape (verified 2026-09-02 on 65 entries):
@@ -18,9 +18,8 @@ Status lives in leading bracket groups before the tag —
 `— ✅ DONE` suffix after the closing `**`. Ladon adds its own groups:
 `[DONE <date> by Ladon — KEEP: …]`, `[LADON DISCARD <date> — …]`,
 `[LADON INSPECT <date> — …; inspect with Fable]`, `[LADON HUMAN …]`.
-A marker only ever rewrites the entry's *first line*; every other line
-of the file stays byte-identical (the precedent is HINTS #49, whose
-marker line is longer than the wrap width).
+Marking changes the entry's first line. Closing also moves its complete
+block to the closure archive, preserving its stable ID and prior outcomes.
 """
 
 # pyright: strict
@@ -83,7 +82,10 @@ def _status_of(annotations: Sequence[str], rest: str) -> HintStatus:
             return "human"
         if _DONE_RE.match(a):
             return "done"
-    if any("DONE" in a or "BUILT" in a for a in annotations):
+    if any(
+        "DONE" in a or "BUILT" in a or a.startswith("PARTIAL")
+        for a in annotations
+    ):
         return "partial"
     return "open"
 
@@ -177,8 +179,9 @@ def find_hint(text: str, n: int) -> Hint | None:
     return None
 
 
-def max_number(text: str) -> int:
-    return max((h.n for h in parse_hints(text)), default=0)
+def max_number(*texts: str) -> int:
+    """Highest allocated ID across open hints and their closure archive."""
+    return max((h.n for text in texts for h in parse_hints(text)), default=0)
 
 
 def mark_hint(text: str, n: int, marker: str) -> str:
@@ -193,6 +196,47 @@ def mark_hint(text: str, n: int, marker: str) -> str:
     assert m is not None
     lines[hint.first_line] = f"{head[: m.end()]}[{marker}] {head[m.end() :]}"
     return "".join(lines)
+
+
+def record_outcome(
+    text: str, closed: str, n: int, marker: str
+) -> tuple[str, str]:
+    """Mark unresolved work, or move a closed hint to the archive.
+
+    Retrying a closure is harmless. The caller saves the archive before
+    removing the open entry so an interrupted write cannot lose a hint.
+    Existing archive entries retain earlier outcomes when a hint reopens.
+    """
+    if find_hint(text, n) is None:
+        return text, closed
+    marked = mark_hint(text, n, marker)
+    hint = find_hint(marked, n)
+    assert hint is not None
+    if hint.status not in ("done", "discarded"):
+        return marked, closed
+    lines = marked.splitlines(keepends=True)
+    block = "".join(lines[hint.first_line : hint.last_line + 1]).rstrip()
+    previous = find_hint(closed, n)
+    if previous is None:
+        heading = "## Closed hints\n\n"
+        if heading not in closed:
+            closed = closed.rstrip() + "\n\n" + heading
+        closed = closed.replace(heading, heading + block + "\n\n", 1)
+    elif marker not in previous.annotations and marker not in previous.body:
+        # A newly closed reopening shares the ID and preserves the prior
+        # outcome rather than creating a second record with the same ID.
+        old_lines = closed.splitlines(keepends=True)
+        old_lines.insert(
+            previous.last_line + 1, "\n   Later outcome: " + marker + "\n"
+        )
+        closed = "".join(old_lines)
+    del lines[hint.first_line : hint.last_line + 1]
+    # Remove empty dated sections left behind by their final closure.
+    remaining = "".join(lines)
+    remaining = re.sub(
+        r"(?m)^## [^\n]*\n(?:[ \t]*\n)*(?=## |\Z)", "", remaining
+    )
+    return remaining, closed
 
 
 LEGEND_TAGS: frozenset[str] = frozenset(
@@ -227,7 +271,9 @@ def ladon_section_heading(date: str) -> str:
     return f"## From {date} — Ladon night"
 
 
-def append_hints(text: str, date: str, new: Sequence[NewHint]) -> str:
+def append_hints(
+    text: str, date: str, new: Sequence[NewHint], *, closed_text: str
+) -> str:
     """
     Add `new` as the newest entries: under the night's own section
     (created before the first existing section if absent), numbered
@@ -235,7 +281,7 @@ def append_hints(text: str, date: str, new: Sequence[NewHint]) -> str:
     """
     if not new:
         return text
-    top = max_number(text)
+    top = max_number(text, closed_text)
     numbers = list(range(top + len(new), top, -1))
     entries = [_wrap_entry(k, h) for k, h in zip(numbers, new)]
     heading = ladon_section_heading(date)

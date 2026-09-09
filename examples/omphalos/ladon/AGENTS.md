@@ -19,7 +19,7 @@ Rules for any interactive session working in or around it:
 - **Frozen for the loop, editable by Guille**: everything in this
   directory except `nights/`. Ladon's guard rejects an arm that changes
   Ladon; changes to the loop are made by hand, in daylight.
-- **Never edit a night in flight**: `HINTS.md`, `PROGRESS.md`,
+- **Never edit a night in flight**: `HINTS.md`, `PROGRESS.md`, `docs/CLOSED_HINTS.md`,
   `experiments/output/ladon_*` and `ladon/nights/<date>` are being
   written by the running orchestrator (`make ladon-status`).
 - **Commits**: a KEEP commit (`Hint N: …`, co-authored by Ladon) is
@@ -34,3 +34,11 @@ Rules for any interactive session working in or around it:
   test-unit`), `make pyright` at the repository root, `ruff format` /
   `ruff check` on touched files, `make ladon-selftest` when the Claude
   driver or the re-verifier changed (that one needs `claude` on PATH).
+
+- Hint lifecycle: HINTS contains unresolved work only. The orchestrator moves
+  KEEP/DISCARD entries to docs/CLOSED_HINTS.md; INSPECT/HUMAN remain pending.
+  Allocate IDs across both files, and preserve IDs when reopening. Both
+  interactive harnesses follow the same rule; dry nights use local copies.
+- Statistical migration is deferred by Guille (2026-09-09): retain Ladon's
+  current p<0.05 decision behavior until the repeated-seed grouping defect
+  is corrected separately (HINTS #120). Non-Ladon alpha is now 0.10.

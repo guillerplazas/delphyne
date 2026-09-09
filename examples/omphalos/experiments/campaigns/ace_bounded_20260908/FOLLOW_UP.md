@@ -47,72 +47,23 @@ budget admission, proof choices and the changed feedback/query policy are
 confounded in this integrated historical comparison. Extra allowance cannot
 be assumed to recover a proof.
 
-## Prioritized next improvements
+## Admission evidence and open work
 
-1. **Fix typed verifier-limit admission before tuning budgets.** The frozen
-   `grounded_search` expects `limits` to be a dictionary, but `dp.compute`
-   supplies a `ToolLimits` instance. Its estimate therefore falls back to
-   60 seconds even when the strategy reduces the next operation's limit.
-   The synthetic probe requests seven seconds: a seven-second parent budget
-   yields no result; a sixty-second parent budget admits the same zero-work
-   computation. Read the actual typed limit and add a regression asserting
-   that a short operation fits the remaining shared allowance. Keep the
-   operation deadline, RPC cap and charge accounting intact. Three recorded
-   stops are consistent with this defect: `imo_1984_p6` has 57.77 seconds
-   left, `mathd_numbertheory_37` 43.25, and `mathd_numbertheory_43` 34.10.
-   This establishes wasted capacity, not that their proofs would succeed.
-   Preserve the measured implementation and introduce the fix as a separately
-   identified follow-up; do not rewrite the frozen benchmark sources.
+The pure reservation probe confirms that a seven-second typed ToolLimits
+operation is admitted only with sixty seconds remaining in the measured
+implementation. Recorded tails with 34–58 seconds left are consistent with
+that mismatch. Other monetary refusals are inferred from traces; they are
+not explicit admission events and do not establish recoverable solves.
 
-2. **Make output allowance fit the remaining dollar budget.** Twelve stops
-   are consistent with declined monetary admission: the final trace exposes
-   a candidate space, request count is below 64, and verifier time remains.
-   They spend roughly $0.032–$0.043 before stopping. The monetary bound
-   reserves up to 32,768 output tokens on every call. In training the maximum
-   actually generated was 2,126 tokens, with p95 1,423; validation's maximum
-   was 2,942. These counts include reasoning. A smaller, explicit output
-   allowance, or a bounded final repair allowance, could admit useful calls
-   within the same ceiling. Size it on training data and check truncations
-   and lost recoveries. Keep worst-case campaign reservations; empirical
-   averages must never replace the hard billing bound.
-
-3. **Log admission decisions and reserve verification before buying a proof.**
-   Current stop labels are inferred from trace shape and remaining budgets;
-   declined monetary/Compute requests are not explicitly exported. Record
-   the budget dimension, estimate, remaining allowance, stage and decision.
-   Three unsolved caches end with a paid model answer and no following
-   recorded check, consistent with Compute admission declining. Admit or
-   earmark the verification allowance before another proposal, so a model
-   answer can always be checked. Separate cached reuse from fresh invocation
-   events. Validate the audit on an offline replay before another paid pilot.
-
-4. **Act differently on unavailable evidence.** The twenty unknown and six
-   resource outcomes are not refutations of the tactics. On numbertheory_43,
-   repeated `vm_compute` over `fact 942` closes the server connection; other
-   tails repeatedly attempt costly arithmetic. A separate finite recovery
-   policy should narrow a computation or change proof representation, instead
-   of paying for another substantially identical attempt. Test this on
-   training resource failures while retaining actual kernel acceptance.
-
-5. **Repair specific syntax/type/normal-form decisions.** Extract accepted
-   training examples for `field_simplify`, square normal forms, inequality
-   lemma argument order and branch completion. Current grounded evidence has
-   six reference examples and two structure examples, with no demonstrated
-   bridge coverage. Preserve verified prefixes and check each proposed local
-   transition. Do not inject these named validation problems as demonstrations.
-
-6. **Improve adaptation reliability and pilot coverage.** Three of four role
-   episodes failed YAML parsing; constrained serialization deserves an offline
-   repair before further adaptation spending. The money pilot used two
-   unsolved controls, so “no lost solve” could not test preservation of late
-   recoveries. Advice and restart were never exercised. A future small trainX
-   panel should include late known recoveries and actual target triggers,
-   and predeclare a cost/coverage trade-off appropriate to budgeting. Keep
-   the original historical gate outcome and avoid another broad sweep.
+Unresolved proposals are maintained only in [HINTS](../../../HINTS.md),
+#113–119: serialization, representative pilots, demonstration coverage,
+resource recovery, admission events, output allowance and typed reservation.
+The source diagnosis and original gate remain recorded here; no follow-up
+fix was silently applied to the measured implementation.
 
 ## Reproduction and interpretation
 
-Run `python tools/grounded_failure_audit.py` from `examples/omphalos/` with
+Run `python -m tools.analysis.grounded_failure_audit` from `examples/omphalos/` with
 either harness. [failure_audit.json](failure_audit.json) records file hashes,
 all fifteen unsolved cells, the five discordances and the pure reservation
 probe. Last/repeated means cache insertion order. The monetary/Compute stop
@@ -122,4 +73,4 @@ There is no new inferential test or confirmation claim in this follow-up.
 The frozen statistics remain in [final_report.json](final_report.json).
 The user acceptance decision is recorded separately in
 [acceptance.json](acceptance.json). All requested runtime changes are retained;
-future improvements above have not silently changed the benchmarked policy.
+the open backlog does not change the benchmarked policy.

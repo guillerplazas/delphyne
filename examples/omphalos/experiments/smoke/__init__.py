@@ -1,0 +1,1 @@
+"""Omphalos experiments smoke modules."""

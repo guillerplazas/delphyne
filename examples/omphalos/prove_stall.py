@@ -7,7 +7,7 @@ verifier verdicts the conversation prefix already carries
 (`stall.views_of_prefix`) and, when `stall.stalled(views, rule, k)`
 holds, returns a strategy that fails instead of the next query. A
 failing `step` yields no candidate, so `dfs` ends the search with no
-solution and the cell records what it spent (see `stall.py` for the
+solution and the cell records what it spent (see `runtime/stall.py` for the
 rules and why the decision lives in `step` and not in `process`: the
 prefix is rebuilt from recorded actions on replay, nested `process`
 bodies are not re-run).
@@ -27,9 +27,9 @@ import delphyne as dp
 from delphyne import Branch, Strategy, dfs, strategy
 from delphyne.stdlib.nodes import Fail
 
-import pytanque_utils as pt
-import skills as sk
-from model_registry import ApiType, OmphalosReasoningEffort, make_model
+import runtime.pytanque_utils as pt
+import runtime.skills as sk
+from runtime.model_registry import ApiType, OmphalosReasoningEffort, make_model
 from prove_agentic import (
     InspectAt,
     ProposeProofScriptAgentic,
@@ -47,7 +47,7 @@ from prove_agentic import (
     check_proof_assisted,
 )
 from prove_standard import ProofScript
-from stall import Rule, stalled, views_of_prefix
+from runtime.stall import Rule, stalled, views_of_prefix
 
 
 @strategy
@@ -79,7 +79,7 @@ def prove_theorem_agentic_stall(
     goal_caps: pt.GoalCaps | None = None,
 ) -> Strategy[Branch, dp.PromptingPolicy, ProofScript]:
     """
-    `prove_theorem_agentic` plus the stall rule described in `stall.py`.
+    `prove_theorem_agentic` plus the stall rule described in `runtime/stall.py`.
 
     `stall_rule` is one of `stall.RULES` (empty = off) and `stall_k`
     the run length; both are strategy arguments, hence part of every

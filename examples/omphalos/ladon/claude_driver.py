@@ -22,6 +22,8 @@ unifiedWindows.{five_hour,seven_day}.{utilization,resetsAt}` in
 stream-json (camelCase), and not at all in `--output-format json`.
 """
 
+from runtime.paths import OMPHALOS_ROOT
+
 # pyright: strict
 
 import json
@@ -35,7 +37,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
 
-_OMPHALOS_DIR = Path(__file__).resolve().parent.parent
+_OMPHALOS_DIR = OMPHALOS_ROOT
 
 type OutputFormat = Literal["json", "stream-json"]
 type SystemPromptFlag = Literal["file", "inline"]

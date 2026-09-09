@@ -32,56 +32,56 @@ test: test-unit test-rocq test-standard test-agentic test-probing test-luna test
 # Pure Python: no API calls, no Rocq server. Guards the deterministic
 # merge and the generated adaptation pool against silent drift.
 test-unit:
-	python tools/test_grounded.py
-	python tools/test_campaign_budget.py
-	python tools/test_paired_evaluation.py
-	python tools/test_ace_repair_loop.py
-	python tools/test_ace_playbook.py
-	python tools/test_ace_driver.py
-	python tools/test_ace_evidence.py
-	python tools/test_ace_triggers.py
-	python tools/test_ace_diagnosis.py
-	python tools/test_ace_repairs.py
-	python tools/test_stall.py
-	python tools/test_parse_problem.py
-	python tools/test_launch_state.py
-	python tools/test_ace_x_eval.py
-	python tools/make_pool.py --check
-	python tools/make_partitions.py --check
+	python -m tests.test_grounded
+	python -m tests.test_campaign_budget
+	python -m tests.test_paired_evaluation
+	python -m tests.test_ace_repair_loop
+	python -m tests.test_ace_playbook
+	python -m tests.test_ace_driver
+	python -m tests.test_ace_evidence
+	python -m tests.test_ace_triggers
+	python -m tests.test_ace_diagnosis
+	python -m tests.test_ace_repairs
+	python -m tests.test_stall
+	python -m tests.test_parse_problem
+	python -m tests.test_launch_state
+	python -m tests.test_ace_x_eval
+	python -m tools.data.make_pool --check
+	python -m tools.data.make_partitions --check
 
 # Rocq transport layer (private warm server, deadlines, reply cap,
 # recycling, prefix memo): a few seconds of Rocq, no API calls.
 test-rocq:
-	python tools/test_rocq_server.py
+	python -m tests.test_rocq_server
 
 # Byte-for-byte parity of the bridge against archived compute calls
 # (`cache_mode: replay` never re-executes Rocq; this does). Doubles as
 # the timing benchmark: run with OMPHALOS_PET_MODE=stdio to compare.
 bridge-parity:
-	python tools/bridge_parity.py --run $(or $(RUN),x_validation_agentic) \
+	python -m tools.analysis.bridge_parity --run $(or $(RUN),x_validation_agentic) \
 	  $(if $(CONFIG),--config $(CONFIG),--limit $(or $(LIMIT),3)) --verbose
 
 # Per-call timing of the bridge in every transport mode, on one
 # archived cell's compute calls (offline, Rocq only).
 bench-rocq:
-	python tools/bench_rocq.py $(if $(CONFIG),--config $(CONFIG),)
+	python -m tools.analysis.bench_rocq $(if $(CONFIG),--config $(CONFIG),)
 
 # State file vs ground truth, slot table and launch lock of one run
 # (SCRIPT=experiments/<script>.py).
 launch-status:
-	python $(SCRIPT) status
+	python -m $(subst /,.,$(patsubst %.py,%,$(SCRIPT))) status
 
 # Every X / ACE directory's ground-truth status, lock holders, slots.
 ace-x-status:
-	python tools/ace_x_status.py
+	python -m tools.maintenance.ace_x_status
 
 # Stop every running launch (frees the RAM within a minute; in-flight
 # cells are re-paid on resume) and print the resume commands.
 stop:
-	python tools/stop_launches.py stop
+	python -m tools.maintenance.stop_launches stop
 
 launches:
-	python tools/stop_launches.py list
+	python -m tools.maintenance.stop_launches list
 
 test-standard:
 	delphyne run commands/prove_one_standard.exec.yaml --cache --no-header
@@ -125,48 +125,48 @@ regen-stall-cache:
 sweep-train: sweep-train-standard sweep-train-agentic
 
 sweep-train-standard:
-	python experiments/train_standard_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.baselines.train_standard_experiment run --max_workers=$(WORKERS)
 
 sweep-train-agentic:
-	python experiments/train_agentic_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.baselines.train_agentic_experiment run --max_workers=$(WORKERS)
 
 sweep-validation:
-	python experiments/validation_standard_experiment.py run --max_workers=$(WORKERS)
-	python experiments/validation_agentic_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.baselines.validation_standard_experiment run --max_workers=$(WORKERS)
+	python -m experiments.baselines.validation_agentic_experiment run --max_workers=$(WORKERS)
 
 sweep-test:
-	python experiments/test_standard_experiment.py run --max_workers=$(WORKERS)
-	python experiments/test_agentic_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.baselines.test_standard_experiment run --max_workers=$(WORKERS)
+	python -m experiments.baselines.test_agentic_experiment run --max_workers=$(WORKERS)
 
 sweep-probing-validation:
-	python experiments/validation_probing_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.ablations.validation_probing_experiment run --max_workers=$(WORKERS)
 
 sweep-probing-test:
-	python experiments/test_probing_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.ablations.test_probing_experiment run --max_workers=$(WORKERS)
 
 replay-train-standard:
-	python experiments/train_standard_experiment.py replay
+	python -m experiments.baselines.train_standard_experiment replay
 
 replay-train-agentic:
-	python experiments/train_agentic_experiment.py replay
+	python -m experiments.baselines.train_agentic_experiment replay
 
 summary-train:
-	python experiments/train_standard_experiment.py force-summary --add-timing
-	python experiments/train_agentic_experiment.py force-summary --add-timing
+	python -m experiments.baselines.train_standard_experiment force-summary --add-timing
+	python -m experiments.baselines.train_agentic_experiment force-summary --add-timing
 
 summary-validation:
-	python experiments/validation_standard_experiment.py force-summary --add-timing
-	python experiments/validation_agentic_experiment.py force-summary --add-timing
+	python -m experiments.baselines.validation_standard_experiment force-summary --add-timing
+	python -m experiments.baselines.validation_agentic_experiment force-summary --add-timing
 
 summary-test:
-	python experiments/test_standard_experiment.py force-summary --add-timing
-	python experiments/test_agentic_experiment.py force-summary --add-timing
+	python -m experiments.baselines.test_standard_experiment force-summary --add-timing
+	python -m experiments.baselines.test_agentic_experiment force-summary --add-timing
 
 summary-probing-validation:
-	python experiments/validation_probing_experiment.py force-summary --add-timing
+	python -m experiments.ablations.validation_probing_experiment force-summary --add-timing
 
 summary-probing-test:
-	python experiments/test_probing_experiment.py force-summary --add-timing
+	python -m experiments.ablations.test_probing_experiment force-summary --add-timing
 
 # --- cost auditing (offline, no API calls) ---
 #
@@ -183,13 +183,13 @@ summary-probing-test:
 # real regression.
 
 reprice:
-	python tools/reprice.py experiments/output
+	python -m tools.analysis.reprice experiments/output
 
 reprice-archive:
-	python tools/reprice.py experiments/previous || true
+	python -m tools.analysis.reprice experiments/previous || true
 
 reprice-write:
-	python tools/reprice.py --write
+	python -m tools.analysis.reprice --write
 
 # Re-audit the design decisions in PROGRESS.md against the archived
 # per-problem results: paired sign tests, a noise floor measured from
@@ -197,7 +197,7 @@ reprice-write:
 # from token counts. Offline, no API calls.
 
 decision-audit:
-	python tools/decision_audit.py \
+	python -m tools.analysis.decision_audit \
 	  --markdown experiments/output/decision_audit/report.md
 
 # What a tighter per-problem budget would have cost and solved,
@@ -207,13 +207,13 @@ decision-audit:
 # cache miss raises -- so a clean run proves no API call was made.
 
 budget-ablation:
-	python tools/budget_ablation.py \
+	python -m tools.analysis.budget_ablation \
 	  --markdown experiments/output/budget_ablation/dollar_cap.md
-	python tools/budget_ablation.py --requests --no-verify \
+	python -m tools.analysis.budget_ablation --requests --no-verify \
 	  --markdown experiments/output/budget_ablation/request_cap.md
 
 budget-replay:
-	python tools/replay_with_budget.py \
+	python -m tools.analysis.replay_with_budget \
 	  --csv experiments/output/budget_ablation/replay_cap030.csv
 
 # --- Responses API arms (real API calls) ---
@@ -223,17 +223,17 @@ budget-replay:
 # spend can be checked between them.
 
 probe-responses:
-	python tools/probe_responses_api.py
+	python -m tools.maintenance.probe_responses_api
 
 sweep-responses-train:
-	python experiments/responses_train_experiment.py run --max_workers=$(WORKERS)
-	python experiments/responses_train_standard_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.ablations.responses_train_experiment run --max_workers=$(WORKERS)
+	python -m experiments.ablations.responses_train_standard_experiment run --max_workers=$(WORKERS)
 
 sweep-responses-validation:
-	python experiments/responses_validation_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.ablations.responses_validation_experiment run --max_workers=$(WORKERS)
 
 sweep-responses-test:
-	python experiments/responses_test_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.ablations.responses_test_experiment run --max_workers=$(WORKERS)
 
 # --- luna migration (real API calls, but luna is 10x cheaper) ---
 #
@@ -242,10 +242,10 @@ sweep-responses-test:
 # one to ship is derived afterwards from the recorded prices.
 
 sweep-luna-train:
-	python experiments/luna_train_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.baselines.luna_train_experiment run --max_workers=$(WORKERS)
 
 luna-cap:
-	python tools/budget_ablation.py experiments/output/luna_train_agentic \
+	python -m tools.analysis.budget_ablation experiments/output/luna_train_agentic \
 	  --model gpt-5.6-luna
 
 # Does feedback-as-a-tool-message pay on the canonical agentic loop?
@@ -254,34 +254,34 @@ luna-cap:
 # -- read that, not the pooled totals.
 
 sweep-luna-cvt:
-	python experiments/luna_cvt_ablation.py run --max_workers=$(WORKERS)
+	python -m experiments.ablations.luna_cvt_ablation run --max_workers=$(WORKERS)
 
 cvt-report:
-	python tools/cvt_report.py
+	python -m tools.reports.cvt_report
 
 # --- ACE on the X partitions (real API calls) ---
 #
 # Adaptation variants are the paper's experiment matrix
-# (experiments/ace_adaptation.py VARIANTS): x-offline, x-offline-e3,
+# (experiments/ace/ace_adaptation.py VARIANTS): x-offline, x-offline-e3,
 # x-noreflect, x-mono, x-online-s{0,1}, x-online-warm-s{0,1}. Frozen
 # playbooks are evaluated with the ace-x-validation / ace-x-test
 # targets; online variants evaluate themselves.
 
 ace-x-plan:
-	python experiments/ace_adaptation.py plan --variant=$(VARIANT)
+	python -m experiments.ace.ace_adaptation plan --variant=$(VARIANT)
 
 ace-x-adapt:
-	python experiments/ace_adaptation.py run --variant=$(VARIANT)
+	python -m experiments.ace.ace_adaptation run --variant=$(VARIANT)
 
 ace-x-replay:
-	python experiments/ace_adaptation.py replay --variant=$(VARIANT)
+	python -m experiments.ace.ace_adaptation replay --variant=$(VARIANT)
 
 ace-x-validation:
-	python experiments/ace_x_validation_experiment.py \
+	python -m experiments.ace.ace_x_validation_experiment \
 	  --playbook=$(PLAYBOOK) --injection=$(or $(INJECTION),full) run --max_workers=$(WORKERS)
 
 ace-x-test:
-	python experiments/ace_x_test_experiment.py \
+	python -m experiments.ace.ace_x_test_experiment \
 	  --playbook=$(PLAYBOOK) run --max_workers=$(WORKERS)
 
 # --- ACE v3 (reference-audit polish) ---
@@ -291,17 +291,17 @@ ace-x-test:
 # Variants: x3-offline, x3-offline-e3, x3-noreflect, x3-mono,
 # x3-online[-warm]-s{0,1}, x3-gate-b1. (The per-worker warm Rocq
 # server is the default transport since 2026-08-26 — see
-# rocq_server.py; OMPHALOS_PET_MODE=stdio restores the archived one.)
+# runtime/rocq_server.py; OMPHALOS_PET_MODE=stdio restores the archived one.)
 
 ace-x3-adapt:
-	python experiments/ace_adaptation.py run --variant=$(VARIANT)
+	python -m experiments.ace.ace_adaptation run --variant=$(VARIANT)
 
 ace-x3-validation:
-	python experiments/ace_x3_validation_experiment.py \
+	python -m experiments.ace.ace_x3_validation_experiment \
 	  --playbook=$(PLAYBOOK) --injection=$(or $(INJECTION),full) run --max_workers=$(WORKERS)
 
 ace-x3-test:
-	python experiments/ace_x3_test_experiment.py \
+	python -m experiments.ace.ace_x3_test_experiment \
 	  --playbook=$(PLAYBOOK) run --max_workers=$(WORKERS)
 
 # --- The ACE-X matrix (2026-08-26 rebuild) ---
@@ -317,39 +317,39 @@ ace-x3-test:
 ACE_X_WORKERS ?= $(if $(filter command line environment,$(origin WORKERS)),$(WORKERS),$(or $(OMPHALOS_MAX_STREAMS),$(WORKERS)))
 
 ace-x3-val-offline:
-	python experiments/ace_x3_validation_experiment.py \
+	python -m experiments.ace.ace_x3_validation_experiment \
 	  --playbook=ace_x3_offline.yaml run --max_workers=$(ACE_X_WORKERS) --wait
 
 ace-x3-val-noreflect:
-	python experiments/ace_x3_validation_experiment.py \
+	python -m experiments.ace.ace_x3_validation_experiment \
 	  --playbook=ace_x3_noreflect.yaml run --max_workers=$(ACE_X_WORKERS) --wait
 
 ace-x3-val-mono:
-	python experiments/ace_x3_validation_experiment.py \
+	python -m experiments.ace.ace_x3_validation_experiment \
 	  --playbook=ace_x3_mono.yaml run --max_workers=$(ACE_X_WORKERS) --wait
 
 ace-x3-online-s0:
-	python experiments/ace_adaptation.py run --variant=x3-online-s0
+	python -m experiments.ace.ace_adaptation run --variant=x3-online-s0
 
 ace-x3-online-s1:
-	python experiments/ace_adaptation.py run --variant=x3-online-s1
+	python -m experiments.ace.ace_adaptation run --variant=x3-online-s1
 
 ace-x3-e3-adapt:
-	python experiments/ace_adaptation.py run --variant=x3-offline-e3
+	python -m experiments.ace.ace_adaptation run --variant=x3-offline-e3
 
 ace-x3-e3-val: ace-x3-e3-adapt
-	python experiments/ace_x3_validation_experiment.py \
+	python -m experiments.ace.ace_x3_validation_experiment \
 	  --playbook=ace_x3_offline_e3.yaml run --max_workers=$(ACE_X_WORKERS) --wait
 
 ace-x4-adapt:
-	python experiments/ace_adaptation.py run --variant=x4-offline
+	python -m experiments.ace.ace_adaptation run --variant=x4-offline
 
 ace-x4-val-offline: ace-x4-adapt
-	python experiments/ace_x3_validation_experiment.py \
+	python -m experiments.ace.ace_x3_validation_experiment \
 	  --playbook=ace_x4_offline.yaml run --max_workers=$(ACE_X_WORKERS) --wait
 
 ace-x4-online-s0:
-	python experiments/ace_adaptation.py run --variant=x4-online-s0
+	python -m experiments.ace.ace_adaptation run --variant=x4-online-s0
 
 ace-x-matrix: ace-x3-val-offline ace-x3-val-noreflect ace-x3-val-mono \
 	ace-x3-online-s0 ace-x3-online-s1 ace-x4-val-offline ace-x4-online-s0 \
@@ -365,17 +365,17 @@ ace-x-matrix: ace-x3-val-offline ace-x3-val-noreflect ace-x3-val-mono \
 # provenance sidecar); testX targets stay one look each.
 
 ace-x3-strong-adapt:
-	python experiments/ace_adaptation.py run --variant=x3-strong --max_workers=$(ACE_X_WORKERS)
+	python -m experiments.ace.ace_adaptation run --variant=x3-strong --max_workers=$(ACE_X_WORKERS)
 
 ace-x3-strong-val: ace-x3-strong-adapt
-	python experiments/ace_x3_validation_experiment.py \
+	python -m experiments.ace.ace_x3_validation_experiment \
 	  --playbook=ace_x3_strong.yaml run --max_workers=$(ACE_X_WORKERS) --wait
 
 ace-x5-adapt:
-	python experiments/ace_adaptation.py run --variant=x5-offline --max_workers=$(ACE_X_WORKERS)
+	python -m experiments.ace.ace_adaptation run --variant=x5-offline --max_workers=$(ACE_X_WORKERS)
 
 ace-x5-val-offline: ace-x5-adapt
-	python experiments/ace_x3_validation_experiment.py \
+	python -m experiments.ace.ace_x3_validation_experiment \
 	  --playbook=ace_x5_offline.yaml run --max_workers=$(ACE_X_WORKERS) --wait
 
 # --- Hint on error (2026-09-05): error-keyed injection of a frozen playbook ---
@@ -388,10 +388,10 @@ ace-x5-val-offline: ace-x5-adapt
 TRIG_PLAYBOOK ?= ace_x5_offline.yaml
 SEEDS ?= 0,1
 ace-triggers:
-	python experiments/ace_triggers_experiment.py --playbook=$(TRIG_PLAYBOOK)
+	python -m experiments.ace.ace_triggers_experiment --playbook=$(TRIG_PLAYBOOK)
 
 ace-x-val-trig:
-	python experiments/ace_x3_validation_experiment.py \
+	python -m experiments.ace.ace_x3_validation_experiment \
 	  --playbook=$(TRIG_PLAYBOOK) --injection=triggered --seeds=$(SEEDS) \
 	  run --max_workers=$(ACE_X_WORKERS) --wait
 
@@ -399,73 +399,73 @@ ace-x-val-trig:
 # appended to TRIG_PLAYBOOK and frozen as REPAIR_OUT with its triggers.
 REPAIR_OUT ?= ace_x6_repairs.yaml
 ace-repairs:
-	python experiments/ace_repairs_experiment.py --playbook=$(TRIG_PLAYBOOK) --out=$(REPAIR_OUT)
+	python -m experiments.ace.ace_repairs_experiment --playbook=$(TRIG_PLAYBOOK) --out=$(REPAIR_OUT)
 
 # Stall rules (2026-09-06): exact offline replay; the live arm is the
 # parity proof of the mechanism.
 stall-tune:
-	python tools/stall_report.py --tune x_train_agentic --check x_validation_agentic --check x_ladon_agentic --json experiments/output/stall/tune_trainX.json
+	python -m tools.reports.stall_report --tune x_train_agentic --check x_validation_agentic --check x_ladon_agentic --json experiments/output/stall/tune_trainX.json
 
 stall-arm:
-	python experiments/x_stall_experiment.py --seeds=$(or $(SEEDS),0) run --max_workers=$(ACE_X_WORKERS) --wait
+	python -m experiments.ablations.x_stall_experiment --seeds=$(or $(SEEDS),0) run --max_workers=$(ACE_X_WORKERS) --wait
 
 stall-parity:
-	python tools/stall_report.py --rule seenstate --k 4 --parity x_validation_stall_seenstate4_agentic
+	python -m tools.reports.stall_report --rule seenstate --k 4 --parity x_validation_stall_seenstate4_agentic
 
 ace-diagnosis:
-	python tools/ace_diagnosis.py --baseline experiments/output/x_validation_agentic \
+	python -m tools.analysis.ace_diagnosis --baseline experiments/output/x_validation_agentic \
 	  $(foreach a,$(ARMS),--arm experiments/output/$(a)) \
 	  --json experiments/output/ace_diagnosis/validationX.json
 
 ace-x3-strong-test:
-	python experiments/ace_x3_test_experiment.py \
+	python -m experiments.ace.ace_x3_test_experiment \
 	  --playbook=ace_x3_strong.yaml run --max_workers=$(ACE_X_WORKERS) --wait
 
 ace-x5-test-offline:
-	python experiments/ace_x3_test_experiment.py \
+	python -m experiments.ace.ace_x3_test_experiment \
 	  --playbook=ace_x5_offline.yaml run --max_workers=$(ACE_X_WORKERS) --wait
 
 # One look each; never re-run.
 ace-x3-test-offline:
-	python experiments/ace_x3_test_experiment.py \
+	python -m experiments.ace.ace_x3_test_experiment \
 	  --playbook=ace_x3_offline.yaml run --max_workers=$(ACE_X_WORKERS) --wait
 
 ace-x4-test-offline:
-	python experiments/ace_x3_test_experiment.py \
+	python -m experiments.ace.ace_x3_test_experiment \
 	  --playbook=ace_x4_offline.yaml run --max_workers=$(ACE_X_WORKERS) --wait
 
 # --- X partitions (real API calls; luna-class pipelines only) ---
 #
 # trainX/validationX/testX are the 40-problem, competition-heavy
-# partitions generated by tools/make_partitions.py. Reserved for the
+# partitions generated by tools/data/make_partitions.py. Reserved for the
 # canonical luna configuration and what is built on it; the frontier
 # and chat-completions arms keep the original partitions. The trainX
 # sweep runs under a loose cap and `x-cap` derives the cap to ship.
 
 sweep-x-train:
-	python experiments/x_train_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.baselines.x_train_experiment run --max_workers=$(WORKERS)
 
 x-cap:
-	python tools/budget_ablation.py experiments/output/x_train_agentic \
+	python -m tools.analysis.budget_ablation experiments/output/x_train_agentic \
 	  --model gpt-5.6-luna
 
 sweep-x-validation:
-	python experiments/x_validation_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.baselines.x_validation_experiment run --max_workers=$(WORKERS)
 
 sweep-x-test:
-	python experiments/x_test_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.baselines.x_test_experiment run --max_workers=$(WORKERS)
 
 summary-x-train:
-	python experiments/x_train_experiment.py force-summary --add-timing
+	python -m experiments.baselines.x_train_experiment force-summary --add-timing
 
 summary-x-validation:
-	python experiments/x_validation_experiment.py force-summary --add-timing
+	python -m experiments.baselines.x_validation_experiment force-summary --add-timing
 
 summary-x-test:
-	python experiments/x_test_experiment.py force-summary --add-timing
+	python -m experiments.baselines.x_test_experiment force-summary --add-timing
 
 responses-report:
-	python tools/responses_report.py \
+	python -m tools.reports.responses_report \
 	  --markdown experiments/output/responses_report/report.md
 
 # Recompute the chart data embedded in the published cost report from
@@ -474,7 +474,7 @@ responses-report:
 # figures on the page still match the data behind them.
 
 report-data:
-	python tools/report_chart_data.py
+	python -m tools.reports.report_chart_data
 
 # Regenerate the single-problem command caches after a prompt /
 # strategy / feedback change (makes real LLM calls).
@@ -499,42 +499,42 @@ regen-command-caches:
 # playbook whose evaluation runs still reference it.
 
 ace-adapt:
-	python experiments/ace_adaptation.py run
+	python -m experiments.ace.ace_adaptation run
 
 ace-eval:
-	python experiments/ace_validation_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.ace.ace_validation_experiment run --max_workers=$(WORKERS)
 
 ace-report:
-	python tools/ace_report.py
+	python -m tools.reports.ace_report
 
 # Offline. Rewrites only the JSON blocks in report/ace_report.html, so
 # a run that reports "No change" is a check that the figures on the
 # page still match the runs behind them.
 ace-report-data:
-	python tools/ace_report_data.py
+	python -m tools.reports.ace_report_data
 
 # The out-of-sample look. Pairs against the already-paid
 # luna_test_agentic seed-0 cells; see the script docstring for the
 # two-looks honesty note.
 ace-test:
-	python experiments/ace_test_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.ace.ace_test_experiment run --max_workers=$(WORKERS)
 
 # One adaptation variant (VARIANT=train|train-e3|pool|noreflect|mono).
 # Each writes its own output dir and freezes its own playbook, so
 # variants can never overwrite one another's artifacts.
 ace-adapt-variant:
-	python experiments/ace_adaptation.py run --variant=$(VARIANT)
+	python -m experiments.ace.ace_adaptation run --variant=$(VARIANT)
 
 # Offline. The cap curve is the experiment the $0.05 cap never ran:
 # a capped run is a strict prefix of a recorded one, so every cell's
 # outcome under every cap is exact, and the arms are paired per cell.
 ace-cap:
-	python tools/ace_cap_report.py \
+	python -m tools.reports.ace_cap_report \
 	  --json experiments/output/budget_ablation/ace_caps.json
 
 # Offline. Does the playbook change *how* the prover fails?
 ace-failures:
-	python tools/failure_analysis.py \
+	python -m tools.analysis.failure_analysis \
 	  experiments/output/luna_validation_agentic \
 	  experiments/output/ace_validation_agentic \
 	  --arm 'core-medium|ace-[0-9a-f]{8}-core-medium' --compare
@@ -543,7 +543,7 @@ ace-failures:
 # problems reference symbols their prompt never showed, and 4 of them
 # are among the 9 the canonical config never solves.
 defs-arm:
-	python experiments/defs_experiment.py run --max_workers=$(WORKERS)
+	python -m experiments.ablations.defs_experiment run --max_workers=$(WORKERS)
 
 # --- housekeeping ---
 
@@ -562,12 +562,12 @@ clean-experiments:
 test-unit: agents-check
 
 agents-check:
-	python tools/agents_check.py --check
+	python -m tools.maintenance.agents_check --check
 
 # Install the checked-in Codex profile as ~/.codex/omphalos.config.toml,
 # then work with `codex -p omphalos`.
 codex-setup:
-	python tools/codex_setup.py
+	python -m tools.maintenance.codex_setup
 
 # Ladon, the overnight improvement loop (ladon/README.md).
 -include ladon/ladon.mk

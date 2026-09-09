@@ -1,10 +1,9 @@
 # ACE review campaign — 2026-09-08
 
 The experiment docstring registered the rules before API calls began.
-This file records the approved protocol and how either agent harness can
-resume it. All commands run from `examples/omphalos`. Paid work runs in
-tmux; its shell must first `source ~/.config/omphalos/env.sh` because an
-existing tmux server may predate the API environment.
+This file preserves the approved protocol and its completed evidence.
+Current operating instructions for both harnesses are in
+[usage](../../../docs/usage.md).
 
 **Completed on 2026-09-08 at 22:56 local time.** All 864 evaluation cells
 and both training seeds finished. Confirmation: x3 121/176 versus baseline
@@ -12,9 +11,9 @@ and both training seeds finished. Confirmation: x3 121/176 versus baseline
 established. Matched Terra reference: 22/32 versus 25/32 solves, at 25.42%
 of Terra's cost (95% descriptive ratio interval 17.29%–35.69%). Final
 liability: **$39.01643976**, including $0.688999 of unknown charges, with
-no in-flight receipts. See [the review](../../../ACE_REVIEW.md),
+no in-flight receipts. See [the review](../../../docs/ace_review.md),
 [final report](final_report.json), [billing audit](operational_audit.json)
-and [effect plot](effect_comparison.png). The scripts below are retained
+and [effect plot](effect_comparison.png). The registered entrypoint is retained
 for reproducibility; completion does not authorize a new tuning round on
 the protected outcomes.
 
@@ -71,67 +70,15 @@ the protected outcomes.
   and template/family filtering. "Unexposed" refers to this project's work,
   not a claim about model pretraining. ValidationX is development data.
 
-## Resume and report
+## Completed campaign and evidence
 
-```bash
-source ~/.config/omphalos/env.sh
-python experiments/ace_review_experiment.py --phase=calibration run --wait
-python tools/ace_review_report.py calibration
-python experiments/ace_adaptation.py run --variant=review-repair-s0 --max_workers=4
-python experiments/ace_adaptation.py run --variant=review-repair-s1 --max_workers=4
-# calibration.json selected 64 requests for all cheap evaluation arms.
-python experiments/ace_review_experiment.py --phase=development --requests=64 run --wait
-python tools/ace_review_report.py selection
-python experiments/ace_review_experiment.py --phase=confirmation run --wait
-python experiments/ace_review_experiment.py --phase=terra run --wait
-python tools/ace_review_report.py final
-python tools/export_ace_review.py
-python tools/plot_ace_review.py
-python tools/ace_review_report.py status
-```
-
-If a stage allocation is exhausted, a resume can explicitly use
-`--budget_stage=contingency` (before `run`) within the remaining contingency
-allocation ($3 after the audited transfer below).
-This changes accounting allocation only; it preserves cell identities,
-request limits, caches and all receipts. Never draw on a different stage
-implicitly.
-
-Add `--retry_errors` to an evaluation launch only when resuming recorded
-infrastructure errors. Their exception records and paid receipts survive.
-The adaptation driver also retries through `retry_failed()`, which preserves
-exceptions and rebuilds launcher state. The launcher starts a fresh
-attempt and removes the active cache; `retry_failed()` now preserves that
-cache under `configs/<cell>/attempts/<timestamp>/` first. All attempt
-charges remain in the ledger. The former `mark_errors_as_todos()`
-was undone by the launcher's ground-truth rebuild.
-
-`calibration.json`, `selection.json`, `final_report.json` and
-`final_cells.json` are immutable decisions/results. `ledger.sqlite3` is the
-billing record; unknown charges retain their full reservation. Never delete
-in-flight records to free money. Do not copy a live SQLite database without
-its WAL: use SQLite's backup API for a portable snapshot.
-After completion, `export_ace_review.py` reads a consistent transaction
-and freezes every receipt in LF-terminated `receipts.csv`, with allocation
-transfers, token-size summaries and exception classifications in
-`operational_audit.json`. It rejects pending billing or any mismatch with
-the final report. Neither export reads proof trajectories.
-`plot_ace_review.py` renders the frozen development and confirmation
-effects with descriptive cluster intervals and exact p values as
-`effect_comparison.png` and `.pdf`. It uses Matplotlib (3.11.0 in this
-environment), makes no model calls and refuses to change an existing
-figure. Development and confirmation are clearly separated in the plot.
-
-The frozen x3 artifact is an incumbent, not a contemporaneously retrained
-no-repair control. Thus a repair-artifact improvement does not isolate the
-causal effect of reflection from additional adaptation compute or training
-randomness. The final baseline comparison measures the deployed ACE pipeline.
-
-For a later CPU diagnostic, use `python tools/bench_ace_runtime.py --output
-experiments/campaigns/ace_runtime_followup` with a new directory. The tool
-refuses to replace the frozen runtime files. Later sweeps also record
-per-chunk durations and a workload digest; these fields were added after
-the original measurement and do not alter its selected campaign profile.
+The campaign is complete; old launch/resume recipes have been removed from
+this result record. Its registrations and original p<0.05 rule above remain
+historical facts. Current operating commands are in
+[usage](../../../docs/usage.md), and the curated
+[review](../../../docs/ace_review.md) links the phase reports and conclusions.
+The paid outputs, receipt ledger, manifests and frozen reports stay intact.
+New work uses a separately registered campaign rather than reopening this one.
 
 ## Execution notes
 
@@ -201,7 +148,7 @@ uniformly across arms, with every attempt charged to its cell.
 Residual failures stay in solve denominators. Admission failures make a
 panel incomplete rather than producing a quality verdict.
 
-`python -u tools/continue_ace_review.py` resumes the campaign after the
+`python -u tools/maintenance/continue_ace_review.py` resumes the campaign after the
 three initial tmux launches. It waits for calibration, applies at most
 two fresh retries to recorded errors, freezes calibration, runs development controls
 while repair training finishes, waits for each artifact, selects once,

@@ -1,0 +1,49 @@
+"""
+Scaffolding for the full miniF2F valid-split sweep, standard baseline.
+
+Not run as part of the dev loop. Kept here so the cost of extending the
+benchmark is mechanical: list all `valid/**/*.v` files, materialise a
+`PROBLEMS` mapping in `miniF2F_bench`, and parameterise over models
+and seeds.
+
+Usage (when ready):
+    python -m experiments.baselines.full_standard_experiment run --max_workers=4
+"""
+
+# pyright: strict
+
+import experiments.common.miniF2F_bench as mf
+import experiments.common.omphalos_launch as ol
+import delphyne as dp
+
+
+MODELS = [mf.CANONICAL_MODEL]
+SEEDS = [0]
+
+
+configs = [
+    mf.StandardConfig(
+        bench_name=name,
+        model_name=model,
+        temperature=None,
+        max_feedback_cycles=5,
+        loop=False,
+        seed=seed,
+        max_dollar_budget=0.5,
+    )
+    for name in mf.TRAIN_PROBLEMS  # extend to the full valid split later
+    for model in MODELS
+    for seed in SEEDS
+]
+
+
+if __name__ == "__main__":
+    ol.OmphalosExperiment(
+        config_class=mf.StandardConfig,
+        context=dp.workspace_execution_context(__file__),
+        configs=configs,
+        output_dir=f"experiments/output/{dp.path_stem(__file__)}",
+        config_naming=lambda cfg, _uid: (
+            f"{cfg.bench_name}__{cfg.model_name}__seed{cfg.seed}"
+        ),
+    ).run_cli()
