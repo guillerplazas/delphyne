@@ -59,7 +59,11 @@ def compare(
     cap_a: float = 0.1,
     cap_b: float = 0.1,
     bootstrap_samples: int = 10000,
+    alpha: float = 0.05,
+    confidence: float = 0.95,
 ) -> dict[str, Any]:
+    if not 0 < alpha < 1 or not 0 < confidence < 1:
+        raise ValueError("alpha and confidence must lie strictly in (0, 1)")
     cells = set(expected)
     if len(cells) != len(expected):
         raise ValueError("duplicate expected cells")
@@ -106,13 +110,14 @@ def compare(
     samples = values[
         rng.integers(0, len(blocks), size=(bootstrap_samples, len(blocks)))
     ].sum(axis=1)
+    quantiles = ((1 - confidence) / 2, (1 + confidence) / 2)
     effect_ci = [
         float(cast(Any, np.quantile(samples[:, 0] / samples[:, 1], q)))
-        for q in (0.025, 0.975)
+        for q in quantiles
     ]
     cost_ci = [
         float(cast(Any, np.quantile(samples[:, 2] / samples[:, 1], q)))
-        for q in (0.025, 0.975)
+        for q in quantiles
     ]
     ratios = np.divide(
         samples[:, 4],
@@ -121,7 +126,7 @@ def compare(
         where=samples[:, 3] > 0,
     )
     ratio_ci = (
-        [float(np.nanquantile(ratios, q)) for q in (0.025, 0.975)]
+        [float(np.nanquantile(ratios, q)) for q in quantiles]
         if np.isfinite(ratios).any()
         else None
     )
@@ -131,11 +136,14 @@ def compare(
     # conservative weighted Hoeffding bound for exclusion decisions.
     # Independent sampling units are families, each with range [-1, 1].
     weights_sq = sum((len(cs) / len(cells)) ** 2 for cs in groups.values())
-    upper95 = min(1.0, effect + math.sqrt(2 * weights_sq * math.log(20)))
+    upper95 = min(
+        1.0,
+        effect + math.sqrt(2 * weights_sq * math.log(1 / (1 - confidence))),
+    )
     p = exact_cluster_p(deltas)
     verdict = (
         "improvement"
-        if effect >= 0.05 - 1e-12 and p < 0.05
+        if effect >= 0.05 - 1e-12 and p < alpha
         else "useful_gain_not_supported"
         if upper95 < 0.05
         else "inconclusive"
@@ -144,6 +152,7 @@ def compare(
         sum(a[c].cost for c in cells),
         sum(b[c].cost for c in cells),
     )
+    confidence_label = round(confidence * 100)
     return {
         "complete": True,
         "cells": len(cells),
@@ -152,25 +161,64 @@ def compare(
         "solved_a": sum(success(a[c], cap_a) for c in cells),
         "solved_b": sum(success(b[c], cap_b) for c in cells),
         "effect": effect,
-        "effect_ci95": effect_ci,
-        "effect_ci95_method": "family percentile bootstrap (descriptive)",
-        "effect_upper95_conservative": upper95,
+        f"effect_ci{confidence_label}": effect_ci,
+        f"effect_ci{confidence_label}_method": "family percentile bootstrap (descriptive)",
+        f"effect_upper{confidence_label}_conservative": upper95,
         "p_two_sided": p,
         "discordant_families": sum(d != 0 for d in deltas),
         "cost_a": total_a,
         "cost_b": total_b,
         "cost_ratio": total_b / total_a if total_a else None,
-        "cost_ratio_ci95": ratio_ci,
+        f"cost_ratio_ci{confidence_label}": ratio_ci,
         "median_paired_cost_difference": statistics.median(
             b[c].cost - a[c].cost for c in cells
         ),
         "cheaper_b_cells": sum(b[c].cost < a[c].cost for c in cells),
         "dearer_b_cells": sum(b[c].cost > a[c].cost for c in cells),
         "mean_cost_difference": (total_b - total_a) / len(cells),
-        "mean_cost_difference_ci95": cost_ci,
+        f"mean_cost_difference_ci{confidence_label}": cost_ci,
         "failed_a": sum(a[c].failed for c in cells),
         "failed_b": sum(b[c].failed for c in cells),
         "cap_crossings_a": sum(a[c].cost > cap_a for c in cells),
         "cap_crossings_b": sum(b[c].cost > cap_b for c in cells),
         "verdict": verdict,
     }
+
+
+def cost_cluster_p(
+    a: Mapping[Cell, Observation],
+    b: Mapping[Cell, Observation],
+    expected: Sequence[Cell],
+    families: Mapping[str, str],
+    samples: int = 100000,
+) -> float:
+    """Two-sided paired sign-flip test on family cost differences.
+
+    Exact through 18 nonzero families, otherwise fixed-seed Monte Carlo with
+    the plus-one correction. This assumes exchangeability of paired signs;
+    historical controls and heavy-tailed costs warrant descriptive intervals
+    and explicit disclosure rather than a randomized causal interpretation.
+    """
+    deltas: dict[str, float] = defaultdict(float)
+    for cell in expected:
+        deltas[families.get(cell[0], cell[0])] += b[cell].cost - a[cell].cost
+    values = np.asarray([d for d in deltas.values() if abs(d) > 1e-15])
+    if not len(values):
+        return 1.0
+    observed = abs(float(values.sum()))
+    if len(values) <= 18:
+        sums = np.zeros(1)
+        for value in values:
+            sums = np.concatenate((sums + value, sums - value))
+        return float(np.mean(np.abs(sums) >= observed - 1e-12))
+    rng = np.random.default_rng(20260909)
+    extreme = 0
+    remaining = samples
+    while remaining:
+        count = min(4096, remaining)
+        signs = rng.integers(0, 2, size=(count, len(values))) * 2 - 1
+        extreme += int(
+            np.count_nonzero(np.abs(signs @ values) >= observed - 1e-12)
+        )
+        remaining -= count
+    return (extreme + 1) / (samples + 1)

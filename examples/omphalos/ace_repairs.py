@@ -42,7 +42,7 @@ from failure_analysis import (  # noqa: E402
     refine_class,
 )
 
-_CHECK_PREFIXES = ("fun: check_assisted", "fun: check\n")
+_CHECK_PREFIXES = ("fun: check_assisted", "fun: check\n", "fun: checked_proof")
 
 Outcome = Literal["solved", "advanced"]
 
@@ -121,6 +121,8 @@ def attempts_of_cache(cache: Path) -> list[Attempt]:
         fb: Any = yaml.load(
             str(outputs[0].get("content") or ""), Loader=loader
         )
+        if isinstance(fb, dict) and "feedback" in fb:
+            fb = cast(dict[str, Any], fb)["feedback"]
         if not isinstance(call, dict) or not isinstance(fb, dict):
             continue
         args = cast(

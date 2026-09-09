@@ -79,7 +79,7 @@ PERSISTENT_CITATION = 5
 reported as persistently cited — the `mathd_numbertheory_405` shape."""
 
 _CITE_RE = re.compile(r"rocq-\d{5}")
-_CHECK_PREFIXES = ("fun: check_assisted", "fun: check\n")
+_CHECK_PREFIXES = ("fun: check_assisted", "fun: check\n", "fun: checked_proof")
 
 
 #####
@@ -455,7 +455,8 @@ def turns_of_cache(cache: Path) -> list[Turn]:
         parsed: Any = yaml.load(content, Loader=loader)
         if not isinstance(parsed, dict):
             continue
-        fb = cast(dict[str, Any], parsed)
+        record = cast(dict[str, Any], parsed)
+        fb = cast(dict[str, Any], record.get("feedback", record))
         success = bool(fb.get("success"))
         cls = (
             None
@@ -643,7 +644,8 @@ def transitions_of_cache(cache: Path) -> list[Transition]:
         )
         if not isinstance(parsed, dict):
             continue
-        fb = cast(dict[str, Any], parsed)
+        record = cast(dict[str, Any], parsed)
+        fb = cast(dict[str, Any], record.get("feedback", record))
         if fb.get("success"):
             events.append(("verdict", None))
         else:

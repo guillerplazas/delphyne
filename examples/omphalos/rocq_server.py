@@ -60,6 +60,8 @@ from pytanque import PetanqueError, Pytanque, PytanqueMode
 from pytanque.client import PETANQUE_ROUTES, Failure, Response, mk_request
 from pytanque.routes import RouteName
 
+import tool_budget as tb
+
 _WORKSPACE_ROOT = Path(__file__).resolve().parent
 ROCQ_CACHE_DIR = _WORKSPACE_ROOT / ".rocq_cache"
 """cwd of every Rocq process: micromega writes `.lia.cache` etc. here."""
@@ -250,7 +252,18 @@ class BoundedPytanque(Pytanque):
         chunks: list[bytes] = []
         total = 0
         sock = cast(socket.socket, self.socket)  # type: ignore[reportUnknownMemberType]
+        rpc_end = (
+            time.monotonic()
+            + (sock.gettimeout() or self._settings.rpc_deadline_s)
+            if tb.CURRENT.get() is not None
+            else None
+        )
         while True:
+            if rpc_end is not None:
+                left = rpc_end - time.monotonic()
+                if left <= 0:
+                    raise TimeoutError("RPC deadline across receives")
+                sock.settimeout(tb.clamp_timeout(left))
             chunk = sock.recv(size)
             if not chunk:
                 raise ConnectionLost("the Rocq server closed the connection")
@@ -335,10 +348,16 @@ class BoundedPytanque(Pytanque):
             deadline = timeout + s.rpc_margin_s
         else:
             deadline = timeout
+        op = tb.CURRENT.get()
+        if op is not None:
+            deadline = op.admit_rpc(deadline)
         try:
             return self._query_unlogged(
                 route_name, params, size=size, timeout=deadline
             )
+        except tb.OperationExhausted:
+            self._fail("OperationBudget")
+            raise
         except TransportError as e:
             self._fail(type(e).__name__)
             raise
@@ -573,6 +592,7 @@ class PetServerManager:
 
     def _spawn(self) -> _Server | None:
         st = self.settings
+        spawn_seconds = tb.clamp_timeout(st.spawn_timeout_s)
         ROCQ_CACHE_DIR.mkdir(exist_ok=True)
         LOG_DIR.mkdir(exist_ok=True)
         port = _free_port()
@@ -598,7 +618,7 @@ class PetServerManager:
         except OSError as e:
             _log.error("cannot spawn pet-server: %s", e)
             return None
-        deadline = time.monotonic() + st.spawn_timeout_s
+        deadline = time.monotonic() + spawn_seconds
         while time.monotonic() < deadline:
             if proc.poll() is not None:
                 _log.error(
@@ -678,6 +698,22 @@ class PetServerManager:
             print(msg, file=sys.stderr)
 
     @contextmanager
+    def _session_admission(self) -> Generator[None]:
+        op = tb.CURRENT.get()
+        if op is None:
+            with self._session_lock:
+                yield
+            return
+        if not self._session_lock.acquire(timeout=op.remaining()):
+            op.exhausted = "operation deadline waiting for session"
+            raise tb.OperationExhausted(op.exhausted)
+        try:
+            op.remaining()
+            yield
+        finally:
+            self._session_lock.release()
+
+    @contextmanager
     def session(self, doc_file: str) -> Generator[Pytanque]:
         """
         A petanque client for `doc_file` (the augmented path). Socket
@@ -685,7 +721,7 @@ class PetServerManager:
         the recycle policy applied first. STDIO mode (or fallback): a
         fresh `pet` subprocess, exactly the archived transport.
         """
-        with self._session_lock:
+        with self._session_admission():
             if pet_mode() == "socket":
                 self.start_supervisor_thread(
                     exit_when_orphaned=self._exit_when_orphaned
@@ -708,7 +744,15 @@ class PetServerManager:
                             # Not already recycled by `on_failure`.
                             self.recycle("poisoned")
                     return
+                if tb.CURRENT.get() is not None:
+                    raise ConnectionLost(
+                        "bounded operation: socket server unavailable"
+                    )
                 self._fallback_warning()
+            if tb.CURRENT.get() is not None:
+                raise ConnectionLost(
+                    "bounded operations require socket transport"
+                )
             with _stdio_session() as client:
                 yield client
 

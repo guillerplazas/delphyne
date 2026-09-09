@@ -77,6 +77,10 @@ DEFAULT_ROOTS = ("experiments/output", "experiments/previous")
 SUMMARY_NAME = "results_summary.csv"
 REPRICED_NAME = "results_summary.repriced.csv"
 
+# Summaries include serialized adaptation states and evidence, not just
+# scalar metrics. Keep a finite allowance large enough for those fields.
+csv.field_size_limit(64 * 1024 * 1024)
+
 # A recomputed price is considered to reproduce a recorded one within
 # this many dollars. Recorded prices are sums of float products, so
 # only float noise should separate them.
@@ -229,7 +233,9 @@ def usage_from_result(result_file: Path) -> Usage | None:
     contribute nothing to spend.
     """
     with open(result_file) as f:
-        doc = _require_mapping(yaml.safe_load(f), result_file, "document")
+        doc = _require_mapping(
+            yaml.load(f, Loader=yaml.CSafeLoader), result_file, "document"
+        )
     args = _require_mapping(doc.get("args"), result_file, "'args'")
     outcome = _require_mapping(doc.get("outcome"), result_file, "'outcome'")
     result = _mapping(outcome.get("result"))
@@ -273,7 +279,7 @@ def run_date(run: Path) -> date | None:
     if not state.exists():
         return None
     with open(state) as f:
-        doc = _mapping(yaml.safe_load(f))
+        doc = _mapping(yaml.load(f, Loader=yaml.CSafeLoader))
     if doc is None:
         return None
     configs = _mapping(doc.get("configs"))
@@ -343,9 +349,17 @@ def collect(run: Path, group_by: str | None) -> list[RunReport]:
     """
     ran_on = run_date(run)
     summary = run / SUMMARY_NAME
+    summary_has_model = False
     if summary.exists():
+        with summary.open(newline="") as source:
+            summary_has_model = "model_name" in next(
+                csv.reader(source), list[str]()
+            )
+    if summary_has_model:
         usages = usages_from_summary(summary, group_by, ran_on)
     else:
+        # Defaults may be omitted from the summary. The command result
+        # contains the actual model passed to the policy; never guess it.
         usages = [
             replace(u, ran_on=ran_on)
             for f in sorted(run.glob("configs/*/result.yaml"))

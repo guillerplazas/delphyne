@@ -457,12 +457,18 @@ GOALS_OVERFLOW_MARKER = (
 
 
 def _safe_goals(client: Pytanque, state: State) -> list[str]:
+    import tool_budget as tb
+
     try:
         goals = client.goals(state)
     except ReplyTooLarge:
+        if tb.CURRENT.get() is not None:
+            raise
         # A silent `[]` would read as "no goals"; say what happened.
         return [GOALS_OVERFLOW_MARKER]
     except Exception:
+        if tb.CURRENT.get() is not None:
+            raise
         return []
     out: list[str] = []
     for g in goals or []:
@@ -589,7 +595,11 @@ def check(
     session, no start failure) are stored.
     """
     file = _resolve(file)
-    memo = _check_memo_enabled()
+    # A cached complete operation has different resource semantics. Prefix
+    # memo remains valid; whole-result memo is disabled for bounded calls.
+    import tool_budget as tb
+
+    memo = _check_memo_enabled() and tb.CURRENT.get() is None
     key = (
         file,
         theorem_name,
@@ -1272,8 +1282,13 @@ def _probe_goals(
     the first `goal_cap` goals are probed and the list is that short.
     """
     limit = n if goal_cap is None else min(n, goal_cap)
+    import tool_budget as tb
+
     closers: list[str | None] = []
     for i in range(1, limit + 1):
+        op = tb.CURRENT.get()
+        if op is not None and op.exhausted:
+            break
         if getattr(client, "poisoned", False):
             break
         if (
@@ -1285,6 +1300,8 @@ def _probe_goals(
             break
         found: str | None = None
         for tac in AUTOMATION_BATTERY:
+            if op is not None and op.exhausted:
+                break
             probe = f"{i}: {tac}" if n > 1 else tac
             try:
                 after = client.run(state, probe, timeout=tactic_timeout)
@@ -1627,6 +1644,11 @@ def _failure_feedback(
     reply cap, server death) is reported in `error_message` instead of
     the Rocq error: the attempt has no verdict, and the cell continues.
     """
+    import tool_budget as tb
+
+    op = tb.CURRENT.get()
+    if op is not None:
+        op.prefix = list(proof_so_far)
     if isinstance(client, BoundedPytanque) and client.poisoned:
         return Feedback(
             success=False,
@@ -1638,6 +1660,8 @@ def _failure_feedback(
             proof_so_far=list(proof_so_far),
         )
     goals = _safe_goals(client, state)
+    if op is not None:
+        op.goals = list(goals)
     probe: list[str | None] | None = None
     if probe_automation and goals and not state.proof_finished:
         probe = _probe_goals(

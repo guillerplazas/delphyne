@@ -42,7 +42,6 @@ Usage:
 # pyright: strict
 
 import argparse
-import csv
 import json
 import re
 from collections import defaultdict
@@ -57,7 +56,7 @@ _OMPHALOS_DIR = Path(__file__).resolve().parent.parent
 
 SUMMARY_NAME = "results_summary.csv"
 
-_CHECK_PREFIXES = ("fun: check_assisted", "fun: check\n")
+_CHECK_PREFIXES = ("fun: check_assisted", "fun: check\n", "fun: checked_proof")
 
 
 #####
@@ -291,7 +290,8 @@ def _feedback_entries(cache: Path) -> list[dict[str, Any]]:
             continue
         parsed = yaml.load(str(outputs[0].get("content") or ""), Loader=loader)
         if isinstance(parsed, dict):
-            out.append(cast(dict[str, Any], parsed))
+            record = cast(dict[str, Any], parsed)
+            out.append(cast(dict[str, Any], record.get("feedback", record)))
     return out
 
 
@@ -306,15 +306,19 @@ def load_run(run: Path, arm: "re.Pattern[str] | None" = None) -> list[Verdict]:
     sweep alongside the canonical `core-medium` one, and blending them
     silently doubles the verdict count of the arm you meant.
     """
-    summary = run / SUMMARY_NAME
-    assert summary.exists(), f"no {SUMMARY_NAME} in {run}"
-    solved: dict[str, bool] = {}
-    with summary.open() as f:
-        for row in csv.DictReader(f):
-            solved[row["bench_name"]] = row["success"] == "True"
+    from cell_records import cells_of_run
+
+    records = {record.name: record for record in cells_of_run(run)}
+    if not (run / "experiment.yaml").exists():
+        raise ValueError(f"missing experiment manifest in {run}")
     verdicts: list[Verdict] = []
     for cache in sorted(run.glob("configs/*/cache.yaml")):
         config = cache.parent.name
+        record = records.get(config)
+        if record is None:
+            # Missing/running cells have no terminal solve label. Do not
+            # manufacture an unsolved observation or blend stale caches.
+            continue
         parts = config.split("__")
         if arm is not None:
             assert len(parts) == 4, (
@@ -330,7 +334,7 @@ def load_run(run: Path, arm: "re.Pattern[str] | None" = None) -> list[Verdict]:
                 Verdict(
                     bench=bench,
                     config=config,
-                    solved_run=solved.get(bench, False),
+                    solved_run=record.solved,
                     success=False,
                     failing_tactic=None,
                     error_message=NEVER_PROPOSED,
@@ -344,7 +348,7 @@ def load_run(run: Path, arm: "re.Pattern[str] | None" = None) -> list[Verdict]:
                 Verdict(
                     bench=bench,
                     config=config,
-                    solved_run=solved.get(bench, False),
+                    solved_run=record.solved,
                     success=bool(fb.get("success")),
                     failing_tactic=cast(str | None, fb.get("failing_tactic")),
                     error_message=cast(str | None, fb.get("error_message")),

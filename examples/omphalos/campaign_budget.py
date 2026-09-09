@@ -256,6 +256,35 @@ class CampaignResponsesModel(oa.OpenAIResponsesModel):
     cell: str = ""
     reasoning_allowance: int = field(init=False, default=0)
     output_limit: int = 32768
+    estimate_dollars: bool = False
+
+    def _input_bound(self, req: LLMRequest) -> int:
+        inp, _ = oa.translate_chat_for_responses(
+            req, self.reasoning_cache, self.convert_user_feedback_to_tool
+        )
+        tools = [oa._make_responses_tool(t) for t in req.tools]  # pyright: ignore[reportPrivateUsage]
+        fmt = oa._responses_response_format(  # pyright: ignore[reportPrivateUsage]
+            req.structured_output, self.no_json_schema
+        )
+        return (
+            len(json.dumps([inp, tools, fmt], default=str).encode())
+            + self.reasoning_allowance
+            + 32768
+        )
+
+    @override
+    def estimate_budget(self, req: LLMRequest) -> Budget:
+        estimate = super().estimate_budget(req)
+        if not self.estimate_dollars:
+            return estimate
+        full = self.add_model_defaults(req)
+        assert self.pricing is not None
+        bound = (
+            self._input_bound(full) * self.pricing.dollars_per_input_token
+            + full.options.get("max_completion_tokens", self.output_limit)
+            * self.pricing.dollars_per_output_token
+        )
+        return estimate + Budget({"price": bound})
 
     @override
     def add_model_defaults(self, req: LLMRequest) -> LLMRequest:
@@ -287,11 +316,7 @@ class CampaignResponsesModel(oa.OpenAIResponsesModel):
         fmt = oa._responses_response_format(  # pyright: ignore[reportPrivateUsage]
             req.structured_output, self.no_json_schema
         )
-        bound_input = (
-            len(json.dumps([inp, tools, fmt], default=str).encode())
-            + self.reasoning_allowance
-            + 32768
-        )
+        bound_input = self._input_bound(req)
         bound = (
             bound_input * self.pricing.dollars_per_input_token
             + options["max_completion_tokens"]
@@ -380,4 +405,5 @@ def for_campaign(model: LLM) -> LLM:
         ledger_file=str(Path(path).resolve()),
         stage=os.environ["OMPHALOS_CAMPAIGN_STAGE"],
         cell=os.environ.get("OMPHALOS_CAMPAIGN_CELL", ""),
+        estimate_dollars=os.environ.get("OMPHALOS_ESTIMATE_DOLLARS") == "1",
     )
