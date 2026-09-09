@@ -319,6 +319,13 @@ def test_frozen_rules() -> None:
     assert guard.is_frozen("experiments/x_ladon_experiment.py")
     assert guard.is_frozen("miniF2F/valid/a.v")
     assert guard.is_frozen("ladon/cli.py") and guard.is_frozen("HINTS.md")
+    # The dual-harness surface: instructions, shared memory and the
+    # Codex profile are Guille's, never an arm's (AGENTS.md).
+    assert guard.is_frozen("AGENTS.md") and guard.is_frozen("CLAUDE.md")
+    assert guard.is_frozen("ladon/AGENTS.md")
+    assert guard.is_frozen("memory/MEMORY.md")
+    assert guard.is_frozen(".codex/config.toml")
+    assert ".codex" not in guard.SNAPSHOT_EXCLUDE
     assert not guard.is_frozen("ladon/nights/2026-09-03/hints/h1/arm.yaml")
     assert not guard.is_frozen("experiments/ladon_2026-09-03_h1_experiment.py")
     assert not guard.is_frozen("pytanque_utils.py")

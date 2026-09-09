@@ -71,6 +71,31 @@ metadata for the Delphyne PR.
 To work on a problem, open one of the `.v` files, replace `Admitted.` with a
 proof, and type-check that file or the full project.
 
+### Agent harnesses
+
+This project is worked on from two agent CLIs, and both are supported:
+Claude Code (`claude`) and Codex CLI. The instructions live in
+`AGENTS.md` (this directory, the repository root, and `ladon/`);
+`CLAUDE.md` beside each one is a symlink to it, so both tools read the
+same file. Those two, like `PROGRESS.md` and `memory/` (durable
+cross-session notes, see `memory/README.md`), are local and untracked;
+`ladon/AGENTS.md` is versioned with the loop.
+
+For Codex, install the checked-in profile once per machine and use it:
+
+```sh
+make codex-setup          # links .codex/config.toml into ~/.codex
+codex -p omphalos         # or: codex exec -p omphalos "..."
+```
+
+The profile grants workspace writes and network access (experiments
+call the OpenAI API), passes `OPENAI_API_KEY` through Codex's default
+env filter, withholds the Anthropic credentials, and registers the
+`rocq-mcp` server. `make agents-check` (part of `make test-unit`)
+verifies the symlinks and the profile. One exception to the
+both-harnesses rule: Ladon nights run on Claude Code only
+(`ladon/AGENTS.md`).
+
 ## Regenerating The Benchmark
 
 Use this only when the upstream Rocq benchmark or the informal HuggingFace data
@@ -168,6 +193,10 @@ Prerequisites:
   overridable via `policy_args.model_name`; gpt-5.6 pricing and the
   tool-call `reasoning_effort` workaround live in
   `model_registry.py`).
+- On i34-gpu01 (the machine since 2026-09-08) all of the above is
+  loaded by `~/.config/omphalos/env.sh` from `.bashrc`. Run anything
+  longer than a few minutes inside tmux (`tmux new -s <name>`): a VPN
+  drop kills a plain SSH session, and there is no user systemd.
 
 ### Running the baselines
 

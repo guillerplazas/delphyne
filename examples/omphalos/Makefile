@@ -553,5 +553,21 @@ clean: clean-experiments
 clean-experiments:
 	rm -rf experiments/output
 
+# --- agent harnesses (AGENTS.md, "Agent harnesses") ---
+
+.PHONY: agents-check codex-setup
+
+# The dual-harness invariants join the omphalos `make test-unit` gate:
+# a copy where a symlink belongs breaks them silently.
+test-unit: agents-check
+
+agents-check:
+	python tools/agents_check.py --check
+
+# Install the checked-in Codex profile as ~/.codex/omphalos.config.toml,
+# then work with `codex -p omphalos`.
+codex-setup:
+	python tools/codex_setup.py
+
 # Ladon, the overnight improvement loop (ladon/README.md).
 -include ladon/ladon.mk

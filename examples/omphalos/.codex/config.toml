@@ -1,0 +1,34 @@
+# Omphalos Codex profile — the source of truth lives here, in the tree.
+#
+#   make codex-setup      symlinks ~/.codex/omphalos.config.toml here
+#   codex -p omphalos     interactive session with this profile
+#   codex exec -p omphalos "…"    one-shot run
+#
+# `-p/--profile` layers $CODEX_HOME/<name>.config.toml over the base
+# ~/.codex/config.toml, so this file only states what omphalos needs.
+# Never write a secret into this file: keys are inherited from the shell
+# (~/.config/omphalos/env.sh), never stored.
+
+model_reasoning_effort = "xhigh"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+# Experiments call the OpenAI API; without this every sweep fails.
+network_access = true
+
+[shell_environment_policy]
+inherit = "all"
+# Codex strips *KEY*/*TOKEN*/*SECRET* by default, which would keep
+# OPENAI_API_KEY out of `make sweep-…` and every experiment script.
+ignore_default_excludes = true
+# The Anthropic credentials stay out on purpose: a Codex session must
+# not be able to spend the Claude subscription (same rule as
+# ladon/claude_driver.py's STRIP_ENV, in the other direction).
+exclude = ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"]
+
+# Same server Claude Code has registered in ~/.claude.json project scope.
+[mcp_servers.rocq-mcp]
+command = "/home/guille/tools/rocq-mcp-venv/bin/rocq-mcp"
+args = []
+env = { ROCQ_WORKSPACE = "/home/guille/anaconda3/envs/guille/delphyne/examples/omphalos" }

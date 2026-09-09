@@ -67,6 +67,9 @@ FROZEN_GLOBS: tuple[str, ...] = (
     "HINTS.md",
     "LINKS.md",
     "CLAUDE.md",
+    "AGENTS.md",
+    ".codex/*",
+    "memory/*",
     "master_arbeit_plan.md",
     "papers/*",
     "ladon/*",
@@ -97,7 +100,6 @@ SNAPSHOT_EXCLUDE: frozenset[str] = frozenset(
         ".pytest_cache",
         ".git",
         ".agents",
-        ".codex",
     }
 )
 OUTPUT_DIR = "experiments/output"

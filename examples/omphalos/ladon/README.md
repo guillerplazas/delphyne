@@ -12,8 +12,11 @@ Named after the dragon that never slept while guarding the garden.
 
 ## Starting a night
 
-Before bed, from `examples/omphalos` in a tmux (the WSL VM must stay
-up; a live tmux keeps it up):
+Before bed, from `examples/omphalos` inside a tmux session. On i34-gpu01
+this is mandatory: there is no user systemd (`Linger=no`), so the night
+falls back to `nohup` and must be started from a tmux that outlives the
+SSH session (`tmux new -s ladon`). On the laptop a live tmux also keeps
+the WSL VM up:
 
     make ladon-night                                   # tonight, defaults
     make ladon-night LADON_ARGS="--max_hints=1 --hints=58"   # pinned queue
@@ -114,6 +117,16 @@ the patch under the night directory.
 
 ## Operating notes
 
+- **Claude Code only** (decision 2026-09-08, when Codex CLI became a
+  second harness for the rest of omphalos). `claude_driver.py` is built
+  on that CLI's `-p` flag surface, on `--max-budget-usd` for the
+  per-session money cap, and on the Max-plan 5 h / 7 d rate windows
+  that decide when a night waits; none of it has a measured Codex
+  equivalent, and the loop spends real money unattended. A Codex
+  session may read Ladon, work on the arms it produced, and run
+  `make ladon-status` / `ladon-report` / `ladon-test`, but must not
+  start or resume a night. `make ladon-selftest` needs `claude` on
+  PATH.
 - `make ladon-selftest` (≈ 1 min): preflight, one structured Sonnet
   call, one archived proof re-checked in a pristine worktree.
 - `make ladon-dry` (≈ $0.05): a synthetic hint through every
