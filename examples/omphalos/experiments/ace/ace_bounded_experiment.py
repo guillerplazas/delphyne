@@ -94,6 +94,8 @@ class BoundedConfig(mf.ResponsesAgenticConfig):
     matched_advice: bool = False
     output_recovery: bool = False
     output_limit: int = 32768
+    playbook_file: str = ""
+    playbook_sha256: str = ""
 
     def _problem(self) -> tuple[str, str]:
         return self.problem_file, self.bench_name
@@ -101,8 +103,13 @@ class BoundedConfig(mf.ResponsesAgenticConfig):
     def instantiate(self, context: object) -> dp.RunStrategyArgs:
         os.environ["OMPHALOS_CAMPAIGN_CELL"] = name(self, None)
         os.environ["OMPHALOS_ESTIMATE_DOLLARS"] = "1" if self.money else "0"
-        pb = Playbook.load(INCUMBENT)
-        if pb.sha256() != INCUMBENT_SHA:
+        pb = Playbook.load(
+            ROOT / self.playbook_file if self.playbook_file else INCUMBENT
+        )
+        expected = (
+            self.playbook_sha256 if self.playbook_file else INCUMBENT_SHA
+        )
+        if not expected or pb.sha256() != expected:
             raise ValueError("incumbent playbook changed")
         return dp.RunStrategyArgs(
             strategy="prove_theorem_grounded",

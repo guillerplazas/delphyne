@@ -32,6 +32,8 @@ test: test-unit test-rocq test-standard test-agentic test-probing test-luna test
 # Pure Python: no API calls, no Rocq server. Guards the deterministic
 # merge and the generated adaptation pool against silent drift.
 test-unit:
+	python -m pytest -q tests/test_ace_models.py
+	python -m pytest -q tests/test_ace_contenders.py
 	python -m tests.test_change_control
 	python -m tests.test_ace_applicability
 	python -m tests.test_ace_polish
