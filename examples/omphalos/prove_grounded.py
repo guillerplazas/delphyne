@@ -17,14 +17,18 @@ from delphyne.stdlib.streams import SpendingDeclined, spend_on
 from delphyne.stdlib.queries import SelectedExample, ExampleSelector
 
 import ace.ace_grounded as ag
+import ace.ace_applicability as aa
+from ace.ace_applicability import RepairExample as SyntaxExample
 import runtime.pytanque_utils as pt
 import runtime.skills as sk
+import runtime.admission_events as events
 from ace.ace_evidence import import_signature, unknown_identifier
 from runtime.model_registry import ApiType, OmphalosReasoningEffort, make_model
 from prove_agentic import ReadSkill, SearchRocq
 from prove_ace import _ace_examples  # pyright: ignore[reportPrivateUsage]
 from runtime.stall import stalled, view_of_feedback
 from runtime.tool_budget import ToolLimits, clip_utf8
+from runtime.grounded_control import DecisionControl
 
 
 @search_policy
@@ -32,6 +36,7 @@ def grounded_search[P, T](
     tree: dp.Tree[dp.Branch | dp.Compute | dp.Fail, P, T],
     env: dp.PolicyEnv,
     policy: P,
+    typed_limits: bool = False,
 ) -> dp.StreamGen[T]:
     """DFS with resource admission for Compute, under the parent budget."""
     node = tree.node
@@ -42,12 +47,17 @@ def grounded_search[P, T](
         args = cast(dict[str, Any], getattr(query, "args"))
         limits = args.get("limits", {})
         seconds = (
-            float(cast(dict[str, Any], limits).get("seconds", 60))
-            if isinstance(limits, dict)
-            else 60.0
+            limits.seconds
+            if typed_limits and isinstance(limits, ToolLimits)
+            else (
+                float(cast(dict[str, Any], limits).get("seconds", 60))
+                if isinstance(limits, dict)
+                else 60.0
+            )
         )
 
         def perform() -> tuple[str, dp.Budget]:
+            before = events.compute_invocations
             answer = node.run_computation_with_cache(cache=env.cache)
             raw: Any = yaml.safe_load(answer)
             elapsed = (
@@ -55,6 +65,14 @@ def grounded_search[P, T](
                 if isinstance(raw, dict)
                 else 0.0
             )
+            if typed_limits:
+                events.record(
+                    "compute",
+                    "settled",
+                    elapsed=elapsed,
+                    estimate_seconds=seconds,
+                    cached=events.compute_invocations == before,
+                )
             return answer, dp.Budget({"rocq_seconds": elapsed})
 
         answer = yield from spend_on(
@@ -64,14 +82,18 @@ def grounded_search[P, T](
             return
         parsed = node.query.attached.parse_answer(dp.Answer(None, answer))
         assert not isinstance(parsed, dp.ParseError)
-        yield from grounded_search()(tree.child(parsed), env, policy)
+        yield from grounded_search(typed_limits=typed_limits)(
+            tree.child(parsed), env, policy
+        )
     elif isinstance(node, dp.Branch):
         yield from node.cands.stream(env, policy).bind(
-            lambda candidate: grounded_search()(
+            lambda candidate: grounded_search(typed_limits=typed_limits)(
                 tree.child(candidate.tracked), env, policy
             )
         )
     else:
+        if typed_limits:
+            events.record("stop", str(node.error.label))
         return
 
 
@@ -106,6 +128,7 @@ class ProposeProofScriptGrounded(
     decision: str = "propose a proof"
     verified_prefix: str = ""
     lesson: str = ""
+    control: DecisionControl | None = None
 
     def parser(
         self,
@@ -151,6 +174,12 @@ def prove_theorem_grounded(
     focused: bool = True,
     restart: bool = True,
     admission: bool = True,
+    polished: bool = False,
+    resource_recovery: bool = False,
+    matched_advice: bool = False,
+    output_recovery: bool = False,
+    syntax_mode: str = "",
+    syntax_bank: tuple["SyntaxExample", ...] = (),
 ) -> dp.Strategy[dp.Branch | dp.Compute | dp.Fail, dp.PromptingPolicy, str]:
     spec = pt.parse_problem(problem_file, show_definitions=True)
     environment = import_signature(problem_file)
@@ -160,22 +189,60 @@ def prove_theorem_grounded(
     repair_used = restart_used = False
     repair_attempted = False
     action = "propose a proof"
+    recovery_state: tuple[str, ...] | None = None
+    syntax_seen: set[tuple[str, ...]] = set()
     for _ in range(turn_budget):
         if spent >= verifier_seconds:
             yield from dp.fail(label="verifier_budget_exhausted")
-        last = feedbacks[-1] if feedbacks else None
+        last: ag.Checked | None = feedbacks[-1] if feedbacks else None
+        recovery_reason = ""
+        if polished and last is not None and recovery_state is not None:
+            state = tuple(last.feedback.proof_so_far) + tuple(
+                last.feedback.remaining_goals
+            )
+            if state == recovery_state:
+                yield from dp.fail(label="recovery_no_progress")
+            recovery_state = None
         selected: tuple[ag.AdviceClaim, ...] = ()
         if (
             admission
             and last is not None
             and last.outcome in ("rejected", "incomplete")
         ):
-            selected = ag.select_advice(claims, last.feedback, environment)
+            selected = (
+                ag.select_matched_advice(claims, last.feedback, environment)
+                if matched_advice
+                else ag.select_advice(claims, last.feedback, environment)
+            )
+        if (
+            polished
+            and matched_advice
+            and last is not None
+            and last.outcome in ("rejected", "incomplete")
+        ):
+            selected = ag.select_matched_advice(
+                claims, last.feedback, environment
+            )
         views = [
             v
             for f in feedbacks
+            if not polished or f.outcome in ("rejected", "incomplete")
             if (v := view_of_feedback(f.feedback)) is not None
         ]
+        if polished and resource_recovery and last is not None:
+            if last.outcome in ("unknown", "resource_exhausted"):
+                recovery_reason = "resource"
+                action = "use a cheaper computation or representation at the verified prefix; the previous attempt has no logical verdict"
+            elif stalled(views, "seenstate", 4):
+                recovery_reason = "stagnation"
+                action = "repair only the suffix after the verified prefix; close the outstanding goals with a different tactic"
+            if recovery_reason:
+                recovery_state = tuple(last.feedback.proof_so_far) + tuple(
+                    last.feedback.remaining_goals
+                )
+                # Responses converts verifier feedback into a tool result.
+                # Keep its immediately preceding proof proposal as well.
+                prefix = prefix[-2:]
         if restart and (
             stalled(views, "seenstate", 4)
             or (repair_attempted and not restart_used)
@@ -183,7 +250,7 @@ def prove_theorem_grounded(
             if not repair_used:
                 repair_used = True
                 action = "repair only the suffix after the verified prefix"
-                feedbacks = feedbacks[-1:]
+                del feedbacks[:-1]
             elif not restart_used:
                 restart_used = True
                 action = (
@@ -223,8 +290,52 @@ def prove_theorem_grounded(
             if last
             else "",
             lesson=lesson,
+            control=DecisionControl(
+                min(limits.seconds, verifier_seconds - spent),
+                recovery_reason,
+                output_recovery
+                and not recovery_reason
+                and ag.recent_progress(feedbacks[-4:]),
+                matched_advice,
+            )
+            if polished
+            else None,
         )
-        response = yield from dp.branch(query.using(dp.ambient_pp))
+        syntax_state = None
+        syntax_correction = ""
+        syntax_query = None
+        if syntax_mode:
+            from prove_applicability import DecideSyntaxRepair
+
+            if syntax_mode not in ("F", "A"):
+                raise ValueError("syntax_mode must be F or A")
+            if last is not None:
+                state = aa.RepairState(
+                    problem_file,
+                    theorem_name,
+                    tuple(last.feedback.proof_so_far),
+                    last.feedback.failing_tactic or "",
+                    last.feedback.error_message or "",
+                    last.outcome,
+                    tuple(last.feedback.remaining_goals),
+                    environment,
+                )
+                key = (*state.prefix, state.failed_action)
+                if aa.eligible(state) and key not in syntax_seen:
+                    syntax_state = state
+                    ids = aa.select_ids(state, syntax_bank, syntax_mode)
+                    syntax_query = DecideSyntaxRepair(
+                        state,
+                        sk.list_skills(),
+                        syntax_mode,
+                        ids,
+                        tuple(prefix),
+                        rendered,
+                    )
+        if syntax_state is not None and syntax_query is not None:
+            response = yield from dp.branch(syntax_query.using(dp.ambient_pp))
+        else:
+            response = yield from dp.branch(query.using(dp.ambient_pp))
         prefix.append(dp.OracleMessage("oracle", response.answer))
         call_limits = replace(
             limits, seconds=min(limits.seconds, verifier_seconds - spent)
@@ -272,17 +383,50 @@ def prove_theorem_grounded(
                 )
             continue
         proposed = response.parsed.final
+        if syntax_state is not None:
+            syntax_seen.add((*syntax_state.prefix, syntax_state.failed_action))
+            if not isinstance(proposed, aa.RepairDecision):
+                yield from dp.fail(label="syntax_parse_failure")
+                return ""
+            if proposed.decision == "abstain":
+                prefix.append(
+                    dp.FeedbackMessage(
+                        "feedback",
+                        "syntax_abstained",
+                        "Continue with an ordinary proof decision.",
+                    )
+                )
+                continue
+            if not aa.supported_decision(syntax_state, proposed):
+                prefix.append(
+                    dp.FeedbackMessage(
+                        "feedback",
+                        "syntax_rejected",
+                        "Correction is outside the registered syntax-only grammar.",
+                    )
+                )
+                continue
+            syntax_correction = proposed.correction
+            proposed = "\n".join((*syntax_state.prefix, proposed.correction))
         if isinstance(proposed, dp.WrappedParseError):
             prefix.append(
                 dp.FeedbackMessage("feedback", "parse", str(proposed.error))
             )
             continue
-        checked = yield from dp.compute(ag.checked_proof)(
-            problem_file,
-            theorem_name,
-            pt.split_into_tactics(proposed),
-            call_limits,
-        )
+        assert isinstance(proposed, str)
+        if syntax_state is not None:
+            checked = yield from dp.compute(aa.checked_application)(
+                syntax_state,
+                syntax_correction,
+                call_limits,
+            )
+        else:
+            checked = yield from dp.compute(ag.checked_proof)(
+                problem_file,
+                theorem_name,
+                pt.split_into_tactics(proposed),
+                call_limits,
+            )
         spent += checked.elapsed
         if checked.feedback.success:
             return "\n".join(checked.feedback.proof_so_far)
@@ -302,6 +446,26 @@ def grounded_examples() -> ExampleSelector:
     def select(
         env: dp.PolicyEnv, query: dp.AbstractQuery[Any]
     ) -> Sequence[SelectedExample]:
+        if (
+            isinstance(query, ProposeProofScriptGrounded)
+            and query.control
+            and query.control.matched_advice
+            and type(query) is not ProposeProofScriptGrounded
+        ):
+            own = env.examples.examples_for("WorkedProofTransition")
+            matches = [
+                SelectedExample(example=e, index=i, similarity=None)
+                for i, e in enumerate(own)
+                if isinstance(e.query, WorkedProofTransition)
+                and query.lesson.startswith(f"[{e.query.claim_id}]")
+            ][:1]
+            events.record(
+                "example",
+                "selected" if matches else "abstained",
+                query=query.query_name(),
+                count=len(matches),
+            )
+            return matches
         own = env.examples.examples_for(query.query_name())
         if own:
             return [
@@ -323,6 +487,11 @@ def prove_theorem_grounded_policy(
     api: ApiType = "responses",
     reasoning_effort: OmphalosReasoningEffort | None = "medium",
     convert_user_feedback_to_tool: bool = True,
+    polished: bool = False,
+    output_limit: int = 32768,
+    dollar_limit: float = 0.10,
+    verifier_seconds: float = 300,
+    turn_budget: int = 64,
 ) -> dp.Policy[dp.Branch | dp.Compute | dp.Fail, dp.PromptingPolicy]:
     model = make_model(
         model_name,
@@ -331,12 +500,40 @@ def prove_theorem_grounded_policy(
         reasoning_effort=reasoning_effort,
         convert_user_feedback_to_tool=convert_user_feedback_to_tool,
     )
-    return grounded_search() & dp.few_shot(
+    from runtime.campaign_budget import CampaignResponsesModel
+    from runtime.grounded_control import (
+        controlled_prompt,
+        observe_budget,
+        limited_prompt,
+    )
+
+    if isinstance(model, CampaignResponsesModel):
+        model.output_limit = output_limit
+    normal = dp.few_shot(
         model,
         temperature=temperature,
         max_requests=1,
         select_examples=grounded_examples(),
         tag_user_feedback_messages=True,
+    )
+    if not polished:
+        return grounded_search() & normal
+    if not isinstance(model, CampaignResponsesModel):
+        raise ValueError("polished paid policy requires campaign accounting")
+    reduced = limited_prompt(model, grounded_examples(), temperature)
+    budgets = {
+        "price": dollar_limit,
+        "rocq_seconds": verifier_seconds,
+        "num_requests": turn_budget,
+        "recoveries": 1,
+    }
+    return (
+        dp.with_budget(dp.BudgetLimit(budgets))
+        @ observe_budget(budgets)
+        @ (
+            grounded_search(typed_limits=True)
+            & controlled_prompt(normal, reduced)
+        )
     )
 
 
@@ -348,6 +545,35 @@ class GroundedReflection:
     correction: tuple[str, ...]
     references: tuple[str, ...]
     abstain: bool = False
+
+
+@dataclass
+class WorkedProofTransition(dp.Query[str]):
+    claim_id: str
+    evidence: ag.TrainingTransition
+    __parser__ = dp.last_code_block
+
+
+@dp.strategy
+def verify_worked_transition(
+    claim: ag.AdviceClaim,
+) -> dp.Strategy[dp.Branch | dp.Compute | dp.Fail, dp.PromptingPolicy, bool]:
+    """Navigation check tying a demonstration answer to live Rocq evidence."""
+    answer = yield from dp.branch(
+        WorkedProofTransition(claim.id, claim.evidence).using(dp.ambient_pp)
+    )
+    action = tuple(pt.split_into_tactics(answer))
+    checked = yield from dp.compute(ag.validate_claim)(
+        replace(
+            claim,
+            action=action,
+            evidence=replace(claim.evidence, correction=action),
+        ),
+        ToolLimits(seconds=10),
+    )
+    if checked.status != "verified":
+        yield from dp.fail(label="demonstration_not_verified")
+    return True
 
 
 @dataclass
@@ -379,11 +605,27 @@ class AuditGroundedClaim(dp.Query[AdmissionChoice]):
     __parser__ = dp.last_code_block.yaml
 
 
+@dataclass
+class ReflectGroundedTransitionJSON(ReflectGroundedTransition):
+    __parser__ = dp.structured
+
+
+@dataclass
+class CurateGroundedClaimJSON(CurateGroundedClaim):
+    __parser__ = dp.structured
+
+
+@dataclass
+class AuditGroundedClaimJSON(AuditGroundedClaim):
+    __parser__ = dp.structured
+
+
 @dp.strategy
 def adapt_grounded_transition(
     evidence: ag.TrainingTransition,
     state: ag.AdaptationState = ag.AdaptationState(),
     limits: ToolLimits = ToolLimits(),
+    structured: bool = False,
 ) -> dp.Strategy[
     dp.Branch | dp.Compute | dp.Fail, dp.IPDict, ag.AdaptationState
 ]:
@@ -408,9 +650,11 @@ def adapt_grounded_transition(
         assisted=False,
     )
     reflection = yield from dp.branch(
-        ReflectGroundedTransition(evidence, solution, failed).using(
-            _reflector_policy
-        )
+        (
+            ReflectGroundedTransitionJSON
+            if structured
+            else ReflectGroundedTransition
+        )(evidence, solution, failed).using(_reflector_policy)
     )
     if reflection.abstain or failed.outcome in (
         "accepted",
@@ -434,14 +678,16 @@ def adapt_grounded_transition(
     if verified.status != "verified":
         return state.admit((verified,))
     curation = yield from dp.branch(
-        CurateGroundedClaim(reflection, verified).using(_curator_policy)
+        (CurateGroundedClaimJSON if structured else CurateGroundedClaim)(
+            reflection, verified
+        ).using(_curator_policy)
     )
     if not curation.keep:
         return state.admit(
             (replace(verified, status="rejected", reason=curation.reason),)
         )
     audit = yield from dp.branch(
-        AuditGroundedClaim(
+        (AuditGroundedClaimJSON if structured else AuditGroundedClaim)(
             verified, curation.condition or claim.condition
         ).using(_auditor_policy)
     )

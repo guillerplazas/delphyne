@@ -83,6 +83,14 @@ def _field(head: str, key: str) -> str | None:
 
 
 def _result_head(path: Path) -> str:
+    # Grounded artifacts can make command arguments exceed 64 KiB and can
+    # themselves contain historical success/spending fields. Anchor at the
+    # command outcome before reading the bounded result header.
+    with path.open(encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if line.rstrip() == "outcome:":
+                return line + f.read(_HEAD_BYTES)
+    # Compatibility for old exports containing a bare result document.
     with path.open("rb") as f:
         return f.read(_HEAD_BYTES).decode(errors="replace")
 

@@ -30,6 +30,7 @@ from delphyne.stdlib.models import (
     LLMRequest,
     LLMResponse,
 )
+from runtime.admission_events import record
 
 
 class CampaignExhausted(RuntimeError):
@@ -324,6 +325,14 @@ class CampaignResponsesModel(oa.OpenAIResponsesModel):
         )
         ledger = Ledger(Path(self.ledger_file))
         key = ledger.reserve(self.stage, options["model"], bound, self.cell)
+        record(
+            "model",
+            "invoked",
+            receipt=key,
+            cached=False,
+            output_limit=options["max_completion_tokens"],
+            estimate_dollars=bound,
+        )
         try:
             with openai.OpenAI(
                 api_key=self.api_key,
@@ -357,6 +366,11 @@ class CampaignResponsesModel(oa.OpenAIResponsesModel):
                 0.0 if rejected else None,
                 {"exception": type(ex).__name__},
             )
+            record(
+                "model",
+                "rejected" if rejected else "unknown_charge",
+                receipt=key,
+            )
             if isinstance(ex, (openai.RateLimitError, openai.APITimeoutError)):
                 raise LLMBusyException(ex) from ex
             raise
@@ -380,6 +394,15 @@ class CampaignResponsesModel(oa.OpenAIResponsesModel):
             },
         )
         self.reasoning_allowance += usage.output_tokens
+        record(
+            "model",
+            "settled",
+            receipt=key,
+            dollars=spent["price"],
+            output_tokens=usage.output_tokens,
+            status=response.status,
+            truncated=response.status == "incomplete",
+        )
         output, parsed_log = self._parse_response(response, req)
         return LLMResponse(
             [] if output is None else [output],

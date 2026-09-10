@@ -129,11 +129,12 @@ composition. A demonstration teaches a decision; a current training problem's
 verified solution is separate evidence. Existing typed composition should be
 extended at the demonstrated gap rather than recreated.
 
-The open backlog owns the corresponding actions: #113–119 for bounded
-reliability/control and coverage, #67/#94/#95/#110 for applicable advice and
-examples, #103/#109 for search/context control, #104 for upstream accounting,
-and #107/#111 for evaluation design. Historical closed capabilities have
-closure records rather than duplicate future-work lists here.
+The backlog owns the corresponding actions: the implemented bounded work
+has closure records #113–119 (resource recovery #116 remains open), with
+#67/#94/#95/#110 for applicable advice and examples, #103/#109 for
+search/context control, #104 for upstream accounting, and #107/#111 for
+evaluation design. New polish follow-ups are #121–123. Historical closed
+capabilities have closure records rather than duplicate future-work lists here.
 
 ## Evidence boundaries
 
@@ -149,3 +150,90 @@ requirement on the observed estimate; p tests zero effect, not a guarantee
 that the true gain is at least five points. Historical rules remain pinned;
 future non-Ladon decisions use p<0.10 with the same grouping discipline.
 Current commands and archive conventions are in [usage](usage.md).
+
+## Bounded ACE polish (2026-09-09)
+
+The follow-up implements the concrete bounded-control findings as an
+opt-in pipeline, retaining the original money+focused configuration as
+the fresh benchmark reference. Delphyne's `with_budget`, spending streams
+and query-specific example selection provide admission and composition;
+the local adapter records their decisions rather than deciding separately.
+
+Typed `ToolLimits` now supply the actual verifier reservation. A zero-cost
+sequential preflight prevents purchasing an answer when its verification
+cannot be admitted. An optional 4096-token continuation after refusal and
+an optional resource/stagnation repair share one recovery allowance; neither
+resets money, time or turn budgets. Resource/unknown outcomes are not logical
+refutations. Separate structured adaptation queries preserve legacy YAML
+contracts while avoiding the observed serialization failure mode.
+
+Twenty-four training transitions were reverified locally and exposed as
+Delphyne demonstrations, including executable navigation checks. Thirteen
+existing role examples were converted offline. No stronger-model authoring
+was needed and no teacher calls were charged. The examples span more failure
+categories, but a verified local correction is not a verified general tactic
+or a full solution to the current problem.
+
+The 24-cell training pilot selected matched advice and output downshift.
+Resource recovery exposed two Responses dialogue-formatting failures, so its
+contrast was invalidated and the mechanism remains disabled. The formatter
+was repaired and regression-tested before the final freeze, without extra
+paid pilot cells. An independent result-reader defect hid outcomes behind
+large command arguments; corrected reporting preserved the same selections.
+Both erroneous drafts remain archived, and no raw paid output was edited.
+
+Protocol, hashes and checks: [polish campaign](../experiments/campaigns/ace_polish_20260909/README.md).
+
+The frozen candidate solved **26/40 trainX problems for $0.76279972**.
+Fresh paired validationX (40 problems, two seeds) tied **53/80 versus
+53/80**, at **$1.51289576 versus $1.43330822**: 5.55% more total cost and
+cost per solve ($0.02854520 versus $0.02704355). Seed 0 lost one solve at
+20.13% more cost; seed 1 gained one at 7.14% less cost. Neither registered
+practical gate passed. Family-clustered solve p=1.0, cost p=0.35545;
+descriptive 90% effect interval [-2.5, +2.5] points and cost-ratio interval
+[0.9604, 1.1648]. This is inconclusive, not evidence of equivalence.
+
+**Retain original bounded money+focused as the recommended budget reference.**
+The polished controls remain available but are not promoted. All 224 cells
+cost **$4.24146774 API**, with 2,749 settled requests, no unknown charges,
+teacher calls, retries or per-cell cost crossings. The two invalid pilot
+cells remain in the record; full training/validation had no experiment
+platform failures or administrative censoring.
+
+Downshift led to zero solves in nine triggered training cells and one in
+17 validation cells; that theorem also solved in the reference at half
+the cost. Neither unique candidate validation win used it. Matched examples
+were selected 20 times across 12 validation cells, yet syntax leakage,
+sqrt/cast normalization and expensive natural-number computation remain.
+Eleven of the candidate's 27 unsolved cells contain a cached resource or
+unknown outcome; these are not logical rejections. Five explicit verifier
+exhaustions and monetary refusals in 24 candidate cells now make stopping
+more auditable, but do not establish that more spending would help.
+
+Detailed paired discordances, failure evidence and targeted follow-ups:
+[polish assessment](../experiments/campaigns/ace_polish_20260909/FOLLOW_UP.md).
+The backlog prioritizes stronger recovery signals (#123), tactic-specific
+syntax examples (#122), narrow normalization guidance (#94/#110), and
+large-natural representation work (#72). No validation-triggered retuning,
+extra seeds, testX or protected-challenge mining was performed.
+
+
+## Bounded applicability mechanism screen (2026-09-09)
+
+The training-only four-arm screen completed 48 saved-state episodes for
+$0.05822918, with 60 settled requests and no platform failures, retries or
+unknown liability. Ordinary continuation / typed query / fixed examples /
+selected examples yielded 1/2/3/2 useful local transitions. Selection was
+23.34% cheaper than fixed examples but lost one useful transition, repaired
+only 4/6 positives and explicitly abstained on 4/6 negatives. The registered
+screen failed: no 24-cell end-to-end training stage or 160-cell validation
+comparison was launched. Bounded money+focused remains the reference.
+
+A post-run Rocq audit found that the finite syntax guard rejected a valid
+suffix in each typed arm. Primary measurements remain unchanged; sensitivity
+gives 3/4/3 useful transitions for typed/fixed/selected and still fails the
+abstention and benefit gates. This limits the negative claim to the registered
+applicability/delivery mechanism; these local episodes do not estimate full
+proof coverage, establish automated-reflection value, or exhaust ACE.
+See the [completed screen](../experiments/campaigns/ace_applicability_20260909/FOLLOW_UP.md)
+and HINTS #122 for the remaining semantic-guard and applicability questions.

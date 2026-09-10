@@ -89,6 +89,11 @@ class BoundedConfig(mf.ResponsesAgenticConfig):
     operation_seconds: float = 60
     verifier_seconds: float = 300
     view_bytes: int = 8192
+    polished: bool = False
+    resource_recovery: bool = False
+    matched_advice: bool = False
+    output_recovery: bool = False
+    output_limit: int = 32768
 
     def _problem(self) -> tuple[str, str]:
         return self.problem_file, self.bench_name
@@ -119,11 +124,32 @@ class BoundedConfig(mf.ResponsesAgenticConfig):
                 "admission": self.admission,
                 "focused": self.focused,
                 "restart": self.restart,
+                **(
+                    {
+                        "polished": True,
+                        "resource_recovery": self.resource_recovery,
+                        "matched_advice": self.matched_advice,
+                        "output_recovery": self.output_recovery,
+                    }
+                    if self.polished
+                    else {}
+                ),
             },
             policy="prove_theorem_grounded_policy",
             policy_args={
                 "model_name": self.model_name,
                 "reasoning_effort": self.reasoning_effort,
+                **(
+                    {
+                        "polished": True,
+                        "output_limit": self.output_limit,
+                        "dollar_limit": self.max_dollar_budget,
+                        "verifier_seconds": self.verifier_seconds,
+                        "turn_budget": self.num_requests,
+                    }
+                    if self.polished
+                    else {}
+                ),
             },
             budget={
                 dp.NUM_REQUESTS: self.num_requests,

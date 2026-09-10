@@ -7,6 +7,7 @@ from unchecked explanatory prose. Persistence belongs to experiment drivers.
 """
 
 from runtime.paths import OMPHALOS_ROOT
+from runtime.admission_events import computation_started
 
 from dataclasses import asdict, dataclass, replace
 import hashlib
@@ -102,6 +103,7 @@ def checked_proof(
     limits: ToolLimits = ToolLimits(),
     assisted: bool = True,
 ) -> Checked:
+    computation_started("checked_proof")
     if _UNSAFE.search("\n".join(tactics)):
         fb = pt.Feedback(
             success=False,
@@ -152,6 +154,7 @@ def inspect_proof_state(
     start: int = 0,
     limits: ToolLimits = ToolLimits(),
 ) -> Inspection:
+    computation_started("inspect_proof_state")
     if start < 0:
         raise ValueError("goal offset must be nonnegative")
     if command and not re.match(
@@ -403,6 +406,61 @@ def select_advice(
         and all(s in goals for s in c.symbols)
     ]
     return tuple(sorted(selected, key=lambda c: c.id)[:limit])
+
+
+def select_matched_advice(
+    claims: tuple[AdviceClaim, ...], feedback: pt.Feedback, environment: str
+) -> tuple[AdviceClaim, ...]:
+    """Select one same-class example with explicit goal-symbol evidence.
+
+    A recorded transition remains a local worked example, never a tactic to
+    substitute blindly in the current proof. Empty filters cannot match.
+    """
+    kind = decision_kind(feedback)
+    name = unknown_identifier(feedback.error_message or "")
+    goals = "\n".join(feedback.remaining_goals)
+    eligible = [
+        c
+        for c in claims
+        if c.environment == environment
+        and c.kind == kind
+        and (
+            (c.trigger_name and c.trigger_name == name)
+            or (c.symbols and all(s in goals for s in c.symbols))
+        )
+        and failure_category(c.evidence.error)
+        == failure_category(feedback.error_message or "")
+    ]
+    return tuple(sorted(eligible, key=lambda c: (-len(c.symbols), c.id))[:1])
+
+
+def failure_category(error: str) -> str:
+    text = error.lower()
+    for category, pattern in (
+        ("syntax", r"syntax|wrong bullet|focus"),
+        ("reference", r"reference .*not found|unknown"),
+        ("normal_form", r"ring|convertible|rewrite|subterm"),
+        ("type", r"unif|expected|type"),
+        ("incomplete", r"incomplete|open goals"),
+        ("resource", r"overflow|timeout|no reply|allowance"),
+    ):
+        if re.search(pattern, text):
+            return category
+    return "structure"
+
+
+def recent_progress(checks: list[Checked]) -> bool:
+    logical = [
+        c.feedback for c in checks if c.outcome in ("rejected", "incomplete")
+    ]
+    return any(
+        (
+            len(b.proof_so_far) > len(a.proof_so_far)
+            and b.proof_so_far[: len(a.proof_so_far)] == a.proof_so_far
+        )
+        or (0 < len(b.remaining_goals) < len(a.remaining_goals))
+        for a, b in zip(logical, logical[1:])
+    )
 
 
 @dataclass(frozen=True)
