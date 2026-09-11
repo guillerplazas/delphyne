@@ -162,6 +162,14 @@ class ChooseProofStructure(ProposeProofScriptGrounded):
     """Choose an invariant, case split or structural opener, then verify."""
 
 
+def _last_feedback(checks: Sequence[ag.Checked]) -> ag.Checked | None:
+    return checks[-1] if checks else None
+
+
+def _no_branch_metadata(_: Any) -> None:
+    return None
+
+
 @dp.strategy
 def prove_theorem_grounded(
     problem_file: str,
@@ -180,6 +188,9 @@ def prove_theorem_grounded(
     output_recovery: bool = False,
     syntax_mode: str = "",
     syntax_bank: tuple["SyntaxExample", ...] = (),
+    continuation: bool = False,
+    checked_repair: bool = False,
+    verified_recovery: bool = False,
 ) -> dp.Strategy[dp.Branch | dp.Compute | dp.Fail, dp.PromptingPolicy, str]:
     spec = pt.parse_problem(problem_file, show_definitions=True)
     environment = import_signature(problem_file)
@@ -191,10 +202,129 @@ def prove_theorem_grounded(
     action = "propose a proof"
     recovery_state: tuple[str, ...] | None = None
     syntax_seen: set[tuple[str, ...]] = set()
+    audited: set[tuple[str, ...]] = set()
+    useful_prefix: tuple[str, ...] | None = None
     for _ in range(turn_budget):
         if spent >= verifier_seconds:
             yield from dp.fail(label="verifier_budget_exhausted")
-        last: ag.Checked | None = feedbacks[-1] if feedbacks else None
+        last = _last_feedback(feedbacks)
+        if checked_repair and last is not None:
+            from prove_continuation import checked_syntax
+
+            state = aa.RepairState(
+                problem_file,
+                theorem_name,
+                tuple(last.feedback.proof_so_far),
+                last.feedback.failing_tactic or "",
+                last.feedback.error_message or "",
+                last.outcome,
+                tuple(last.feedback.remaining_goals),
+                environment,
+            )
+            key = (*state.prefix, state.failed_action)
+            if aa.eligible(state) and key not in syntax_seen:
+                syntax_seen.add(key)
+                repaired: ag.Checked = yield from dp.compute(checked_syntax)(
+                    state,
+                    {
+                        "seconds": min(
+                            limits.seconds, verifier_seconds - spent
+                        ),
+                        "rpc_calls": limits.rpc_calls,
+                        "view_bytes": limits.view_bytes,
+                    },
+                )
+                spent += repaired.elapsed
+                if repaired.feedback.success:
+                    return "\n".join(repaired.feedback.proof_so_far)
+                pattern, correction = aa.syntax_form(state.failed_action)
+                decision = aa.RepairDecision(
+                    "repair", pattern, correction, "local check"
+                )
+                if aa.executed(state, decision, repaired):
+                    feedbacks.append(repaired)
+                    last = _last_feedback(feedbacks)
+                    # The checked correction is a proposal/result pair, as
+                    # required by Responses feedback-to-tool translation.
+                    prefix.extend(
+                        [
+                            dp.OracleMessage(
+                                "oracle",
+                                dp.Answer(
+                                    None,
+                                    "```rocq\n"
+                                    + "\n".join(repaired.feedback.proof_so_far)
+                                    + "\n```",
+                                ),
+                            ),
+                            dp.FeedbackMessage(
+                                "feedback", repaired.outcome, meta=repaired
+                            ),
+                        ]
+                    )
+                else:
+                    prefix.append(
+                        dp.OracleMessage(
+                            "oracle",
+                            dp.Answer(
+                                None,
+                                "```rocq\n"
+                                + "\n".join((*state.prefix, correction))
+                                + "\n```",
+                            ),
+                        )
+                    )
+                    prefix.append(
+                        dp.FeedbackMessage(
+                            "feedback",
+                            "checked_repair_declined",
+                            "Canonical syntax candidate was not established; keep the prior verified prefix. "
+                            + (
+                                repaired.feedback.error_message
+                                or repaired.outcome
+                            ),
+                        )
+                    )
+        if spent >= verifier_seconds:
+            yield from dp.fail(label="verifier_budget_exhausted")
+        if verified_recovery and last is not None:
+            from prove_continuation import progress_evidence
+
+            current = tuple(last.feedback.proof_so_far)
+            if (
+                useful_prefix is not None
+                and current[: len(useful_prefix)] != useful_prefix
+            ):
+                useful_prefix = None
+            if (
+                current not in audited
+                and len(feedbacks) >= 2
+                and ag.recent_progress(feedbacks[-2:])
+            ):
+                audited.add(current)
+                before = _last_feedback(feedbacks[:-1])
+                assert before is not None
+                state = aa.RepairState(
+                    problem_file,
+                    theorem_name,
+                    tuple(before.feedback.proof_so_far),
+                    before.feedback.failing_tactic or "",
+                    before.feedback.error_message or "",
+                    before.outcome,
+                    tuple(before.feedback.remaining_goals),
+                    environment,
+                )
+                # Audit evidence, not a goal-count proxy, authorizes recovery.
+                evidence = yield from dp.compute(progress_evidence)(
+                    state,
+                    last,
+                    {"seconds": min(10.0, verifier_seconds - spent)},
+                )
+                spent += evidence.elapsed
+                if evidence.useful:
+                    useful_prefix = current
+        if spent >= verifier_seconds:
+            yield from dp.fail(label="verifier_budget_exhausted")
         recovery_reason = ""
         if polished and last is not None and recovery_state is not None:
             state = tuple(last.feedback.proof_so_far) + tuple(
@@ -303,7 +433,12 @@ def prove_theorem_grounded(
         )
         syntax_state = None
         syntax_correction = ""
-        syntax_query = None
+        syntax_query: (
+            dp.AbstractQuery[
+                dp.Response[Any, ReadSkill | SearchRocq | InspectProofState]
+            ]
+            | None
+        ) = None
         if syntax_mode:
             from prove_applicability import DecideSyntaxRepair
 
@@ -332,8 +467,34 @@ def prove_theorem_grounded(
                         tuple(prefix),
                         rendered,
                     )
+        continuation_query = None
+        if continuation and last is not None:
+            from prove_continuation import (
+                continuation_query as make_continuation,
+            )
+
+            if verified_recovery:
+                # No new verifier preflight treatment: the checker itself
+                # reserves its work exactly as in the incumbent.
+                query.control = DecisionControl(
+                    0.0, may_downshift=useful_prefix is not None
+                )
+            continuation_query = make_continuation(query)
+        response: dp.Response[Any, ReadSkill | SearchRocq | InspectProofState]
         if syntax_state is not None and syntax_query is not None:
-            response = yield from dp.branch(syntax_query.using(dp.ambient_pp))
+            response = cast(
+                dp.Response[Any, ReadSkill | SearchRocq | InspectProofState],
+                (
+                    yield from dp.branch(
+                        syntax_query.using(dp.ambient_pp),
+                        meta=_no_branch_metadata,
+                    )
+                ),
+            )
+        elif continuation_query is not None:
+            response = yield from dp.branch(
+                continuation_query.using(dp.ambient_pp)
+            )
         else:
             response = yield from dp.branch(query.using(dp.ambient_pp))
         prefix.append(dp.OracleMessage("oracle", response.answer))
@@ -413,6 +574,21 @@ def prove_theorem_grounded(
                 dp.FeedbackMessage("feedback", "parse", str(proposed.error))
             )
             continue
+        if continuation_query is not None:
+            from prove_continuation import ProofContinuation, assemble
+
+            assert isinstance(proposed, ProofContinuation)
+            try:
+                proposed = "\n".join(
+                    assemble(
+                        proposed, last.feedback.proof_so_far if last else []
+                    )
+                )
+            except ValueError as exc:
+                prefix.append(
+                    dp.FeedbackMessage("feedback", "parse", str(exc))
+                )
+                continue
         assert isinstance(proposed, str)
         if syntax_state is not None:
             checked = yield from dp.compute(aa.checked_application)(

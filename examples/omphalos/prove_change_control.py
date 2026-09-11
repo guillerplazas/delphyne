@@ -77,6 +77,7 @@ def change_episode(
     diagnostic_only: bool = False,
     request_limit: int = 4,
     limits: ToolLimits = ToolLimits(),
+    continuation: bool = False,
 ) -> dp.Strategy[
     dp.Branch | dp.Compute | dp.Fail,
     dp.PromptingPolicy,
@@ -128,16 +129,17 @@ def change_episode(
             if repair.executed
             else state.goals,
         )
-    continuation = yield from pa.repair_episode(
+    continued = yield from pa.repair_episode(
         current,
         "R",
         (),
         playbook,
         request_limit - repair.requests,
         replace(limits, seconds=min(limits.seconds, remaining)),
+        continuation=continuation,
     ).inline()
     return ChangeEpisodeResult(
-        repair, continuation, repair.elapsed + continuation.elapsed
+        repair, continued, repair.elapsed + continued.elapsed
     )
 
 

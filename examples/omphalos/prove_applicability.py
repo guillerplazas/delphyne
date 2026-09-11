@@ -56,6 +56,7 @@ def repair_episode(
     playbook: str = "",
     request_limit: int = 4,
     limits: ToolLimits = ToolLimits(),
+    continuation: bool = False,
 ) -> dp.Strategy[
     dp.Branch | dp.Compute | dp.Fail, dp.PromptingPolicy, RepairResult
 ]:
@@ -120,6 +121,10 @@ def repair_episode(
                 turn_budget=request_limit,
                 verified_prefix="\n".join(state.prefix),
             )
+            if continuation:
+                from prove_continuation import continuation_query
+
+                query = continuation_query(query)
         else:
             query = DecideSyntaxRepair(
                 state, sk.list_skills(), mode, ids, tuple(prefix), playbook
@@ -165,18 +170,32 @@ def repair_episode(
                 )
             continue
         value = response.parsed.final
+        proposed_tactics: list[str] = []
         if isinstance(value, dp.WrappedParseError):
             return RepairResult(
                 abstain, None, False, turn + 1, spent, "parse_failure"
             )
         if mode == "R":
-            assert isinstance(value, str)
-            tactics = pt.split_into_tactics(value)
-            if tactics[: len(state.prefix)] != list(state.prefix):
+            if continuation:
+                from prove_continuation import ProofContinuation, assemble
+
+                assert isinstance(value, ProofContinuation)
+                try:
+                    proposed_tactics = assemble(value, state.prefix)
+                except ValueError:
+                    return RepairResult(
+                        abstain, None, False, turn + 1, spent, "parse_failure"
+                    )
+            else:
+                assert isinstance(value, str)
+                proposed_tactics = pt.split_into_tactics(value)
+            if not continuation and proposed_tactics[
+                : len(state.prefix)
+            ] != list(state.prefix):
                 return RepairResult(
                     abstain, None, False, turn + 1, spent, "changed_prefix"
                 )
-            suffix = tactics[len(state.prefix) :]
+            suffix = proposed_tactics[len(state.prefix) :]
             # R is unconstrained at generation. The same syntax-only rubric
             # scores its first proposal; extra search is not a local repair.
             answer = aa.RepairDecision(
@@ -197,7 +216,7 @@ def repair_episode(
             checked = yield from dp.compute(ag.checked_proof)(
                 state.problem_file,
                 state.theorem_name,
-                [*state.prefix, *pt.split_into_tactics(answer.correction)],
+                proposed_tactics,
                 call_limits,
                 assisted=False,
             )
