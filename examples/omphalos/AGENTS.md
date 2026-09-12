@@ -134,6 +134,20 @@ the repo-root `AGENTS.md`. What matters here:
   pricing. Rates are dated — prepend new rates, never edit old ones.
   Guard: `make reprice` must exit 0.
 
+## testX closure (Guille, 2026-09-11)
+
+Guille explicitly forbids accessing testX again. This supersedes the older
+one-look-per-headline-arm convention above. Do not read its partition,
+statements, cached results, reports or mixed aggregate artifacts, and do not
+import modules that eagerly load it. New coverage work uses trainX and
+validationX only; protected challenge data also remains excluded.
+Use the development-only campaign entry point and `make test-coverage-cycle`.
+`make ladon-status` also imports the eager X loader: inspect Ladon night
+metadata directly instead of importing its CLI while this closure applies.
+Aggregate `make test`, partition checks and repricing can access testX: run
+explicitly scoped equivalents instead and document the exclusions. Keep
+this restriction in both harnesses through this canonical instruction file.
+
 ## Running experiments (since 2026-08-26)
 
 - Every experiment script ends in `ol.OmphalosExperiment(...).run_cli()`

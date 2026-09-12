@@ -186,3 +186,52 @@ HINTS contains unresolved work only. Closing an item moves its numbered
 outcome to `docs/CLOSED_HINTS.md`; PROGRESS holds the important dated finding.
 Allocate IDs across both files and preserve them on reopening. Neither
 harness edits these records during an active Ladon night.
+
+### Fixed-book coverage variants (2026-09-11)
+
+The opt-in coverage campaign uses `python -m experiments.coverage_experiment`
+from this directory after sourcing `~/.config/omphalos/env.sh`. Both Claude
+Code and Codex use the same commands; no harness driver or MCP dependency.
+See `experiments/campaigns/coverage_20260911/README.md` and its immutable
+registration before resuming. A benchmark run is 40 problems at seed 0,
+with $0.10 per problem; this campaign does not run a second seed.
+
+D uses the ordinary grounded strategy with `coverage_policy(bank_file=...)`
+and a context that includes only its frozen `demos/coverage.demo.yaml` as
+additional examples. E uses `bounded_exploration=True` with `coverage_policy`
+and the incumbent demonstration context. Use that matching policy: it routes
+`ExploreProof` to the 4096-token nested prompting model. The ordinary model
+keeps its 32768-token allowance. The shared sub-search limits are $.025,
+six requests (three per branch), and 120 verifier seconds, all inside the
+parent's limits. `nofail` returns the original search state if exploration
+produces nothing usable. No default or ACE playbook has been changed.
+
+`demos/exploration.demo.yaml` exercises checked continuation and fallback
+navigation; `tests/test_coverage.py` checks inherited money/request limits.
+Authoring uses a separate ledger; all actual prover comparisons and retries
+belong to the experiment ledger. Do not repurchase completed runs or alter
+frozen inputs to reinterpret their results.
+
+Campaign findings and the final comparison are recorded in
+[`RESULTS.md`](../experiments/campaigns/coverage_20260911/RESULTS.md).
+
+### Development-only coverage cycle (2026-09-11)
+
+Guille forbids further testX access. Use
+`python -m experiments.coverage_cycle_experiment` and
+`make test-coverage-cycle`; these install the development-only guard before
+imports. The shared minif2f_x module eagerly reads testX and is forbidden
+in this workflow. Do not run aggregate partition checks or aggregate
+repricing. Reprice only the explicit coverage_cycle_20260911 output root.
+Both harnesses use the same runner and standard supervised launcher.
+
+Four independent arms D2/E2/S/H implement hints 126/127/122/109, with 40
+seed-0 training cells and 40 validation cells each. No test stage exists.
+See `experiments/campaigns/coverage_cycle_20260911/README.md` for the frozen
+limits, manifests and interpretation. Existing policies remain the defaults.
+
+The initial planning `make ladon-status` check was found to import the eager
+X loader before the guard existed, reading testX's path list and checking
+file existence. No theorem contents/results were read or used. The guarded
+runner blocks this path. Inspect Ladon night metadata directly; do not call
+its status CLI under the testX closure. See campaign access_incident.json.

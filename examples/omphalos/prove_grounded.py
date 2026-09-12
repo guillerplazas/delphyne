@@ -191,6 +191,9 @@ def prove_theorem_grounded(
     continuation: bool = False,
     checked_repair: bool = False,
     verified_recovery: bool = False,
+    bounded_exploration: bool = False,
+    exploration_v2: bool = False,
+    compact_history: bool = False,
 ) -> dp.Strategy[dp.Branch | dp.Compute | dp.Fail, dp.PromptingPolicy, str]:
     spec = pt.parse_problem(problem_file, show_definitions=True)
     environment = import_signature(problem_file)
@@ -204,10 +207,58 @@ def prove_theorem_grounded(
     syntax_seen: set[tuple[str, ...]] = set()
     audited: set[tuple[str, ...]] = set()
     useful_prefix: tuple[str, ...] | None = None
+    exploration_used = False
     for _ in range(turn_budget):
         if spent >= verifier_seconds:
             yield from dp.fail(label="verifier_budget_exhausted")
         last = _last_feedback(feedbacks)
+        if (
+            (bounded_exploration or exploration_v2)
+            and not exploration_used
+            and last is not None
+        ):
+            logical = [
+                v
+                for f in feedbacks
+                if f.outcome in ("rejected", "incomplete")
+                if (v := view_of_feedback(f.feedback)) is not None
+            ]
+            if last.outcome in ("rejected", "incomplete") and stalled(
+                logical, "seenstate", 2 if exploration_v2 else 4
+            ):
+                from prove_coverage import exploration_space
+
+                if exploration_v2:
+                    from prove_coverage_cycle import exploration_space_v2
+
+                    exploration_space = exploration_space_v2
+                exploration_used = True
+                explored = yield from dp.branch(
+                    exploration_space(
+                        problem_file, theorem_name, last, playbook, limits
+                    )
+                )
+                if explored is not None:
+                    spent += explored.elapsed
+                    if explored.checked.feedback.success:
+                        return "\n".join(
+                            explored.checked.feedback.proof_so_far
+                        )
+                    last = explored.checked
+                    feedbacks.append(last)
+                    # A real proposal/result pair keeps Responses feedback
+                    # translation valid after replacing stale dialogue.
+                    prefix = [
+                        dp.OracleMessage(
+                            "oracle",
+                            dp.Answer(
+                                None, f"```rocq\n{explored.script}\n```"
+                            ),
+                        ),
+                        dp.FeedbackMessage(
+                            "feedback", last.outcome, meta=last
+                        ),
+                    ]
         if checked_repair and last is not None:
             from prove_continuation import checked_syntax
 
@@ -431,6 +482,10 @@ def prove_theorem_grounded(
             if polished
             else None,
         )
+        if compact_history:
+            from prove_coverage_cycle import compact_query
+
+            query = compact_query(query)
         syntax_state = None
         syntax_correction = ""
         syntax_query: (

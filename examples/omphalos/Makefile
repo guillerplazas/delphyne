@@ -32,6 +32,7 @@ test: test-unit test-rocq test-standard test-agentic test-probing test-luna test
 # Pure Python: no API calls, no Rocq server. Guards the deterministic
 # merge and the generated adaptation pool against silent drift.
 test-unit:
+	python -m pytest -q tests/test_coverage.py -k "not live"
 	python -m pytest -q tests/test_ace_mechanisms.py -k "not live"
 	python -m pytest -q tests/test_ace_models.py
 	python -m pytest -q tests/test_ace_contenders.py
@@ -59,6 +60,7 @@ test-unit:
 # Rocq transport layer (private warm server, deadlines, reply cap,
 # recycling, prefix memo): a few seconds of Rocq, no API calls.
 test-rocq:
+	python -m pytest -q tests/test_coverage.py -k live
 	python -m pytest -q tests/test_ace_mechanisms.py -k live
 	python -m tests.test_change_control_rocq
 	python -m tests.test_rocq_server
@@ -580,3 +582,8 @@ codex-setup:
 
 # Ladon, the overnight improvement loop (ladon/README.md).
 -include ladon/ladon.mk
+
+# User-approved development-only checks: never import/load testX.
+.PHONY: test-coverage-cycle
+test-coverage-cycle:
+	python -c 'from runtime.development_only import install; install(); import pytest; raise SystemExit(pytest.main(["-q", "tests/test_coverage_cycle.py", "tests/test_continuation_output.py"]))'
