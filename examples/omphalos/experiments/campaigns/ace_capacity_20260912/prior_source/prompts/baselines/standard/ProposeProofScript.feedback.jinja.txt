@@ -1,0 +1,72 @@
+{% if feedback.label not in ("incomplete", "feedback") %}
+Your previous message could not be processed:
+
+  {{ feedback.description | default("(no description)", true) }}
+
+Remember the output format: end your message with exactly **one**
+fenced code block containing only the body tactics of the proof, each
+terminated with a `.`.
+{% elif feedback.label == "incomplete" %}
+Your script is on track: **every tactic applied cleanly**, but the
+proof is not finished yet.
+
+- **Verified prefix** (these tactics ran without error — keep them):
+{% if feedback.meta.proof_so_far %}{% for t in feedback.meta.proof_so_far %}
+  {{ loop.index }}. `{{ t }}`{% endfor %}
+{% else %}
+  (your message contained no tactics — the goal is untouched)
+{% endif %}
+
+- **Remaining goals**:
+{% for g in feedback.meta.remaining_goals %}
+{% if g.startswith("... ") %}
+  {{ g }}
+{% else %}
+  ```
+  {{ g|trim }}
+  ```
+{% endif %}
+{% endfor %}
+
+Reply with the complete proof body — your verified prefix plus tactics
+that close the remaining goals — in one fenced code block.
+{% else %}
+Your previous proof did not close the goal.
+
+- **Failing tactic** (index {{ feedback.meta.failing_index }} in your script): `{{ feedback.meta.failing_tactic }}`
+- **Rocq error**:
+
+  """
+  {{ feedback.meta.error_message|trim }}
+  """
+
+- **Tactics that succeeded before the failure**:
+{% if feedback.meta.proof_so_far %}{% for t in feedback.meta.proof_so_far %}
+  {{ loop.index }}. `{{ t }}`{% endfor %}
+{% else %}
+  (none — failure occurred on the first tactic)
+{% endif %}
+
+- **Goals remaining at the point of failure**:
+{% if feedback.meta.remaining_goals %}{% for g in feedback.meta.remaining_goals %}
+{% if g.startswith("... ") %}
+  {{ g }}
+{% else %}
+  ```
+  {{ g|trim }}
+  ```
+{% endif %}
+{% endfor %}
+{% elif feedback.meta.failing_tactic == "Qed." %}
+  No goal is *focused*, yet the proof is not complete: open goals are
+  hiding behind bullets (`-`/`+`/`*`) or braces you opened but never
+  finished. Every bullet branch and `{ }` block must be closed before
+  `Qed`. Revisit your bullet structure and supply the missing
+  branches.
+{% else %}
+  (none reported)
+{% endif %}
+
+Revise the whole proof body and reply with one fenced code block in the
+same format as before.
+{% endif %}

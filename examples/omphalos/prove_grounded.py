@@ -194,7 +194,11 @@ def prove_theorem_grounded(
     bounded_exploration: bool = False,
     exploration_v2: bool = False,
     compact_history: bool = False,
+    feedback_version: int = 1,
+    prompt_turn_budget: int | None = None,
 ) -> dp.Strategy[dp.Branch | dp.Compute | dp.Fail, dp.PromptingPolicy, str]:
+    if feedback_version not in (1, 2):
+        raise ValueError("Unknown goal feedback version")
     spec = pt.parse_problem(problem_file, show_definitions=True)
     environment = import_signature(problem_file)
     prefix: list[dp.AnswerPrefixElement] = []
@@ -463,7 +467,9 @@ def prove_theorem_grounded(
         query = query_class(
             spec=spec,
             available_skills=sk.list_skills(),
-            turn_budget=turn_budget,
+            turn_budget=turn_budget
+            if prompt_turn_budget is None
+            else prompt_turn_budget,
             prefix=tuple(prefix),
             playbook=rendered,
             decision=action,
@@ -582,7 +588,14 @@ def prove_theorem_grounded(
                             call.command,
                             call.start,
                         )
-                    inspected = yield from dp.compute(ag.inspect_proof_state)(
+                    inspect_function = ag.inspect_proof_state
+                    if feedback_version == 2:
+                        from ace.ace_goal_visibility import (
+                            inspect_proof_state_v2,
+                        )
+
+                        inspect_function = inspect_proof_state_v2
+                    inspected = yield from dp.compute(inspect_function)(
                         problem_file,
                         theorem_name,
                         tactics,
@@ -652,7 +665,12 @@ def prove_theorem_grounded(
                 call_limits,
             )
         else:
-            checked = yield from dp.compute(ag.checked_proof)(
+            check_function = ag.checked_proof
+            if feedback_version == 2:
+                from ace.ace_goal_visibility import checked_proof_v2
+
+                check_function = checked_proof_v2
+            checked = yield from dp.compute(check_function)(
                 problem_file,
                 theorem_name,
                 pt.split_into_tactics(proposed),

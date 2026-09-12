@@ -1,0 +1,20 @@
+diff --git a/examples/omphalos/experiments/ace/ace_attribution_experiment.py b/examples/omphalos/experiments/ace/ace_attribution_experiment.py
+index 9b045475..907b0ec6 100644
+--- a/examples/omphalos/experiments/ace/ace_attribution_experiment.py
++++ b/examples/omphalos/experiments/ace/ace_attribution_experiment.py
+@@ -645,6 +645,15 @@ def run_batch(filename: str) -> None:
+     batch = read(filename)
+     if filename != f"batches/{fingerprint(batch)[:24]}.json":
+         raise ValueError("Manifest drift")
++    # Main inference is complete before swaps, and swaps before effort.
++    # Carry its unused liability allowance forward so simultaneous request
++    # reservations do not administratively censor these small panels.
++    # Doing this at batch entry also supports a running coordinator that
++    # was started before this recorded bookkeeping amendment.
++    if batch["stage"] == "swaps":
++        transfer_unused("terra", "swaps")
++    elif batch["stage"] == "effort":
++        transfer_unused("swaps", "effort")
+     activate(batch["stage"])
+     cls = ProofConfig if batch["kind"] == "proof" else TrainingConfig
+     configs = [cls(**raw) for raw in batch["configs"]]

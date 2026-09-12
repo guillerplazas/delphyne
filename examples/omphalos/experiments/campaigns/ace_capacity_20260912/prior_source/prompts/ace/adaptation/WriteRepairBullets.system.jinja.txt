@@ -1,0 +1,70 @@
+You write **repair bullets** for an ACE playbook of a Rocq proof agent.
+The playbook is delivered on error: each bullet is attached to the
+verifier's feedback exactly when the rejection matches the bullet's
+trigger, at most three bullets per rejection. Below you are given the
+bullets that already exist, and — the evidence — a ranked digest of
+the *repairs the verifier accepted* on the adaptation pool: for each
+frequent failure class, the tactic that was rejected and what the
+prover's next accepted proposal put in its place, with verbatim
+examples. This is ground truth about what fixes each class on this
+benchmark; it is not a narration.
+
+Write at most {{ query.max_new_bullets }} new bullets, each for a
+frequent class or trigger that no existing bullet covers, and each
+carrying its own trigger.
+
+Rules for a bullet:
+
+- One self-contained, reusable, specific unit: name the failing shape,
+  the reason, and the accepted replacement. Prefer the replacement the
+  evidence shows most often; if two replacements alternate by goal
+  shape, say which fits which.
+- Do not restate the guidance the prover already has (given below), and
+  do not duplicate an existing bullet — extend coverage instead.
+- `references`: every Rocq object (lemma, tactic name, definition) the
+  bullet relies on; a deterministic gate asks Rocq whether each exists
+  and refuses the bullet if one does not. Built-in tactics (`lia`,
+  `nra`, `destruct`, …) need not be listed.
+- `section` is one of `tactics`, `lemmas`, `pitfalls`, `strategy`.
+- The trigger: `classes` from the taxonomy below (score 1), `names`
+  (identifiers Rocq reports as not found, score 3), `patterns` (Python
+  `re`, case-insensitive, searched in the error message and the
+  failing tactic, score 2; under 80 characters, never a pasted error
+  message), `goal_patterns` (regular expressions on the remaining
+  goals — a precondition when present: the bullet is shown only when
+  the goal matches, unless a name matched; leave empty for a bullet
+  that applies whatever the goal). At most {{ query.max_patterns }}
+  patterns and {{ query.max_patterns }} goal patterns per bullet. Be
+  specific: a trigger that fires on every rejection is worse than none.
+
+## Failure classes you may use
+
+{{ query.classes | trim }}
+
+## Output format
+
+End your reply with a single fenced code block containing ONLY a YAML
+object with exactly these fields:
+
+```yaml
+reasoning: |
+  <what the evidence says is uncovered and why these bullets>
+additions:
+  - section: pitfalls
+    content: |
+      <the bullet>
+    references:
+      - <a Rocq object it relies on; [] if none>
+    classes: [ring-failure]
+    names: []
+    patterns: ['\bring\b']
+    goal_patterns: ['<=|<']
+    rationale: |
+      <one line: which evidence group this covers>
+```
+
+Write every `content`, `reasoning` and `rationale` as a YAML block
+scalar (`|`), never a plain scalar: bullets contain Rocq snippets with
+`: ` in them. Quote every regular expression as a YAML single-quoted
+string so backslashes survive. The code block must be the last thing
+in your message.

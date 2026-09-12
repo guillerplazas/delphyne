@@ -1,0 +1,69 @@
+## Rocq tactic guidance
+
+You are completing a Rocq proof. The theorem statement is fixed; do not
+change it. The imports listed in the user message are already in scope —
+you do not need to repeat `Require Import` lines.
+
+### Core principles
+
+- **Try automation first.** Many miniF2F goals close with a single
+  automation tactic once the hypotheses are introduced.
+- **Build incrementally.** Use `intros` to name hypotheses, then attempt
+  the highest-power automation that fits the goal's domain.
+- **Stay sound.** Do not propose `admit`, `Admitted`, `Abort`, or
+  fabricated lemmas. If you cannot close a goal, propose a partial
+  proof that compiles up to a smaller subgoal.
+
+### Automation cascade (try in roughly this order)
+
+`reflexivity` → `auto` → `trivial` → `ring` → `field` → `lia` → `lra` →
+`nia` → `nra` → `tauto` → `firstorder` → `intuition` → `eauto` →
+`congruence` → `discriminate`
+
+Domain hints:
+
+- Natural-number arithmetic (`nat`) → `lia`, `nia`.
+- Integer arithmetic (`Z`) → `lia`, `nia`, `ring`.
+- Real arithmetic (`R`, `Open Scope R_scope`) → `lra` (linear), `nra`
+  (nonlinear), `field` (for `/` and `*` identities), `nia` only for
+  integer subgoals.
+- Equational reasoning → `ring`, `field`, `congruence`.
+- Pure propositional logic → `tauto`, `intuition`.
+- Goals about constants only → `compute` or `vm_compute` followed by
+  `reflexivity`.
+
+### Common preludes for miniF2F problems
+
+- Reals are already imported via `Require Import Reals.` plus
+  `Open Scope R_scope.` — you can use real-number literals directly.
+- For divisibility / modular arithmetic you may need `Lia` (already
+  available globally in modern stdlib) and `Znumtheory`.
+- For square roots, `sqrt` is `R -> R` from `Reals`; `sqrt_pos` and
+  `sqrt_lt_R0` are usable lemmas.
+
+### Math → Rocq phrasebook (selected)
+
+| Math                  | Rocq (`R` scope)         |
+|-----------------------|---------------------------|
+| `a + b`, `a - b`, `a*b` | `a + b`, `a - b`, `a * b` |
+| `a / b`               | `a / b` (in `R_scope`)    |
+| `a ≤ b`, `a < b`      | `a <= b`, `a < b`         |
+| `|a|`                 | `Rabs a`                  |
+| `√a`                  | `sqrt a`                  |
+| `a^n`                 | `a^n` or `pow a n`        |
+| `∀ x, P x`            | `forall x, P x`           |
+| `∃ x, P x`            | `exists x, P x`           |
+| `P ∧ Q`, `P ∨ Q`, `¬P`| `P /\ Q`, `P \/ Q`, `~ P` |
+
+### Tactical patterns
+
+- Always start with `intros` to name universally quantified variables
+  and hypotheses before invoking automation.
+- For inequalities of the form `a * b ≤ c²` or polynomial squared
+  inequalities, `nra` is usually the right hammer.
+- For "prove an equality by rearranging" → `field` (if division) or
+  `ring` (otherwise) after introductions.
+- Use `subst.` to eliminate equalities of the form `x = e` before
+  closing with automation.
+- `apply` / `rewrite` are useful when a specific stdlib lemma applies;
+  do not invent lemma names you are not certain of.

@@ -1,0 +1,67 @@
+{
+  "finding": "The generator used assert; the reflector and curator preserved it. The batch reducer first introduced the unsupported have ... := syntax.",
+  "paid_calls": 0,
+  "roles": {
+    "curator": {
+      "cache_sha256": "96fd60dec37bab29455d928a052ff9fc343d773eaccdc7b12a1ef300c297ee1d",
+      "output": {
+        "operations": [
+          {
+            "content": "For real goals of the shape `0 <= t * t`, `apply Rle_0_sqr` closes the goal directly; if the goal is written `0 <= t ^ 2`, restate or bridge it to the product form because `apply Rle_0_sqr` may not unify syntactically with exponentiation notation.\n",
+            "references": [],
+            "section": "lemmas",
+            "type": "ADD"
+          },
+          {
+            "content": "To derive a bound on a coefficient from a quadratic inequality over `R`, assert a nonnegative completed square such as `0 <= (a * x + b) * (a * x + b)` using `Rle_0_sqr`, then use `nra` to expand it and combine it with the quadratic hypothesis.\n",
+            "references": [],
+            "section": "tactics",
+            "type": "ADD"
+          }
+        ],
+        "reasoning": "The empty playbook lacks the reusable syntactic guidance for applying\n`Rle_0_sqr` and then handing a completed-square inequality to `nra`.\n"
+      },
+      "source": "experiments/output/ace_adaptation_attribution-terra-20260912/configs/step00_curator_mathd_algebra_28"
+    },
+    "reducer": {
+      "cache_sha256": "2013d50268eb0722c455a987d669c13253501ae21345fa6a92ee2ab99420bb2a",
+      "output": {
+        "operations": [
+          {
+            "content": "For nonlinear inequalities over `R`, derive useful quadratic bounds by asserting a nonnegative completed square, e.g. `have hs : 0 <= (a * x + b) * (a * x + b) := Rle_0_sqr _`, then let `nra` expand it and combine it with the hypotheses. If a square is written as `t ^ 2`, first bridge or restate it as `t * t` when `Rle_0_sqr` does not unify syntactically.\n",
+            "references": [],
+            "section": "tactics",
+            "type": "ADD"
+          },
+          {
+            "content": "For divisibility goals over integers, arithmetic tactics do not construct divisibility witnesses. After unpacking `d | p` as `p = q * d` (or an equivalent witness equation), prove derived divisibility facts explicitly by giving the transformed witness, rewriting with that equation, and normalizing with `ring`; then use divisibility closure lemmas such as those for addition or multiplication.\n",
+            "references": [],
+            "section": "pitfalls",
+            "type": "ADD"
+          },
+          {
+            "content": "For equalities involving large concrete recursive sums, avoid unfolding the concrete computation directly. Prove a symbolic closed form or recurrence by induction on the bound, instantiate it at the desired numeral, and finish the resulting arithmetic with `lia` or `nia`.\n",
+            "references": [],
+            "section": "strategy",
+            "type": "ADD"
+          }
+        ],
+        "reasoning": "Kept the completed-square method from Sample 0 as a general nonlinear-real-arithmetic tactic; its syntactic note about `t ^ 2` versus `t * t` is folded into the same addition. Kept and generalized Sample 1's witness-based divisibility guidance, dropping the fixed-small-divisor prime argument and residue-specific details as too theorem-specific. Kept Sample 2's symbolic-induction strategy for large recursive sums because it avoids expensive computation. Dropped the `sum_f` post-simplification syntax issue and the `nat` subtraction case split because they are narrow syntactic troubleshooting patterns.\n"
+      },
+      "source": "experiments/output/ace_adaptation_attribution-terra-20260912/configs/step00_reducer_mathd_algebra_28"
+    },
+    "reflector": {
+      "cache_sha256": "36189e5b6621252447f2bc4602410f39f005de7cdd6a0da45b17557995530b71",
+      "output": {
+        "bullet_tags": [],
+        "correct_approach": "1. Introduce c, f, the defining equation Hf, and the existential witness x with\n   its inequality Hx.\n2. Rewrite Hf in Hx, obtaining 2 * x^2 + 5 * x + c <= 0.\n3. Assert 0 <= (4 * x + 5) * (4 * x + 5) and prove it with apply Rle_0_sqr.\n4. Invoke nra. It combines the quadratic upper bound with the nonnegative\n   completed square to derive c <= 25 / 8.\n",
+        "error_identification": "The first proof failed because apply Rle_0_sqr did not syntactically unify with\nthe asserted exponentiation form (4 * x + 5) ^ 2. The verifier reported a\nunification failure during the assertion, so nra was never reached. There was\nno mathematical error in the intended inequality.\n",
+        "key_insight": "For real quadratic bounds, use the completed-square invariant in the exact\nproduct shape accepted by Rle_0_sqr\u2014assert 0 <= t * t, not necessarily\n0 <= t ^ 2\u2014then nra can expand and rearrange it with the polynomial hypothesis.\n",
+        "reasoning": "The proof strategy was sound: unpack the existential witness x, rewrite f x using\nits defining hypothesis, derive nonnegativity of a completed-square expression,\nand let nra perform the polynomial rearrangement. The initial introduction and\nrewrite both verified. The first attempt failed only when applying Rle_0_sqr to a\ngoal stated with exponentiation, 0 <= (4 * x + 5) ^ 2. After checking Rle_0_sqr,\nthe prover restated the same square as an explicit product,\n0 <= (4 * x + 5) * (4 * x + 5), which matched the lemma application and allowed\nnra to close the real-arithmetic goal. The search call was useful because it\nconfirmed the intended nonnegativity lemma; the final proof was short and\nappropriately avoided an unnecessary discriminant argument.\n",
+        "root_cause_analysis": "The prover assumed that the power notation used in the assertion would directly\nmatch the precise representation expected by Rle_0_sqr under apply. In this\nenvironment, that syntactic match did not occur. The relevant bridge was to\nstate the square in the lemma-friendly product form rather than expecting\nautomatic normalization between exponentiation and multiplication at lemma\napplication time.\n"
+      },
+      "source": "experiments/output/ace_adaptation_attribution-terra-20260912/configs/step00_reflector_mathd_algebra_28"
+    }
+  },
+  "verification": "quality_probe_have.json"
+}
