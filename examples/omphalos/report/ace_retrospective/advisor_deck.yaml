@@ -1,0 +1,443 @@
+title: 'Omphalos · ACE, control and evidence'
+date: '13 September 2026'
+scope: 'Audited development evidence through 12 September; completed resource-completion campaign on 13 September. Ongoing code work excluded.'
+slides:
+  - title: 'ACE, control and the cost of a proof'
+    section: 'Research update'
+    layout: cover
+    subtitle: 'Omphalos / Delphyne / miniF2F in Rocq'
+    cards:
+      - {value: '−55.5%', label: 'spending', text: 'Accepted bounded-control trade-off; 28 → 25 validation solves.'}
+      - {value: '+3 / 40', label: 'Luna ACE increment', text: 'Matched development comparison; encouraging, p = 0.25.'}
+      - {value: '38 / 40', label: 'Terra during learning', text: 'Training generation; later frozen evaluation uses a different controller.'}
+    bullets:
+      - '**Thesis contribution:** economical, verifiable search through Delphyne.'
+      - '**Main question:** which improvements survive the entire path to a checked proof?'
+    takeaway: 'Strong control result; modest ACE signal; concrete explanations for lost opportunity.'
+    notes: 'Open with the three numbers. They belong to different comparisons. Never present 38/40 as validation performance. This is a complete reading deck; use the rehearsal route for a shorter talk.'
+
+  - title: 'The questions this update answers'
+    section: 'Reading guide'
+    layout: cards
+    cards:
+      - title: 'Is ACE implemented?'
+        bullets: ['**Yes:** Generator, Reflector, Curator and persistent playbook.', '**Local additions:** batched Reducer, checked evidence and budget controls.']
+      - title: 'Did it improve coverage?'
+        bullets: ['**Luna:** 24 → 27/40 in the matched validation comparison.', '**Uncertain:** three gains; too little evidence for a supported general gain.']
+      - title: 'Does a stronger model unlock ACE?'
+        bullets: ['**Terra solves more** without a book.', '**ACE increment stays small:** +0 with Luna’s book, +1 with its own.']
+      - title: 'What is worth retaining?'
+        bullets: ['**Budget trade-offs and reliable evidence.**', '**Failed candidates stay optional;** common controller limitations remain.']
+    takeaway: 'Separate implementation fidelity, local correctness, coverage and economic value.'
+    notes: 'Use these questions as a map. Each is answered visibly later; no claim depends on speaker notes or a live file visit.'
+
+  - title: 'Our ACE loop, in one slide'
+    section: 'Implementation'
+    layout: pipeline
+    stages:
+      - ['Generator', 'Propose a proof\nusing the current book']
+      - ['Rocq feedback', 'Execute and check\nwhat actually happened']
+      - ['Reflector', 'Diagnose the attempt;\npropose useful lessons']
+      - ['Curator', 'Propose structured\nplaybook changes']
+      - ['Reducer', 'Select / combine\nbatched proposals']
+      - ['Merge + store', 'Deterministic update;\nhash the next book']
+    bullets:
+      - '**Training:** the book evolves between batches; no model weights are updated.'
+      - '**Evaluation:** the selected book is frozen; each proof has its own resource allowance.'
+      - '**Delphyne:** strategies describe choices; policies choose models, search and spending.'
+    takeaway: 'The Reducer is a local batching component; the deterministic merge owns the stored state.'
+    notes: 'The advisor knows ACE. Spend at most 45 seconds here. Emphasize the local Reducer and the separation between the evolving book and frozen inference.'
+
+  - title: 'Where each ACE element lives in the code'
+    section: 'Implementation / navigation'
+    layout: table
+    widths: [1.6, 4.8, 5.7]
+    font: 17
+    columns: ['ACE element', 'Delphyne strategy / query', 'File to open · then search symbol']
+    rows:
+      - ['**Generator**', 'prove_theorem_ace / ProposeProofScriptACE', 'prove_ace.py']
+      - ['**Reflector**', 'reflect_on_trajectory / ReflectOnTrajectory', 'prove_ace.py']
+      - ['**Curator**', 'curate_playbook / CuratePlaybook', 'prove_ace.py']
+      - ['**Reducer**', 'aggregate_curation_deltas / AggregateCurationDeltas', 'prove_ace.py']
+      - ['**Book + merge**', 'Playbook / merge / refine; PlaybookStore.put', 'ace/ace_playbook.py; ace/ace_store.py']
+      - ['**Driver**', 'execute / ACEAdaptStepConfig', 'experiments/ace/ace_adaptation.py']
+    takeaway: 'All paths are relative to examples/omphalos; search by symbol because active code can move lines.'
+    notes: 'Optional visit 1: prove_ace.py; compare the four strategies and their policy functions. Visit 2: ace/ace_playbook.py merge; then ace/ace_store.py PlaybookStore.put. Mapping describes the measured architecture, not unbenchmarked work in the other session.'
+
+  - title: 'What counts as a solve—and what is capped?'
+    section: 'Measurement'
+    layout: table
+    columns: ['Setting', 'Dollar allowance / problem', 'Requests / verifier', 'Interpretation']
+    widths: [3.0, 2.5, 2.5, 4.1]
+    font: 18
+    rows:
+      - ['Historical X / Luna', '**$0.10**', '32 requests', 'Older post-crossing stopping']
+      - ['Bounded / Luna', '**$0.10**', '64 / 300 seconds', 'Conservative pre-request admission']
+      - ['Bounded / Terra', '**$1.00**', '64 / 300 seconds', 'Same controller; recorded tariffs ×10']
+      - ['Terra training Generator', '**$1.00 nominal**', '32 requests', 'Evolving book; older stopping rule']
+    bullets:
+      - '**Qualified solve:** verifier success within the stated cost rule.'
+      - '**Bill includes failures;** book preparation is separate.'
+      - '**40 problems per X partition;** validation is reused development data.'
+    takeaway: 'A nominal allowance, a request reservation and the eventual bill are different quantities.'
+    notes: 'Do not conflate the original canonical $0.05 setting with X experiments. The slide deliberately gives the settings behind the principal comparisons. testX and protected challenge outcomes remain excluded.'
+
+  - title: 'Development cycles 1/4 · replication and X3'
+    section: 'Complete development history'
+    layout: table
+    font: 17.5
+    columns: ['Cycle / change', 'Observed development result', 'Conclusion / disposition']
+    widths: [3.1, 4.6, 4.4]
+    rows:
+      - ['**Initial replication**', 'ACE = baseline: **32/40 cells**; $0.5058 vs $0.4446', 'No coverage gain; 20 original validation problems × 2 seeds.']
+      - ['**Initial ablations / definitions**', 'No-Reflector changes book composition; definitions fix **1/8** cells', 'No context-collapse replication at this scale; preserve the input fix.']
+      - ['**X v2: offline / online**', 'Offline **54/80** = baseline; cold online **56/80**; warm **50/80**', 'Warm start does not reliably improve results.']
+      - ['**X3: batched evidence**', 'X3 **57/80** vs baseline **54/80**', 'Modest gain; one-epoch book becomes the reference.']
+      - ['**Reflection / rewriting / epochs**', 'No-Reflector **57/80**; monolithic **55/80**; X3 3 epochs **53/80**', 'More reflection / training is not reliably better.']
+    takeaway: 'For X rows, 80 cells = the same 40 validationX problems at two replicate identifiers.'
+    notes: 'These are development reconstructions, not independent repeated confirmations. Early incomplete top-k, no-Reflector and online archives are not scored as complete panels. All later X counts use their explicitly named versions; v2 three epochs scored 50/80.'
+
+  - title: 'Development cycles 2/4 · better advice and delivery'
+    section: 'Complete development history'
+    layout: table
+    font: 17
+    columns: ['Cycle / change', 'Observed development result', 'Conclusion / disposition']
+    widths: [3.1, 4.6, 4.4]
+    rows:
+      - ['**X4: cited-only credit**', '**55/80** vs X3 **57/80**', 'Better bookkeeping; citations do not establish causal usefulness.']
+      - ['**Stronger writers / v5**', 'Terra writers **55/80**; v5 **53/80**', 'More capable writing and richer failure evidence do not beat X3.']
+      - ['**Rendering v2 vs v3**', 'Cost effect changes sign across v5 and X3 books', 'Rendering effect depends on the book.']
+      - ['**Hints on error / x6 repairs**', 'Triggered **53/80**; repairs **56 raw / 55 qualified**', 'Some repairs help locally; no reliable large coverage gain.']
+      - ['**Stall stopping: k = 4**', '**26/40**, $0.7943 vs **27/40**, $0.8870', 'Spend less with one fewer solve; live and offline estimates differ.']
+      - ['**Deterministic digest table**', '**51/80** vs X3 rendering 2 **56/80**', 'Simple summaries lose coverage; effect uncertain.']
+    takeaway: 'Advice can be correct, cheaper to send, or more traceable without completing more theorems.'
+    notes: 'The stronger-writer treatment still uses Luna as Generator. The later all-Terra training chain is different. x6 has one raw success above the retrospective $0.10 qualification threshold. Old cost exports do not necessarily contain every retry receipt.'
+
+  - title: 'Development cycles 3/4 · control and local checks'
+    section: 'Complete development history'
+    layout: table
+    font: 17
+    columns: ['Cycle / change', 'Observed development result', 'Conclusion / disposition']
+    widths: [3.1, 4.6, 4.4]
+    rows:
+      - ['**Review development stage**', 'X3 **57/80**; repair books **55 / 54 raw**; baseline **52/80**', 'Repair books do not beat X3; protected stages excluded.']
+      - ['**Bounded money + focused**', '**25/40** vs **28/40**; spending **−55.5%**', '**Accepted trade-off**; original no-loss gate failed.']
+      - ['**Control-cycle follow-up**', '**28/40**, $1.0253 vs **25/40**, $0.6780', 'Coverage bought back at higher cost; Pareto gate failed.']
+      - ['**Polish / downshift / recovery**', '**53/80** each; candidate bill **+5.55%**', 'No benchmark win; keep optional.']
+      - ['**Applicability / checked change**', 'Adaptive **2/12** useful vs fixed **3/12**; checked change **1→2/6**', 'Local correctness helps; full-theorem gains unestablished.']
+      - ['**Local reasoning-effort probes**', 'Terra low/medium/high **4/6** each; Luna high/xhigh **5/6**', 'More reasoning is not monotonic; check the right local operation.']
+    takeaway: 'Local episodes, theorem cells and campaign bills have different denominators.'
+    notes: 'Applicability primary screen stopped; no full train/validation benchmark followed. Checked-change correctness improved 3/6 to 6/6. The control-cycle archived source has reconstruction limitations; do not quietly rerun it as the same experiment.'
+
+  - title: 'Development cycles 4/4 · coverage and attribution'
+    section: 'Complete development history'
+    layout: table
+    font: 17
+    columns: ['Cycle / change', 'Observed development result', 'Conclusion / disposition']
+    widths: [3.1, 4.6, 4.4]
+    rows:
+      - ['**Model / writer-effort suite**', 'Pilot **18/24 vs 17/24**; full contenders **19 / 24 vs 27/40**', 'Promising pilot did not become a coverage upgrade.']
+      - ['**Structured mechanisms**', 'Effort arm **43/80 vs 53/80**; S/C/R have **51 parse failures**', 'No promotion; parser confounds mechanism interpretation.']
+      - ['**Fixed-book demos / exploration**', 'D/E validation **26 / 25 vs 27/40**', 'No coverage gain; unchanged book.']
+      - ['**Four isolated coverage arms**', 'D2/E2/S/H **25 / 24 / 25 / 25 vs 27/40**', 'All cost more on validation; retain the reference.']
+      - ['**Attribution / capacity**', 'Own-book increment: Luna **+3**, Terra **+1**; training Terra **38/40**', 'Solver strength exceeds demonstrated ACE increment.']
+      - ['**13 Sep: resource completion**', 'Small cap **26/40**; continuation **23/40** vs **27/40**', 'Both cost more; no follow-up selected, no promotion.']
+    takeaway: 'Completed cycles are preserved as evidence; the latest losing variants are not the new default.'
+    notes: 'The September 13 row is a completed snapshot, not a report on the other active session. Costs and controller details appear later. The ledger and archival scores are left unchanged.'
+
+  - title: 'The strongest result is a budget trade-off'
+    section: 'Control result'
+    layout: chart
+    chart: bounded
+    bullets:
+      - '**Coverage:** 28 → 25 / 40.'
+      - '**Bill:** $1.5238 → $0.6780; **55.5% less**.'
+      - '**Cost per solve:** $0.0544 → $0.0271.'
+      - '**Accepted:** three fewer solves for lower cost; no-loss gate failed.'
+    takeaway: 'Both use a nominal $0.10/problem allowance; the controller changes what gets admitted.'
+    notes: 'The comparator is the older review X3 seed-0 run, not the latest 27/40 flagship. Total cost includes failed attempts. Categorical bars show measured alternatives; there is no interpolated budget-response curve.'
+
+  - title: 'A changed baseline explains part of the confusion'
+    section: 'Attribution'
+    layout: table
+    font: 23
+    widths: [4.3, 2.3, 2.7, 2.8]
+    columns: ['Program', 'trainX', 'validationX', 'Validation bill']
+    rows:
+      - ['Earlier / no book', '**33/40**', '**27/40**', '$0.8870']
+      - ['Bounded / no book', '**28/40**', '**24/40**', '$0.7765']
+      - ['Bounded / Luna book', '**28/40**', '**27/40**', '$0.6672']
+    bullets:
+      - '**Earlier → current no book:** five training and three validation solves lost.'
+      - '**Current no book → ACE:** three validation solves recovered.'
+      - '**Current ACE vs earlier program:** same validation count; bill **24.8% lower**.'
+    takeaway: 'All use Luna and $0.10/problem; controller, feedback and runtime lineage still differ.'
+    notes: 'The first arrow is a historical program comparison, not a paired single-feature ablation. The second is the intended book intervention within the bounded program, still subject to historical/provider conditions. File: experiments/campaigns/ace_attribution_20260912/LINEAGE.md.'
+
+  - title: 'Luna’s book helps here—but the signal is small'
+    section: 'Matched ACE result'
+    layout: chart
+    chart: matched
+    bullets:
+      - '**Question:** does this book help the bounded solver?'
+      - '**Observed:** 24 → 27/40; three gains, no losses.'
+      - '**Economics:** $0.7765 → $0.6672; bill **−14.1%**.'
+      - '**Uncertain:** paired p = **0.25**.'
+    takeaway: 'Luna / medium / $0.10 per problem / 64 requests / 300 verifier seconds.'
+    notes: 'Do not say ACE is proved effective, proved ineffective, or equivalent. The whole-panel count is more informative than a count of cherry-picked repaired cases. Cache economics are separated later.'
+
+  - title: 'The full crossover separates solver from book'
+    section: 'Luna / Terra experiment'
+    layout: crossover
+    bullets:
+      - '**Same Luna book:** +3 solves for Luna, **+0** for Terra.'
+      - '**Terra-written book:** no gain for Luna; **+1** for Terra.'
+      - '**Own-book Terra:** **9.67×** the bill for three more validation solves.'
+    takeaway: 'Each cell is 40 validationX problems; costs include failures and exclude book preparation.'
+    notes: 'Rows are solver models, columns are frozen books. Luna cap $0.10; Terra $1.00. Same-book interaction −7.5 percentage points, paired p=0.375. Own-Terra book increment p=1.0. Reused records do not become independent theorems.'
+
+  - title: 'What the Luna / Terra experiment changes'
+    section: 'Interpretation'
+    layout: cards
+    cards:
+      - title: 'Stronger solver: yes, more coverage'
+        bullets: ['**Without ACE:** Terra 29/40; Luna 24/40.', '**Cost matters:** Terra uses a $1.00 cap and recorded tariffs ×10.']
+      - title: 'Stronger writer: no clear unlock'
+        bullets: ['**Luna + Terra book:** 24/40, matching no book.', '**Terra + own book:** only 29 → 30/40.']
+      - title: 'Training success vs book usefulness'
+        bullets: ['**Generator:** Terra 38/40; Luna 33/40.', '**Transfer still needs** valid, relevant advice that the solver uses.']
+      - title: 'Next inference to test'
+        bullets: ['**Target exposed bottlenecks** in evidence or completion.', '**Larger models and more writing** do not guarantee an ACE gain.']
+    takeaway: 'The study does not establish that model scale unlocks ACE; an intrinsic model ceiling also remains unproven.'
+    notes: 'Avoid a categorical statement that Terra cannot benefit. The same-book interaction has p=0.375 and the own-Terra difference p=1.0. Small gains and the study design limit conclusions.'
+
+  - title: 'Yes: Terra achieved 38/40 during book creation'
+    section: 'The 38/40 result'
+    layout: chart
+    chart: training_gap
+    bullets:
+      - '**38/40 on trainX:** the book evolved between batches.'
+      - '**Generator bill:** $5.9984 for all 40 tasks.'
+      - '**Full preparation:** $8.0992, including writers and embeddings.'
+      - '**Frozen book:** trainX **32/40**; validationX **30/40**.'
+    takeaway: '38 → 32 compares two training executions; 30/40 is a different partition, not another measured decline.'
+    notes: 'Terra is used for all four generative roles. One shuffled pass, four-problem batches, final book 26 bullets / 2426 estimated tokens. The two training-generation misses were algebra_amgm_sum1toneqn_prod1tonleq1 and imo_1967_p3. Source: training_evolution.json and training_accounting.json in ace_attribution_20260912.'
+
+  - title: 'Why did 38 become 32? What we know—and do not'
+    section: 'Controller and context'
+    layout: cards
+    cards:
+      - title: 'Known change · request admission'
+        bullets: ['**Training:** 32 requests; stop after a budget crossing.', '**Evaluation:** up to 64; reservations can deny the next call.']
+      - title: 'Known change · context'
+        bullets: ['**Training:** evolving book; older proof loop.', '**Evaluation:** frozen book; focused queries and bounded verifier feedback.']
+      - title: 'Known issue · completion is fragile'
+        bullets: ['**Unfinished progress:** time limits, parsing and final submission matter.', '**More nominal requests** do not guarantee useful admitted work.']
+      - title: 'Unknown · the causal breakdown'
+        bullets: ['**Different sampled trajectories:** this is not a paired controller ablation.', '**Six net solves lost ≠ six proven reservation failures.**']
+    takeaway: 'The gap motivates diagnosis; it does not show that the finished book destroyed six proofs.'
+    notes: 'Same nominal Terra generator allowance $1.00, different stopping semantics. Do not assign a numerical share of the six-solve gap to the controller, compression or sampling without a matched intervention.'
+
+  - title: 'Creating a book is a real up-front expense'
+    section: 'Economics / preparation'
+    layout: chart
+    chart: preparation
+    bullets:
+      - '**Luna:** ≥ $0.9169; historical embeddings unknown.'
+      - '**Terra:** $8.0992; **8.83×** Luna’s known cost.'
+      - '**26 bullets each;** below the 4,000-token guard.'
+      - '**Payback requires** useful lessons to survive reduction.'
+    takeaway: 'Preparation and inference are separate bills; generation is the largest preparation component.'
+    notes: 'The bars are additive costs, not a learning curve. Luna final size 2103 estimated tokens; Terra 2426. Breakeven uses assumed future workloads and belongs in the backup question.'
+
+  - title: 'Spent versus solved: the actual recorded staircase'
+    section: 'Economics / whole panel'
+    layout: chart_wide
+    chart: spend
+    bullets:
+      - '**Right without up:** money spent without a solve. **Up:** a qualified proof.'
+      - '**Fixed task order; all 40 costs.** Accounting paths, not simulated smaller-cap runs.'
+    takeaway: 'Luna endpoints: 24 / $0.7765 vs 27 / $0.6672. Terra: 29 / $6.6106 vs 30 / $6.4513.'
+    notes: 'Two model-specific dollar scales avoid squeezing Luna into an unreadable sliver. Step plots preserve discrete solve increments. Do not smooth these observations or imply the task order is an optimized execution policy.'
+
+  - title: 'Cache discounts change the economic conclusion'
+    section: 'Economics / sensitivity'
+    layout: chart
+    chart: cache
+    bullets:
+      - '**Observed Luna bill:** ACE saves **14.1%**.'
+      - '**No cache discount:** the same tokens cost **1.45% more** with ACE.'
+      - '**Cached share:** 64.6% → **75.9%**; token use rises slightly.'
+      - '**Terra:** own-book uncached sensitivity is **+8.51%**.'
+    takeaway: 'The saving is real at the observed tariff; it cannot all be attributed to less computation.'
+    notes: 'This counterfactual reprices the same trajectories; it does not rerun the models or change admission behavior. Bar pairs deliberately replace straight-line trajectories between unrelated price scenarios.'
+
+  - title: 'Four failure mechanisms behind weak transfer'
+    section: 'Mistakes and lessons'
+    layout: cards
+    cards:
+      - title: '1 · The wrong successful ending'
+        bullets: ['**Accepted ending: nia.** Missing from the last proposed script.', '**Risk:** teach a different action from the one that closed the proof.']
+      - title: '2 · Invalid syntax in a valid idea'
+        bullets: ['**Reducer:** valid assert becomes rejected have syntax around Rle_0_sqr.', '**Name lookup is insufficient:** verify the snippet in its source context.']
+      - title: '3 · A mechanism that never arrives'
+        bullets: ['**51 parse failures; 33 duplicates.**', '**Concatenated final messages** break parsing; evaluate the fix separately.']
+      - title: '4 · Shorter context, longer search'
+        bullets: ['**Compaction:** repeated tool calls; sometimes no proof submission.', '**Local savings** can lose useful memory and completion opportunity.']
+    takeaway: 'Capture → validate → retain → expose → use → finish. A failure anywhere can erase the benefit.'
+    notes: 'Terminal witness: amc12_2000_p6. The missing-text flag alone does not prove every affected training lesson was wrong. Syntax acceptance is not full theorem success; exposure is not causal attribution.'
+
+  - title: 'More allowance recovered Terra proofs, then stalled'
+    section: 'Exact continuations'
+    layout: continuation
+    bullets:
+      - '**Same paid prefixes:** eight selected trainX problems; no fresh restarts.'
+      - '**Extra money:** Luna unchanged; Terra gains **+2 / +4** solves.'
+      - '**Then no extra solves:** 11 residual paths face money denial; one carries an API failure.'
+    takeaway: 'The final plateau is not evidence of an unrestricted model-capability ceiling.'
+    notes: 'C = no ACE; E = corrected own-book context. Level 0 caps Luna $0.10 / Terra $1.00. Level 1 doubles money to $0.20 / $2.00 while retaining 64 requests / 300s. Level 2 retains that money and gives 128 requests / 600s. Costs in backups include each prefix once.'
+
+  - title: '13 September: the first completion fixes did not win'
+    section: 'Latest completed cycle'
+    layout: table
+    font: 21
+    widths: [4.1, 2.3, 2.8, 2.9]
+    columns: ['Treatment', 'trainX', 'validationX', 'Validation bill']
+    rows:
+      - ['**Historical reference**', '28/40', '**27/40**', '**$0.6672**']
+      - ['A · output cap 4,096', '**30/40**', '26/40', '$1.1281']
+      - ['B · corrected continuation', '25/40', '23/40', '$0.7379']
+    bullets:
+      - '**A exposed more search, but did not improve validation economics.**'
+      - '**Both gates failed:** no selected follow-up; neither becomes the default.'
+      - '**Cost:** $3.6136 of a $30 ceiling; Luna / medium / $0.10 per problem.'
+    takeaway: 'A reduces the response cap from 32,768 to 4,096 tokens. Completed cycle; ongoing code work is unscored.'
+    notes: 'These are historical seed-0 controls and fresh candidate trajectories. Validation is reused development data. The frozen book is unchanged. Output cap is a model-response limit including reasoning, not the final visible proof length.'
+
+  - title: 'Are failed ideas inherited by later experiments?'
+    section: 'Research discipline'
+    layout: cards
+    cards:
+      - title: 'Stored in Git'
+        bullets: ['**Keep results, costs, books and candidate code.**', '**A research commit does not establish a solver improvement.**']
+      - title: 'Activated by configuration'
+        bullets: ['**Opt-in:** compaction, exploration, repair and continuation.', '**The next control retains the reference;** losing flags stay off.']
+      - title: 'What really is inherited'
+        bullets: ['**The accepted controller** and its cost / coverage compromise.', '**Shared code changes** can affect several configurations.']
+      - title: 'Remaining protection to strengthen'
+        bullets: ['**One explicit reference constructor;** preserve prompt identity.', '**Separate archive, fix and promotion;** check shared behavior.']
+    takeaway: 'Optional treatments are isolated by switches; shared-code behavior still deserves regression checks.'
+    notes: 'This is an assessment of inspected configuration and history, not a proof of complete behavioral equivalence. Raw BoundedConfig defaults differ from the reference’s explicit admission=False / restart=False settings. No code is changed by preparing this presentation.'
+
+  - title: 'The thesis claim and the advisor decisions'
+    section: 'Discussion'
+    layout: cards
+    cards:
+      - title: 'Claim supported by the work'
+        bullets: ['**ACE in Delphyne:** explicit artifacts and verifier feedback.', '**Useful cost / coverage control;** concrete failure diagnoses.']
+      - title: 'Claim that stays open'
+        bullets: ['**A general, reproducible ACE coverage gain.**', '**An intrinsic Luna ceiling** or a general stronger-writer advantage.']
+      - title: 'Where further work earns its cost'
+        bullets: ['**Faithful, executable evidence.**', '**Local progress must become an accepted proof** within the full budget.']
+      - title: 'Decisions for the meeting'
+        bullets: ['**Which cost / coverage trade-off serves the thesis?**', '**What evidence is still needed?** Use trainX / validationX; testX stays closed.']
+    takeaway: 'Evaluate improvements by completed proofs and the whole bill, with mechanism exposure recorded.'
+    notes: 'Close with decisions, not a promise that the active code work will succeed. The original $30 proposal has begun; the completed first cycle is already included. No new budget or experiment is requested by this deck.'
+
+  - title: 'What are the exact crossover costs and caps?'
+    section: 'Backup / exact values'
+    backup: true
+    layout: cross_table
+    bullets:
+      - '**One row = 40 validationX problems.** Recorded inference spending includes failures.'
+      - '**Preparation excluded;** historical controls reused; not 240 independent theorems.'
+    takeaway: 'Luna / medium / $0.10 cap; Terra / medium / $1.00 cap; 64 requests and 300 verifier seconds.'
+    notes: 'Exact source: report/ace_retrospective/data/crossover.csv. Own-book p-values: Luna 0.25; Terra 1.0. The full crossover tests solver/book combinations, not a general scaling law.'
+
+  - title: 'Which historical books improved coverage?'
+    section: 'Backup / historical comparison'
+    backup: true
+    layout: chart_wide
+    chart: historical
+    bullets:
+      - '**X3 and no-Reflector:** 57/80 versus no ACE **54/80**; differences remain modest.'
+      - '**Repair bullets:** 56 raw successes; **55 qualify** under the retrospective cost rule.'
+    takeaway: 'Two replicate identifiers on 40 validationX problems; separate books and delivery methods.'
+    notes: 'Directly labeled horizontal bars show categorical treatments. Bills were repriced from tokens at the audited snapshot; they are not guaranteed complete historical retry receipts. Incomplete arms are excluded, not silently counted as full panels.'
+
+  - title: 'How can a run stop while money remains?'
+    section: 'Backup / admission semantics'
+    backup: true
+    layout: admission
+    bullets:
+      - '**Reserve input and maximum output charges** before dispatch.'
+      - '**Bound above balance → deny.** The hypothetical actual bill is unknown.'
+      - '**A smaller cap also constrains reasoning;** the 4,096-token trial did not win.'
+    takeaway: 'Unused money is not automatically spendable; looser admission must still respect financial protection.'
+    notes: 'Illustrative recorded continuation: remaining $0.085742, next reservation $0.086368. This is $0.000626 over the balance. File: runtime/campaign_budget.py, CampaignResponsesModel.estimate_budget and Ledger.reserve. Do not make all reservations unsafe just to admit more calls.'
+
+  - title: 'When would preparing the book pay for itself?'
+    section: 'Backup / amortization'
+    backup: true
+    layout: table
+    widths: [4.9, 3.6, 3.6]
+    font: 22
+    columns: ['Quantity', 'Luna', 'Terra']
+    rows:
+      - ['Known preparation bill', '**≥ $0.9169**', '**$8.0992**']
+      - ['Inference saving / 40 tasks', '$0.1093', '$0.1593']
+      - ['Conditional break-even workload', '**≈ 336 tasks**', '**≈ 2,034 tasks**']
+    bullets:
+      - '**Assumptions:** unchanged task mix, coverage, prices, cache reuse and usefulness.'
+      - '**Denominator:** future attempted problems; unsuccessful attempts also count.'
+      - '**Not included:** engineering / assistant costs; Luna’s missing historical embeddings.'
+    takeaway: 'This is arithmetic under fixed assumptions, not a prediction of external generalization.'
+    notes: 'Break-even = known preparation cost divided by observed per-attempt inference saving. Values are rounded upward to whole attempted tasks. No extrapolated straight-line chart is needed to convey these conditional figures.'
+
+  - title: 'Which evidence should an ACE lesson retain?'
+    section: 'Backup / evidence'
+    backup: true
+    layout: cards
+    cards:
+      - title: 'Proposal and execution'
+        bullets: ['**The exact submitted script** and the prefix actually executed.', '**Accepted terminal proof,** including automatic assistance such as nia.']
+      - title: 'The concrete witness'
+        bullets: ['**amc12_2000_p6:** final_check.success = true.', '**nia. accepted; missing from proposal.** The proof succeeded.']
+      - title: 'From source to lesson'
+        bullets: ['**Context, bindings and checked snippet** attached to the lesson.', '**Preserve valid syntax** through reflection, curation and reduction.']
+      - title: 'From lesson to benefit'
+        bullets: ['**Show delivery and use** in the later operation.', '**Then measure full proofs and total spending;** local validity is insufficient.']
+    takeaway: 'File to inspect: report/ace_retrospective/data/creator_terminal_evidence.json, entry 0.'
+    notes: 'Other fields and full paths are in rehearsal_excerpts.md. Seven of 33 source successes have a missing terminal-tactic text flag; this is not seven established identical causal errors.'
+
+  - title: 'Why is +3 solves not yet a supported gain?'
+    section: 'Backup / measurement rules'
+    backup: true
+    layout: cards
+    cards:
+      - title: 'What the three gains say'
+        bullets: ['**3 gains, 0 losses:** paired exact p = **0.25**.', '**No proof of a general effect;** also no proof that ACE has zero value.']
+      - title: 'What counts as evidence'
+        bullets: ['**All expected cells;** platform failures retained in the denominator.', '**Whole-panel costs,** including failed attempts, retries and known liabilities.']
+      - title: 'What is independent'
+        bullets: ['**Cluster related theorem families and repeated seeds.**', '**validationX is reused development data;** selection is not confirmation.']
+      - title: 'What permits a practical decision'
+        bullets: ['**Support:** two-sided p < 0.10; 90% intervals.', '**Expansion, trade-off and promotion** are separate decisions; preserve gates.']
+    takeaway: 'Do not buy extra seeds merely to cross a significance threshold; testX stays closed.'
+    notes: 'Five independent all-favorable discordances give exact two-sided p=0.0625. This is a minimum for attainable significance, not a power calculation. Small samples and historical controls warrant restrained interpretation.'
+
+  - title: 'Which files should I rehearse before presenting?'
+    section: 'Backup / navigation'
+    backup: true
+    layout: table
+    font: 18
+    widths: [2.4, 6.0, 3.7]
+    columns: ['Question', 'File · relative to examples/omphalos', 'Search / inspect']
+    rows:
+      - ['**How is ACE wired?**', 'prove_ace.py', 'prove_theorem_ace; ReflectOnTrajectory']
+      - ['**How is the book stored?**', 'ace/ace_playbook.py; ace/ace_store.py', 'merge; refine; PlaybookStore.put']
+      - ['**Where is 38/40?**', 'experiments/campaigns/ace_attribution_20260912/RESULTS.md', 'Playbook creation; Generator solves']
+      - ['**What stopped a call?**', 'runtime/campaign_budget.py', 'estimate_budget; Ledger.reserve']
+      - ['**Terminal witness?**', 'report/ace_retrospective/data/creator_terminal_evidence.json', 'entry 0; final_check; last_tactic']
+    takeaway: 'Read-only rehearsal; no experiment launch, partition loader or live model call is needed.'
+    notes: 'A short presentation route and file checklist are in advisor_rehearsal.md / advisor_rehearsal.pdf. The older rehearsal_notes files describe the previous sixteen-slide deck.'
