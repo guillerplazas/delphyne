@@ -1,0 +1,680 @@
+{
+  "after": {
+    "bullets": [
+      {
+        "content": "When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n",
+        "harmful": 0,
+        "helpful": 5,
+        "id": "rocq-00001",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For an induction hypothesis relating recursive `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then apply `rewrite IH; lia`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00002",
+        "section": "tactics"
+      },
+      {
+        "content": "For goals over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use `intros` followed by `nia`; it can handle the nonlinear products and truncated subtraction directly.\n",
+        "harmful": 3,
+        "helpful": 4,
+        "id": "rocq-00003",
+        "section": "tactics"
+      },
+      {
+        "content": "For closed `nat` equalities built from executable finite-list operations such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`; use `reflexivity` afterward if the resulting definitional equality is not closed automatically.\n",
+        "harmful": 1,
+        "helpful": 1,
+        "id": "rocq-00004",
+        "section": "tactics"
+      },
+      {
+        "content": "When applying a recurrence hypothesis whose predecessor uses truncated subtraction, first prove the exact natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality before applying the hypothesis so its indices unify.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00005",
+        "section": "pitfalls"
+      },
+      {
+        "content": "Under an active `R_scope`, annotate natural-number indices, arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion and comparison-type errors.\n",
+        "harmful": 0,
+        "helpful": 6,
+        "id": "rocq-00006",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00007",
+        "section": "lemmas"
+      },
+      {
+        "content": "For finite nonnegative real sequences with a fixed-sum product goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00009",
+        "section": "strategy"
+      },
+      {
+        "content": "Do not obtain a successor product bound by multiplying an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`. An induction proof must retain a bound parameterized by the total sum or average.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00010",
+        "section": "pitfalls"
+      },
+      {
+        "content": "Before using `nra` in AM-GM base or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition; `nra` cannot reason through opaque recursive definitions or supply the global inequality.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00011",
+        "section": "tactics"
+      },
+      {
+        "content": "For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately for completing-square identities before finishing the resulting linear inequality with `lra`.\n",
+        "harmful": 0,
+        "helpful": 2,
+        "id": "rocq-00012",
+        "section": "tactics"
+      },
+      {
+        "content": "For positivity of a recursive real product whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity through opaque recursive products.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00013",
+        "section": "lemmas"
+      },
+      {
+        "content": "For natural-number product bounds, use `Nat.mul_le_mono` to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply an established inequality by a nonnegative factor; provide the premises in the lemma's expected order instead of guessing a multiplication-monotonicity API.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00014",
+        "section": "lemmas"
+      },
+      {
+        "content": "To lift a natural bound into `R`, expose the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <= INR c; apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent `.mpr` projection.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00015",
+        "section": "lemmas"
+      },
+      {
+        "content": "For real equations involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead of relying on `field_simplify` to normalize it.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00016",
+        "section": "pitfalls"
+      },
+      {
+        "content": "To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00017",
+        "section": "tactics"
+      },
+      {
+        "content": "For bounded natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce only explicitly closed numeral cases, using `change` to expose a known numeral equality when needed.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00018",
+        "section": "pitfalls"
+      },
+      {
+        "content": "When proving a least witness by finite exclusion, first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch immediately, handle the finitely many numeral cases explicitly under `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors.\n",
+        "harmful": 1,
+        "helpful": 1,
+        "id": "rocq-00019",
+        "section": "strategy"
+      },
+      {
+        "content": "For instantiated recurrence equations containing closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then normalize each index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation chain.\n",
+        "harmful": 1,
+        "helpful": 0,
+        "id": "rocq-00020",
+        "section": "tactics"
+      },
+      {
+        "content": "For an explicit `Ensemble` built from nested `Add`, first unfold `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions and `False` cases are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer by layer, prove each freshness premise by unfolding `In` and `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00021",
+        "section": "tactics"
+      },
+      {
+        "content": "For trigonometric goals involving complementary or doubled angles, use the library lemma with the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00022",
+        "section": "lemmas"
+      },
+      {
+        "content": "For logarithmic inequalities and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use the resulting instantiated equality directly.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00023",
+        "section": "lemmas"
+      },
+      {
+        "content": "For an unbounded quadratic equation over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction from the original equation.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00024",
+        "section": "tactics"
+      },
+      {
+        "content": "A closed cast such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality, for example with `cbv [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00025",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For a target or hypothesis containing `ln (a * b)`, prove positivity of both factors explicitly; when a factor is an `Rpower`, unfold `Rpower` and apply `exp_pos`, rather than reusing positivity of the enclosing product. Then rewrite with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation does not expose this logarithmic product identity or supply its positivity premises.",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00026",
+        "section": "lemmas"
+      },
+      {
+        "content": "For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00027",
+        "section": "lemmas"
+      }
+    ],
+    "next_id": 28
+  },
+  "before": {
+    "bullets": [
+      {
+        "content": "When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n",
+        "harmful": 0,
+        "helpful": 5,
+        "id": "rocq-00001",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For an induction hypothesis relating recursive `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then apply `rewrite IH; lia`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00002",
+        "section": "tactics"
+      },
+      {
+        "content": "For goals over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use `intros` followed by `nia`; it can handle the nonlinear products and truncated subtraction directly.\n",
+        "harmful": 3,
+        "helpful": 4,
+        "id": "rocq-00003",
+        "section": "tactics"
+      },
+      {
+        "content": "For closed `nat` equalities built from executable finite-list operations such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`; use `reflexivity` afterward if the resulting definitional equality is not closed automatically.\n",
+        "harmful": 1,
+        "helpful": 1,
+        "id": "rocq-00004",
+        "section": "tactics"
+      },
+      {
+        "content": "When applying a recurrence hypothesis whose predecessor uses truncated subtraction, first prove the exact natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality before applying the hypothesis so its indices unify.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00005",
+        "section": "pitfalls"
+      },
+      {
+        "content": "Under an active `R_scope`, annotate natural-number indices, arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion and comparison-type errors.\n",
+        "harmful": 0,
+        "helpful": 6,
+        "id": "rocq-00006",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00007",
+        "section": "lemmas"
+      },
+      {
+        "content": "For finite nonnegative real sequences with a fixed-sum product goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00009",
+        "section": "strategy"
+      },
+      {
+        "content": "Do not obtain a successor product bound by multiplying an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`. An induction proof must retain a bound parameterized by the total sum or average.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00010",
+        "section": "pitfalls"
+      },
+      {
+        "content": "Before using `nra` in AM-GM base or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition; `nra` cannot reason through opaque recursive definitions or supply the global inequality.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00011",
+        "section": "tactics"
+      },
+      {
+        "content": "For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately for completing-square identities before finishing the resulting linear inequality with `lra`.\n",
+        "harmful": 0,
+        "helpful": 2,
+        "id": "rocq-00012",
+        "section": "tactics"
+      },
+      {
+        "content": "For positivity of a recursive real product whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity through opaque recursive products.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00013",
+        "section": "lemmas"
+      },
+      {
+        "content": "For natural-number product bounds, use `Nat.mul_le_mono` to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply an established inequality by a nonnegative factor; provide the premises in the lemma's expected order instead of guessing a multiplication-monotonicity API.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00014",
+        "section": "lemmas"
+      },
+      {
+        "content": "To lift a natural bound into `R`, expose the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <= INR c; apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent `.mpr` projection.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00015",
+        "section": "lemmas"
+      },
+      {
+        "content": "For real equations involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead of relying on `field_simplify` to normalize it.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00016",
+        "section": "pitfalls"
+      },
+      {
+        "content": "To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00017",
+        "section": "tactics"
+      },
+      {
+        "content": "For bounded natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce only explicitly closed numeral cases, using `change` to expose a known numeral equality when needed.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00018",
+        "section": "pitfalls"
+      },
+      {
+        "content": "When proving a least witness by finite exclusion, first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch immediately, handle the finitely many numeral cases explicitly under `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors.\n",
+        "harmful": 1,
+        "helpful": 1,
+        "id": "rocq-00019",
+        "section": "strategy"
+      },
+      {
+        "content": "For instantiated recurrence equations containing closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then normalize each index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation chain.\n",
+        "harmful": 1,
+        "helpful": 0,
+        "id": "rocq-00020",
+        "section": "tactics"
+      },
+      {
+        "content": "For an explicit `Ensemble` built from nested `Add`, first unfold `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions and `False` cases are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer by layer, prove each freshness premise by unfolding `In` and `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00021",
+        "section": "tactics"
+      },
+      {
+        "content": "For trigonometric goals involving complementary or doubled angles, use the library lemma with the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00022",
+        "section": "lemmas"
+      },
+      {
+        "content": "For logarithmic inequalities and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use the resulting instantiated equality directly.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00023",
+        "section": "lemmas"
+      },
+      {
+        "content": "For an unbounded quadratic equation over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction from the original equation.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00024",
+        "section": "tactics"
+      },
+      {
+        "content": "A closed cast such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality, for example with `cbv [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00025",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For a target or hypothesis containing `ln (a * b)`, prove positivity of both factors explicitly; when a factor is an `Rpower`, unfold `Rpower` and apply `exp_pos`, rather than reusing positivity of the enclosing product. Then rewrite with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation does not expose this logarithmic product identity or supply its positivity premises.",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00026",
+        "section": "lemmas"
+      },
+      {
+        "content": "For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00027",
+        "section": "lemmas"
+      }
+    ],
+    "next_id": 28
+  },
+  "edits": [],
+  "writer": {
+    "base_sha256": "ff92ace8e5c60ad1b3c114d78f1b9f8b4bed594435dbc4cecc54fd0f9922ed9e",
+    "contexts": [
+      {
+        "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros k m n c Hpos Hc Hp Hbound.",
+          "unfold is_prime in Hp.",
+          "destruct n as [|n].",
+          "- lia.",
+          "- rewrite !Hc.",
+          "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+          "+ unfold prod_from_1_to.",
+          "simpl.",
+          "eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n)."
+        ],
+        "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+        "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+        "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+        "theorem_name": "imo_1967_p3",
+        "version": 1
+      },
+      {
+        "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros n a Hnonneg Hsum.",
+          "induction n as [|n IH].",
+          "- simpl in Hsum |- *.",
+          "lra.",
+          "- simpl in Hsum |- *.",
+          "destruct n as [|n].",
+          "+ simpl in Hsum |- *.",
+          "nra.",
+          "+ assert (Hnonneg' : forall i, (i < S n)%nat -> 0 <= a i).",
+          "{ intros i Hi. apply Hnonneg. lia. }",
+          "specialize (IH Hnonneg')."
+        ],
+        "problem_file": "miniF2F/test/algebra/algebra_amgm_sum1toneqn_prod1tonleq1.v",
+        "problem_sha256": "98a7ce779b142988b5de3fc6e9eac5b5977dad9252104aff720dcabdb19cf0a2",
+        "source": "4d1317ca60044cf5132c85f2f3d4dfed427be037e8f75119a72d81761b949bad",
+        "theorem_name": "algebra_amgm_sum1toneqn_prod1tonleq1",
+        "version": 1
+      },
+      {
+        "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "unfold Least.",
+          "split."
+        ],
+        "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+        "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+        "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+        "theorem_name": "mathd_numbertheory_629",
+        "version": 1
+      },
+      {
+        "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros k m n c Hpos Hc Hp Hbound.",
+          "unfold is_prime in Hp.",
+          "destruct n as [|n].",
+          "- lia.",
+          "- rewrite !Hc.",
+          "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+          "+ unfold prod_from_1_to.",
+          "simpl.",
+          "eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n).",
+          "cbn [prod_from_1_to]."
+        ],
+        "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+        "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+        "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+        "theorem_name": "imo_1967_p3",
+        "version": 1
+      },
+      {
+        "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "unfold Least.",
+          "split.",
+          "- split.\n  + lia.\n  + change (36 ^ 3 = 216 ^ 2).\n    reflexivity."
+        ],
+        "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+        "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+        "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+        "theorem_name": "mathd_numbertheory_629",
+        "version": 1
+      }
+    ],
+    "diagnostics": [],
+    "drafts": [
+      {
+        "context_id": "ctx-3df4a41f09c1af2eb7aacfe5",
+        "draft_id": "repair-f92b20bdec70536a7e068e2d",
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "proposed_code": "cbn [prod_from_1_to].",
+        "purpose": "Expose the recursive product definitions before attempting any arithmetic, and treat the quotient witness as requiring a separate divisibility argument rather than expecting `nia` to infer it.: The rejected `nia` is being asked to solve an equality containing opaque recursive `prod_from_1_to` terms and natural-number division; it cannot expose the recursive factors or establish the required divisibility from the displayed hypotheses.; At the e12 goal, after the displayed `eexists` witness and the preceding `unfold prod_from_1_to; simpl.`, the goal still contains recursive product constants and `/` on nat.",
+        "remaining_goals": [
+          "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\nHkm  : k <= m\n|-(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  c n *\nc (S n) *\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) n /\n prod_from_1_to (fun i : nat => i * (i + 1)) n) =\n(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  (fun i : nat => c (m + i) - k * (k + 1)) n *\n(c (m + S n) - k * (k + 1))"
+        ],
+        "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1"
+      },
+      {
+        "context_id": "ctx-c7db7d0eadba067617d5ff84",
+        "draft_id": "repair-52ee56440828f6a71874f2a2",
+        "error": "(-32003, 'Coq: In environment\\nn : nat\\na : nat -> R\\nHnonneg : forall i : nat, (i < S (S n))%nat -> 0 <= a i\\nHsum : sum_n a (S n) + a (S n) = INR (S n) + 1\\nIH : sum_n a (S n) = INR (S n) -> prod_n a (S n) <= 1\\nHnonneg\\' : forall i : nat, (i < S n)%nat -> 0 <= a i\\nUnable to unify \"prod_n a (S n) <= 1\" with \"prod_n a (S n) * a (S n) <= 1\".')",
+        "proposed_code": "assert (Hstep : prod_n a (S n) * a (S n) <= 1). { nra. }\nexact Hstep.",
+        "purpose": "Replace the fixed-target induction with a normalized AM-GM invariant, proved for arbitrary finite sums and specialized to sum_n a n = INR n only at the end. As a narrowly conditional repair of the recorded goal, multiplication by the successor factor is valid only after separately establishing nonnegativity of the preceding product and an upper bound on that factor.: The induction hypothesis only bounds prod_n a (S n) by 1, which cannot be multiplied by the unrestricted successor factor a (S n); the recorded context provides no upper bound on that factor. The missing operation is to strengthen the induction invariant to a sum/average-parameterized product bound, rather than applying IH directly.; For the conditional local branch: 0 <= prod_n a (S n), prod_n a (S n) <= 1, and a (S n) <= 1. These are not established by the recorded prefix; the normalized invariant is the intended way to avoid requiring the last precondition.",
+        "remaining_goals": [
+          "n  : nat\na  : nat -> R\nHnonneg  : forall i : nat, (i < S (S n))%nat -> 0 <= a i\nHsum  : sum_n a (S n) + a (S n) = INR (S n) + 1\nIH  : sum_n a (S n) = INR (S n) -> prod_n a (S n) <= 1\nHnonneg'  : forall i : nat, (i < S n)%nat -> 0 <= a i\n|-prod_n a (S n) * a (S n) <= 1"
+        ],
+        "source": "4d1317ca60044cf5132c85f2f3d4dfed427be037e8f75119a72d81761b949bad"
+      },
+      {
+        "context_id": "ctx-af8cee57e1569b8e547fdd05",
+        "draft_id": "repair-dd7da744219756c017cba6f3",
+        "error": "(-32003, 'Coq: Stack overflow.')",
+        "proposed_code": "split.\n- split.\n  + lia.\n  + change (36 ^ 3 = 216 ^ 2).\n    reflexivity.",
+        "purpose": "Split the witness conjunction, solve positivity arithmetically, and replace the closed lcm expression by its known numeral equality before reflexivity.: Broad vm_compute on the closed witness goal unfolds Nat.lcm/Nat.gcd recursively and overflows the stack; the conjunction should be split and the closed lcm value exposed only by a targeted change.; Current prefix is after unfold Least; split, with the first goal 18 > 0 /\\ Nat.lcm 12 18 ^ 3 = (12 * 18) ^ 2 and the second goal the universal leastness condition.",
+        "remaining_goals": [
+          "\n|-18 > 0 /\\ Nat.lcm 12 18 ^ 3 = (12 * 18) ^ 2",
+          "\n|-forall m : nat, m > 0 /\\ Nat.lcm 12 m ^ 3 = (12 * m) ^ 2 -> 18 <= m"
+        ],
+        "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a"
+      }
+    ],
+    "edits": [],
+    "plan": {
+      "decisions": [
+        {
+          "action": "drop",
+          "closest_rule": "b12",
+          "content": "",
+          "draft": "d1",
+          "failure_receipt": "",
+          "reason": "Drop: `cbn [prod_from_1_to]` only exposes recursive product structure after the witness attempt has failed; it does not construct the quotient witness or prove the required natural-number divisibility. The open-fragment receipt is not successful reusable evidence.",
+          "receipts": [],
+          "section": ""
+        },
+        {
+          "action": "drop",
+          "closest_rule": "b8",
+          "content": "",
+          "draft": "d2",
+          "failure_receipt": "",
+          "reason": "Drop: the proposed normalized sum/average invariant is already the operation recorded by b8, while the warning against multiplying an insufficient fixed-target induction hypothesis is recorded by b9. The supplied context cannot establish the redesigned invariant as a local repair.",
+          "receipts": [],
+          "section": ""
+        },
+        {
+          "action": "drop",
+          "closest_rule": "b17",
+          "content": "",
+          "draft": "d3",
+          "failure_receipt": "",
+          "reason": "Drop: the targeted `change` and explicit closed numeral reduction duplicate b17. The broad computation was rejected for stack overflow, and the follow-up receipt remains an open fragment rather than a completed checked example.",
+          "receipts": [],
+          "section": ""
+        }
+      ],
+      "reasoning": "All three candidates either repeat existing guidance or lack a successful checked repair. The recursive-product fragment does not establish a witness or divisibility, the AM-GM proposal is already covered by b8 and b9 and is not a local repair, and the lcm fragment repeats b17 while remaining open after the rejected broad computation."
+    },
+    "receipts": [
+      {
+        "checked": {
+          "elapsed": 0.5588049758225679,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof imo_1967_p3): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 10,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "intros k m n c Hpos Hc Hp Hbound.",
+              "unfold is_prime in Hp.",
+              "destruct n as [|n].",
+              "- lia.",
+              "- rewrite !Hc.",
+              "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+              "+ unfold prod_from_1_to.",
+              "simpl.",
+              "eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n).",
+              "cbn [prod_from_1_to]."
+            ],
+            "remaining_goals": [
+              "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\nHkm  : k <= m\n|-(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  c n *\nc (S n) *\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) n /\n prod_from_1_to (fun i : nat => i * (i + 1)) n) =\n(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  (fun i : nat => c (m + i) - k * (k + 1)) n *\n(c (m + S n) - k * (k + 1))"
+            ],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 16,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof imo_1967_p3): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"intros k m n c Hpos Hc Hp Hbound.\", \"unfold is_prime in Hp.\", \"destruct n as [|n].\", \"- lia.\", \"- rewrite !Hc.\", \"destruct (le_gt_dec k m) as [Hkm | Hmk].\", \"+ unfold prod_from_1_to.\", \"simpl.\", \"eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n).\", \"cbn [prod_from_1_to].\"], \"total_goals\": 1, \"goals\": [\"k, m, n  : nat\\nc  : nat -> nat\\nHpos  : 0 < k /\\\\ 0 < m /\\\\ 0 < S n\\nHc  : forall s : nat, c s = s * (s + 1)\\nHp  : k + m + 1 > 1 /\\\\\\n(forall n0 : nat,\\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\\nHbound  : S n + 1 < k + m + 1\\nHkm  : k <= m\\n|-(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\\n   match n0 with\\n   | 0 => 1\\n   | S m0 => prod_from_1_to f m0 * f (S m0)\\n   end)\\n  c n *\\nc (S n) *\\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) n /\\n prod_from_1_to (fun i : nat => i * (i + 1)) n) =\\n(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\\n   match n0 with\\n   | 0 => 1\\n   | S m0 => prod_from_1_to f m0 * f (S m0)\\n   end)\\n  (fun i : nat => c (m + i) - k * (k + 1)) n *\\n(c (m + S n) - k * (k + 1))\"], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros k m n c Hpos Hc Hp Hbound.",
+            "unfold is_prime in Hp.",
+            "destruct n as [|n].",
+            "- lia.",
+            "- rewrite !Hc.",
+            "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+            "+ unfold prod_from_1_to.",
+            "simpl.",
+            "eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n)."
+          ],
+          "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+          "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+          "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+          "theorem_name": "imo_1967_p3",
+          "version": 1
+        },
+        "elapsed": 0.5588049758225679,
+        "rpc_calls": 16,
+        "snippet": "cbn [prod_from_1_to].",
+        "status": "executed_open"
+      },
+      {
+        "checked": {
+          "elapsed": 0.5247576553374529,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq: Not an inductive goal with 1 constructor.')",
+            "failing_index": 2,
+            "failing_tactic": "split.\n- split.\n  + lia.\n  + change (36 ^ 3 = 216 ^ 2).\n    reflexivity.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "unfold Least.",
+              "split."
+            ],
+            "remaining_goals": [
+              "\n|-18 > 0 /\\ Nat.lcm 12 18 ^ 3 = (12 * 18) ^ 2",
+              "\n|-forall m : nat, m > 0 /\\ Nat.lcm 12 m ^ 3 = (12 * m) ^ 2 -> 18 <= m"
+            ],
+            "success": false
+          },
+          "outcome": "rejected",
+          "rpc_calls": 5,
+          "view": "{\"outcome\": \"rejected\", \"failing_tactic\": \"split.\\n- split.\\n  + lia.\\n  + change (36 ^ 3 = 216 ^ 2).\\n    reflexivity.\", \"error\": \"(-32003, 'Coq: Not an inductive goal with 1 constructor.')\", \"verified_prefix\": [\"unfold Least.\", \"split.\"], \"total_goals\": 2, \"goals\": [\"\\n|-18 > 0 /\\\\ Nat.lcm 12 18 ^ 3 = (12 * 18) ^ 2\", \"\\n|-forall m : nat, m > 0 /\\\\ Nat.lcm 12 m ^ 3 = (12 * m) ^ 2 -> 18 <= m\"], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "elapsed": 0.5247576553374529,
+        "rpc_calls": 5,
+        "snippet": "split.\n- split.\n  + lia.\n  + change (36 ^ 3 = 216 ^ 2).\n    reflexivity.",
+        "status": "rejected"
+      },
+      {
+        "checked": {
+          "elapsed": 0.3282148605212569,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof mathd_numbertheory_629): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 3,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "unfold Least.",
+              "split.",
+              "- split.\n  + lia.\n  + change (36 ^ 3 = 216 ^ 2).\n    reflexivity."
+            ],
+            "remaining_goals": [],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 4,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof mathd_numbertheory_629): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"unfold Least.\", \"split.\", \"- split.\\n  + lia.\\n  + change (36 ^ 3 = 216 ^ 2).\\n    reflexivity.\"], \"total_goals\": 0, \"goals\": [], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "elapsed": 0.3282148605212569,
+        "rpc_calls": 4,
+        "snippet": "- split.\n  + lia.\n  + change (36 ^ 3 = 216 ^ 2).\n    reflexivity.",
+        "status": "executed_open"
+      }
+    ],
+    "reviews": [],
+    "role": "reducer",
+    "status": "complete"
+  }
+}

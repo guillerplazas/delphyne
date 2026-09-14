@@ -1,0 +1,3579 @@
+- demonstration: reflector_preserves_unsolved_local_repair
+  query: ReflectLocalRepairs
+  args:
+    spec:
+      file: /home/guille/anaconda3/envs/guille/delphyne/examples/omphalos/miniF2F/test/amc/amc12_2000_p1.v
+      theorem_name: amc12_2000_p1
+      theorem_statement: ":\n  forall (i m o : nat),\n  i <> m /\\ m <> o /\\ o <>\
+        \ i /\\ (i * m * o = 2001) -> \n  i + m + o <= 671"
+      informal_statement: "In the year $2001$, the United States will host the [[International\
+        \ Mathematical\n   Olympiad]].  Let $I,M,$ and $O$ be distinct [[positive\
+        \ integer]]s such that the\n   product $I \\cdot M \\cdot O = 2001 $.  What\
+        \ is the largest possible value of the sum\n   $I + M + O$?\n\n   $\\textbf{(A)}\\\
+        \ 23 \\qquad \\textbf{(B)}\\ 55 \\qquad \\textbf{(C)}\\ 99 \\qquad\n   \\\
+        textbf{(D)}\\ 111 \\qquad \\textbf{(E)}\\ 671$ Show that it is \\text{(E)}."
+      informal_proof: "The sum is the highest if two [[factor]]s are the lowest.\n\
+        \n   So, $1 \\cdot 3 \\cdot 667 = 2001$ and $1+3+667=671 \\Longrightarrow\
+        \ \\text{(E)}$."
+      imports: Require Import Arith.
+      definitions: ''
+    playbook: "### pitfalls\n- [rocq-00001] When `Hf : forall x, f x = polynomial\
+      \ x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before\
+      \ invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n\n\
+      - [rocq-00005] When applying a recurrence hypothesis whose predecessor uses\
+      \ truncated subtraction, first prove the exact natural-number equality (for\
+      \ example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite\
+      \ with that equality before applying the hypothesis so its indices unify.\n\
+      \n- [rocq-00006] Under an active `R_scope`, annotate natural-number indices,\
+      \ arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`);\
+      \ reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid\
+      \ coercion and comparison-type errors.\n\n- [rocq-00010] Do not obtain a successor\
+      \ product bound by multiplying an induction hypothesis such as `prod_n a (S\
+      \ n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`.\
+      \ An induction proof must retain a bound parameterized by the total sum or\
+      \ average.\n\n- [rocq-00016] For real equations involving a single reciprocal\
+      \ `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the\
+      \ inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r\
+      \ x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead\
+      \ of relying on `field_simplify` to normalize it.\n\n- [rocq-00018] For bounded\
+      \ natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`,\
+      \ `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow;\
+      \ reduce only explicitly closed numeral cases, using `change` to expose a known\
+      \ numeral equality when needed.\n\n- [rocq-00025] A closed cast such as `INR\
+      \ 4` is not necessarily definitionally convertible to `(4 : R)`, so `change`\
+      \ may fail. First prove an explicit equality, for example with `cbv [INR];\
+      \ ring`, and rewrite with that equality before applying real arithmetic.\n\n\
+      \n### tactics\n- [rocq-00002] For an induction hypothesis relating recursive\
+      \ `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to\
+      \ expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n\
+      \ + g n + S n`; then apply `rewrite IH; lia`.\n\n- [rocq-00003] For goals over\
+      \ `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor\
+      \ or exact-value conclusion, use `intros` followed by `nia`; it can handle\
+      \ the nonlinear products and truncated subtraction directly.\n\n- [rocq-00004]\
+      \ For closed `nat` equalities built from executable finite-list operations\
+      \ such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`;\
+      \ use `reflexivity` afterward if the resulting definitional equality is not\
+      \ closed automatically.\n\n- [rocq-00011] Before using `nra` in AM-GM base\
+      \ or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions,\
+      \ including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any\
+      \ required `INR n <> 0` denominator condition; `nra` cannot reason through\
+      \ opaque recursive definitions or supply the global inequality.\n\n- [rocq-00012]\
+      \ For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use\
+      \ `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately\
+      \ for completing-square identities before finishing the resulting linear inequality\
+      \ with `lra`.\n\n- [rocq-00017] To turn `Rabs t = 1` into a sign disjunction,\
+      \ destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq\
+      \ t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t\
+      \ = 1 \\/ t = -1` by `lra`.\n\n- [rocq-00020] For instantiated recurrence equations\
+      \ containing closed casts and natural sums, use `cbv [INR]` to evaluate the\
+      \ casts, then normalize each index explicitly with `replace (a + b)%nat with\
+      \ c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting\
+      \ linear real-equation chain.\n\n- [rocq-00021] For an explicit `Ensemble`\
+      \ built from nested `Add`, first unfold `Add` and rewrite membership using\
+      \ the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once\
+      \ the resulting disjunctions and `False` cases are exposed, use `intuition;\
+      \ lia`. For cardinality, apply `card_add` layer by layer, prove each freshness\
+      \ premise by unfolding `In` and `Add` and inverting membership hypotheses,\
+      \ and finish the empty base with `card_empty`.\n\n- [rocq-00024] For an unbounded\
+      \ quadratic equation over `nat` that `nia` cannot solve directly, split with\
+      \ `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive\
+      \ `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive\
+      \ the contradiction from the original equation.\n\n\n### lemmas\n- [rocq-00007]\
+      \ For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite\
+      \ a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia`\
+      \ for the resulting arithmetic. When the dividend is normalized as `r + q *\
+      \ m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n\n\
+      - [rocq-00013] For positivity of a recursive real product whose successor factor\
+      \ is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`,\
+      \ prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos;\
+      \ assumption`; `nra` does not infer positivity through opaque recursive products.\n\
+      \n- [rocq-00014] For natural-number product bounds, use `Nat.mul_le_mono` to\
+      \ combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r`\
+      \ to multiply an established inequality by a nonnegative factor; provide the\
+      \ premises in the lemma's expected order instead of guessing a multiplication-monotonicity\
+      \ API.\n\n- [rocq-00015] To lift a natural bound into `R`, expose the coercion\
+      \ and apply `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <=\
+      \ INR c; apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR`\
+      \ to the natural positivity hypothesis rather than using a nonexistent `.mpr`\
+      \ projection.\n\n- [rocq-00022] For trigonometric goals involving complementary\
+      \ or doubled angles, use the library lemma with the exact goal orientation\u2014\
+      such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when\
+      \ necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds\
+      \ `0 < x` and `x < PI` explicitly.\n\n- [rocq-00023] For logarithmic inequalities\
+      \ and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing`\
+      \ to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 *\
+      \ ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize\
+      \ the casted exponent with `cbv [INR]`, and use the resulting instantiated\
+      \ equality directly.\n\n- [rocq-00026] For a target or hypothesis containing\
+      \ `ln (a * b)`, explicitly rewrite it with `ln_mult a b Ha Hb` before calling\
+      \ `nra`; arithmetic automation does not expose this logarithmic product identity\
+      \ on its own.\n\n- [rocq-00027] For real square-root goals, use `pow2_sqrt`\
+      \ to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt\
+      \ (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite\
+      \ `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n\
+      \n\n### strategy\n- [rocq-00009] For finite nonnegative real sequences with\
+      \ a fixed-sum product goal, prove the stronger normalized inequality `prod_n\
+      \ a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average\
+      \ throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n\
+      \n- [rocq-00019] When proving a least witness by finite exclusion, first split\
+      \ with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound\
+      \ branch immediately, handle the finitely many numeral cases explicitly under\
+      \ `Hlt`, and discharge any residual symbolic successor branch directly from\
+      \ `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors."
+    trajectory: "[PROBLEM]\nProve the following theorem in Rocq.\n\n## Imports already\
+      \ in scope\n\n```rocq\nRequire Import Arith.\n```\n\n## Theorem\n\n```rocq\n\
+      Theorem amc12_2000_p1 :\n  forall (i m o : nat),\n  i <> m /\\ m <> o /\\ o\
+      \ <> i /\\ (i * m * o = 2001) -> \n  i + m + o <= 671.\n```\n\n## Informal\
+      \ statement\n\nIn the year $2001$, the United States will host the [[International\
+      \ Mathematical\n   Olympiad]].  Let $I,M,$ and $O$ be distinct [[positive integer]]s\
+      \ such that the\n   product $I \\cdot M \\cdot O = 2001 $.  What is the largest\
+      \ possible value of the sum\n   $I + M + O$?\n\n   $\\textbf{(A)}\\ 23 \\qquad\
+      \ \\textbf{(B)}\\ 55 \\qquad \\textbf{(C)}\\ 99 \\qquad\n   \\textbf{(D)}\\\
+      \ 111 \\qquad \\textbf{(E)}\\ 671$ Show that it is \\text{(E)}.\n\n## Informal\
+      \ proof sketch\n\nThe sum is the highest if two [[factor]]s are the lowest.\n\
+      \n   So, $1 \\cdot 3 \\cdot 667 = 2001$ and $1+3+667=671 \\Longrightarrow \\\
+      text{(E)}$.\n\nReply with a fenced code block containing only the body of the\
+      \ proof\n(no `Proof.`, no `Qed.`).\nBefore your first tool call or proposal,\
+      \ name the playbook bullet ids\nyou intend to rely on for this theorem (or\
+      \ say \"none apply\").\nLast verified prefix (preserve it for local suffix\
+      \ repair):\n```rocq\nintros i m o H.\ndestruct H as [Him [Hmo [Hoi Hprod]]].\n\
+      assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z\
+      \ -> x * y * z = 2001 -> x + y + z <= 671).\n{ intros x y z Hxy Hyz Hxyneq\
+      \ Hyzneq Hp.\ndestruct (eq_nat_dec x 1) as [Hx1 | Hx1].\n- subst x.\nsimpl\
+      \ in Hp.\ndestruct (eq_nat_dec y 2) as [Hy2 | Hy2].\n+ subst y.\nnia.\n+ assert\
+      \ (Hy3 : 3 <= y) by nia.\nassert (Hbound : 3 * z <= y * z).\n{ apply Nat.mul_le_mono_r.\
+      \ exact Hy3. }\nreplace (y + 0)%nat with y in Hp by lia.\nrewrite Hp in Hbound.\n\
+      nia.\n- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].\n+ subst x.\nnia.\n+ assert\
+      \ (Hx3 : 3 <= x) by nia.\nassert (Hy4 : 4 <= y) by nia.\nassert (Hxy12 : 12\
+      \ <= x * y).\n{ assert (H1 : 3 * 4 <= 3 * y) by nia.\nassert (H2 : 3 * y <=\
+      \ x * y).\n{ apply Nat.mul_le_mono_r. exact Hx3. }\nnia.\n}\nassert (Hbound\
+      \ : 12 * z <= (x * y) * z).\n{ apply Nat.mul_le_mono_r. exact Hxy12. }\nrewrite\
+      \ Hp in Hbound.\nnia.\n}\ndestruct (le_gt_dec i m) as [Himle | Hmil].\n- destruct\
+      \ (le_gt_dec m o) as [Hmole | Homl].\n+ apply Hsorted; nia.\n+ destruct (le_gt_dec\
+      \ i o) as [Hiole | Hoil].\n* assert (Ho_m : o <> m).\n{ intro E. apply Hmo.\
+      \ symmetry. exact E. }\nassert (H : i + o + m <= 671).\n{ apply Hsorted with\
+      \ (x := i) (y := o) (z := m).\n- exact Hiole.\n- nia.\n- intro E. apply Hoi.\
+      \ symmetry. exact E.\n- exact Ho_m.\n- nia.\n}\nnia.\n* assert (H : o + i +\
+      \ m <= 671).\n{ apply Hsorted with (x := o) (y := i) (z := m).\n- nia.\n- exact\
+      \ Himle.\n- intro E. apply Hoi. exact E.\n```\n\nFocus decision: identify the\
+      \ cast, normal form or side condition blocking\nthe last step. Choose one bridge\
+      \ justified by the current goal, preserve\nthe verified prefix, and return\
+      \ a complete script using that bridge.\n\n[ASSISTANT]\nRelevant playbook bullets:\
+      \ [rocq-00003] for nonlinear `nat` arithmetic with an exact product equation;\
+      \ [rocq-00024] for bounding an unbounded quadratic-style `nat` argument by\
+      \ a finite case split.\n\n[TOOL CALL] SearchRocq(command='Check Nat.le_induction.')\n\
+      [TOOL RESULT]\nPetanqueError: (-32003, 'Coq: The reference Nat.le_induction\
+      \ was not found in the current environment.')\n\n[ASSISTANT]\n```rocq\nintros\
+      \ i m o H.\ndestruct H as [Him [Hmo Hoi]].\nnia.\n```\n\n[VERIFIER FEEDBACK]\n\
+      {\"outcome\": \"rejected\", \"failing_tactic\": \"nia.\", \"error\": \"(-32003,\
+      \ 'Coq: Tactic failure:  Cannot find witness.')\", \"verified_prefix\": [\"\
+      intros i m o H.\", \"destruct H as [Him [Hmo Hoi]].\"], \"total_goals\": 1,\
+      \ \"goals\": [\"i, m, o  : nat\\nHim  : i <> m\\nHmo  : m <> o\\nHoi  : o <>\
+      \ i /\\\\ i * m * o = 2001\\n|-i + m + o <= 671\"], \"automation\": [null],\
+      \ \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\
+      \n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='About interval_cases.')\n\
+      [TOOL RESULT]\n{\"output\": \"[(3, 'interval_cases not a defined object.')]\"\
+      , \"start\": 0, \"total_goals\": 1, \"goals\": [\"i, m, o  : nat\\nHim  : i\
+      \ <> m\\nHmo  : m <> o\\nHoi  : o <> i /\\\\ i * m * o = 2001\\n|-i + m + o\
+      \ <= 671\"], \"next\": null}\n\n[ASSISTANT]\nThe blocking issue is nonlinear\
+      \ arithmetic without an ordering normal form. I will sort the three variables\
+      \ by case splits, turn distinctness into strict inequalities, and let `nia`\
+      \ use the ordered product constraint.\n\n[TOOL CALL] SearchRocq(command='About\
+      \ nia.')\n[TOOL RESULT]\n{\"output\": \"[(3, 'Ltac Stdlib.micromega.Psatz.nia')]\"\
+      , \"start\": 0, \"total_goals\": 1, \"goals\": [\"i, m, o  : nat\\nHim  : i\
+      \ <> m\\nHmo  : m <> o\\nHoi  : o <> i /\\\\ i * m * o = 2001\\n|-i + m + o\
+      \ <= 671\"], \"next\": null}\n\n[ASSISTANT]\n```rocq\nintros i m o H.\ndestruct\
+      \ H as [Him [Hmo [Hoi Hprod]]].\ndestruct (le_gt_dec i m) as [Himle | Hmil].\n\
+      - destruct (le_gt_dec m o) as [Hmole | Homl].\n  + nia.\n  + destruct (le_gt_dec\
+      \ i o) as [Hiole | Hoil].\n    * nia.\n    * nia.\n- destruct (le_gt_dec i\
+      \ o) as [Hiole | Hoil].\n  + destruct (le_gt_dec m o) as [Hmole | Homl].\n\
+      \    * nia.\n    * nia.\n  + destruct (le_gt_dec m o) as [Hmole | Homl].\n\
+      \    * nia.\n    * nia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\"\
+      , \"failing_tactic\": \"+ nia.\", \"error\": \"(-32003, 'Coq: Tactic failure:\
+      \  Cannot find witness.')\", \"verified_prefix\": [\"intros i m o H.\", \"\
+      destruct H as [Him [Hmo [Hoi Hprod]]].\", \"destruct (le_gt_dec i m) as [Himle\
+      \ | Hmil].\", \"- destruct (le_gt_dec m o) as [Hmole | Homl].\"], \"total_goals\"\
+      : 2, \"goals\": [\"i, m, o  : nat\\nHim  : i <> m\\nHmo  : m <> o\\nHoi  :\
+      \ o <> i\\nHprod  : i * m * o = 2001\\nHimle  : i <= m\\nHmole  : m <= o\\\
+      n|-i + m + o <= 671\", \"i, m, o  : nat\\nHim  : i <> m\\nHmo  : m <> o\\nHoi\
+      \  : o <> i\\nHprod  : i * m * o = 2001\\nHimle  : i <= m\\nHoml  : m > o\\\
+      n|-i + m + o <= 671\"], \"automation\": [null, null], \"inspection\": \"InspectProofState(tactics=verified\
+      \ prefix, start=4)\"}\n\n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='Check\
+      \ Nat.mul_le_mono_r.')\n[TOOL RESULT]\n{\"output\": \"[(3, 'Nat.mul_le_mono_r\\\
+      \\n     : forall n m p : nat, n <= m -> n * p <= m * p')]\", \"start\": 0,\
+      \ \"total_goals\": 2, \"goals\": [\"i, m, o  : nat\\nHim  : i <> m\\nHmo  :\
+      \ m <> o\\nHoi  : o <> i\\nHprod  : i * m * o = 2001\\nHimle  : i <= m\\nHmole\
+      \  : m <= o\\n|-i + m + o <= 671\", \"i, m, o  : nat\\nHim  : i <> m\\nHmo\
+      \  : m <> o\\nHoi  : o <> i\\nHprod  : i * m * o = 2001\\nHimle  : i <= m\\\
+      nHoml  : m > o\\n|-i + m + o <= 671\"], \"next\": null}\n\n[ASSISTANT]\n```rocq\n\
+      intros i m o H.\ndestruct H as [Him [Hmo [Hoi Hprod]]].\nassert (Hsorted :\n\
+      \  forall x y z : nat,\n    x <= y -> y <= z -> x <> y -> y <> z ->\n    x\
+      \ * y * z = 2001 -> x + y + z <= 671).\n{\n  intros x y z Hxy Hyz Hxyneq Hyzneq\
+      \ Hp.\n  destruct (eq_nat_dec x 1) as [Hx1 | Hx1].\n  - subst x.\n    assert\
+      \ (Hy3 : 3 <= y) by nia.\n    assert (Hyy : y * y <= y * z).\n    { apply Nat.mul_le_mono_l.\
+      \ exact Hyz. }\n    simpl in Hp.\n    nia.\n  - destruct (eq_nat_dec x 2) as\
+      \ [Hx2 | Hx2].\n    + subst x.\n      nia.\n    + assert (Hx3 : 3 <= x) by\
+      \ nia.\n      assert (Hy4 : 4 <= y) by nia.\n      assert (Hxy12 : 12 <= x\
+      \ * y).\n      { apply Nat.mul_le_mono; nia. }\n      assert (Hxyz : 12 * z\
+      \ <= (x * y) * z).\n      { apply Nat.mul_le_mono_r. exact Hxy12. }\n     \
+      \ nia.\n}\ndestruct (le_gt_dec i m) as [Himle | Hmil].\n- destruct (le_gt_dec\
+      \ m o) as [Hmole | Homl].\n  + apply Hsorted; assumption.\n  + destruct (le_gt_dec\
+      \ i o) as [Hiole | Hoil].\n    * assert (H : i + o + m <= 671).\n      { apply\
+      \ Hsorted; nia. }\n      nia.\n    * assert (H : o + i + m <= 671).\n     \
+      \ { apply Hsorted; nia. }\n      nia.\n- destruct (le_gt_dec i o) as [Hiole\
+      \ | Hoil].\n  + destruct (le_gt_dec m o) as [Hmole | Homl].\n    * assert (H\
+      \ : m + i + o <= 671).\n      { apply Hsorted; nia. }\n      nia.\n    * assert\
+      \ (H : m + o + i <= 671).\n      { apply Hsorted; nia. }\n      nia.\n  + assert\
+      \ (H : o + m + i <= 671).\n    { apply Hsorted; nia. }\n    nia.\n```\n\n[VERIFIER\
+      \ FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"{ apply Nat.mul_le_mono;\
+      \ nia. }\", \"error\": \"(-32003, 'Coq: In environment\\\\ni, m, o : nat\\\\\
+      nHim : i <> m\\\\nHmo : m <> o\\\\nHoi : o <> i\\\\nHprod : i * m * o = 2001\\\
+      \\nx, y, z : nat\\\\nHxy : x <= y\\\\nHyz : y <= z\\\\nHxyneq : x <> y\\\\\
+      nHyzneq : y <> z\\\\nHp : x * y * z = 2001\\\\nHx1 : x <> 1\\\\nHx2 : x <>\
+      \ 2\\\\nHx3 : 3 <= x\\\\nHy4 : 4 <= y\\\\nUnable to unify \\\"?M1849 * ?M1851\
+      \ <= ?M1850 * ?M1852\\\" with \\\\n\\\"12 <= x * y\\\".')\", \"verified_prefix\"\
+      : [\"intros i m o H.\", \"destruct H as [Him [Hmo [Hoi Hprod]]].\", \"assert\
+      \ (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x\
+      \ * y * z = 2001 -> x + y + z <= 671).\", \"{ intros x y z Hxy Hyz Hxyneq Hyzneq\
+      \ Hp.\", \"destruct (eq_nat_dec x 1) as [Hx1 | Hx1].\", \"- subst x.\", \"\
+      assert (Hy3 : 3 <= y) by nia.\", \"assert (Hyy : y * y <= y * z).\", \"{ apply\
+      \ Nat.mul_le_mono_l. exact Hyz. }\", \"simpl in Hp.\", \"nia.\", \"- destruct\
+      \ (eq_nat_dec x 2) as [Hx2 | Hx2].\", \"+ subst x.\", \"nia.\", \"+ assert\
+      \ (Hx3 : 3 <= x) by nia.\", \"assert (Hy4 : 4 <= y) by nia.\", \"assert (Hxy12\
+      \ : 12 <= x * y).\"], \"total_goals\": 2, \"goals\": [\"i, m, o  : nat\\nHim\
+      \  : i <> m\\nHmo  : m <> o\\nHoi  : o <> i\\nHprod  : i * m * o = 2001\\nx,\
+      \ y, z  : nat\\nHxy  : x <= y\\nHyz  : y <= z\\nHxyneq  : x <> y\\nHyzneq \
+      \ : y <> z\\nHp  : x * y * z = 2001\\nHx1  : x <> 1\\nHx2  : x <> 2\\nHx3 \
+      \ : 3 <= x\\nHy4  : 4 <= y\\n|-12 <= x * y\", \"i, m, o  : nat\\nHim  : i <>\
+      \ m\\nHmo  : m <> o\\nHoi  : o <> i\\nHprod  : i * m * o = 2001\\nx, y, z \
+      \ : nat\\nHxy  : x <= y\\nHyz  : y <= z\\nHxyneq  : x <> y\\nHyzneq  : y <>\
+      \ z\\nHp  : x * y * z = 2001\\nHx1  : x <> 1\\nHx2  : x <> 2\\nHx3  : 3 <=\
+      \ x\\nHy4  : 4 <= y\\nHxy12  : 12 <= x * y\\n|-x + y + z <= 671\"], \"automation\"\
+      : [\"lia.\", \"nia.\"], \"inspection\": \"InspectProofState(tactics=verified\
+      \ prefix, start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros i m o H.\ndestruct\
+      \ H as [Him [Hmo [Hoi Hprod]]].\nassert (Hsorted :\n  forall x y z : nat,\n\
+      \    x <= y -> y <= z -> x <> y -> y <> z ->\n    x * y * z = 2001 -> x + y\
+      \ + z <= 671).\n{\n  intros x y z Hxy Hyz Hxyneq Hyzneq Hp.\n  destruct (eq_nat_dec\
+      \ x 1) as [Hx1 | Hx1].\n  - subst x.\n    assert (Hy3 : 3 <= y) by nia.\n \
+      \   assert (Hyzprod : 3 * z <= y * z).\n    { apply Nat.mul_le_mono_r. exact\
+      \ Hy3. }\n    simpl in Hp.\n    rewrite Hp in Hyzprod.\n    nia.\n  - destruct\
+      \ (eq_nat_dec x 2) as [Hx2 | Hx2].\n    + subst x.\n      assert (Hy3 : 3 <=\
+      \ y) by nia.\n      assert (Hyzprod : 3 * z <= y * z).\n      { apply Nat.mul_le_mono_r.\
+      \ exact Hy3. }\n      assert (Hprod' : 2 * (y * z) = 2001) by nia.\n      nia.\n\
+      \    + assert (Hx3 : 3 <= x) by nia.\n      assert (Hy4 : 4 <= y) by nia.\n\
+      \      assert (Hxy12 : 12 <= x * y) by nia.\n      assert (Hprod' : 12 * z\
+      \ <= (x * y) * z).\n      { apply Nat.mul_le_mono_r. exact Hxy12. }\n     \
+      \ rewrite Hp in Hprod'.\n      nia.\n}\ndestruct (le_gt_dec i m) as [Himle\
+      \ | Hmil].\n- destruct (le_gt_dec m o) as [Hmole | Homl].\n  + apply Hsorted;\
+      \ assumption.\n  + destruct (le_gt_dec i o) as [Hiole | Hoil].\n    * assert\
+      \ (H : i + o + m <= 671).\n      { apply Hsorted; nia. }\n      nia.\n    *\
+      \ assert (H : o + i + m <= 671).\n      { apply Hsorted; nia. }\n      nia.\n\
+      - destruct (le_gt_dec i o) as [Hiole | Hoil].\n  + destruct (le_gt_dec m o)\
+      \ as [Hmole | Homl].\n    * assert (H : m + i + o <= 671).\n      { apply Hsorted;\
+      \ nia. }\n      nia.\n    * assert (H : m + o + i <= 671).\n      { apply Hsorted;\
+      \ nia. }\n      nia.\n  + assert (H : o + m + i <= 671).\n    { apply Hsorted;\
+      \ nia. }\n    nia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\"\
+      , \"failing_tactic\": \"rewrite Hp in Hyzprod.\", \"error\": \"(-32003, 'Coq:\
+      \ Found no subterm matching \\\"(y + 0) * z\\\" in Hyzprod.')\", \"verified_prefix\"\
+      : [\"intros i m o H.\", \"destruct H as [Him [Hmo [Hoi Hprod]]].\", \"assert\
+      \ (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x\
+      \ * y * z = 2001 -> x + y + z <= 671).\", \"{ intros x y z Hxy Hyz Hxyneq Hyzneq\
+      \ Hp.\", \"destruct (eq_nat_dec x 1) as [Hx1 | Hx1].\", \"- subst x.\", \"\
+      assert (Hy3 : 3 <= y) by nia.\", \"assert (Hyzprod : 3 * z <= y * z).\", \"\
+      { apply Nat.mul_le_mono_r. exact Hy3. }\", \"simpl in Hp.\"], \"total_goals\"\
+      : 1, \"goals\": [\"i, m, o  : nat\\nHim  : i <> m\\nHmo  : m <> o\\nHoi  :\
+      \ o <> i\\nHprod  : i * m * o = 2001\\ny, z  : nat\\nHxy  : 1 <= y\\nHyz  :\
+      \ y <= z\\nHxyneq  : 1 <> y\\nHyzneq  : y <> z\\nHp  : (y + 0) * z = 2001\\\
+      nHy3  : 3 <= y\\nHyzprod  : 3 * z <= y * z\\n|-1 + y + z <= 671\"], \"automation\"\
+      : [\"nia.\"], \"inspection\": \"InspectProofState(tactics=verified prefix,\
+      \ start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros i m o H.\ndestruct H as [Him\
+      \ [Hmo [Hoi Hprod]]].\nassert (Hsorted :\n  forall x y z : nat,\n    x <= y\
+      \ -> y <= z -> x <> y -> y <> z ->\n    x * y * z = 2001 -> x + y + z <= 671).\n\
+      {\n  intros x y z Hxy Hyz Hxyneq Hyzneq Hp.\n  destruct (eq_nat_dec x 1) as\
+      \ [Hx1 | Hx1].\n  - subst x.\n    assert (Hy3 : 3 <= y) by nia.\n    change\
+      \ y * z = 2001 in Hp.\n    nia.\n  - destruct (eq_nat_dec x 2) as [Hx2 | Hx2].\n\
+      \    + subst x.\n      nia.\n    + assert (Hx3 : 3 <= x) by nia.\n      assert\
+      \ (Hy4 : 4 <= y) by nia.\n      assert (Hxy12 : 12 <= x * y) by nia.\n    \
+      \  assert (Hprod' : 12 * z <= (x * y) * z).\n      { apply Nat.mul_le_mono_r.\
+      \ exact Hxy12. }\n      rewrite Hp in Hprod'.\n      nia.\n}\ndestruct (le_gt_dec\
+      \ i m) as [Himle | Hmil].\n- destruct (le_gt_dec m o) as [Hmole | Homl].\n\
+      \  + apply Hsorted; assumption.\n  + destruct (le_gt_dec i o) as [Hiole | Hoil].\n\
+      \    * assert (H : i + o + m <= 671).\n      { apply Hsorted; nia. }\n    \
+      \  nia.\n    * assert (H : o + i + m <= 671).\n      { apply Hsorted; nia.\
+      \ }\n      nia.\n- destruct (le_gt_dec i o) as [Hiole | Hoil].\n  + destruct\
+      \ (le_gt_dec m o) as [Hmole | Homl].\n    * assert (H : m + i + o <= 671).\n\
+      \      { apply Hsorted; nia. }\n      nia.\n    * assert (H : m + o + i <=\
+      \ 671).\n      { apply Hsorted; nia. }\n      nia.\n  + assert (H : o + m +\
+      \ i <= 671).\n    { apply Hsorted; nia. }\n    nia.\n```\n\n[VERIFIER FEEDBACK]\n\
+      {\"outcome\": \"rejected\", \"failing_tactic\": \"change y * z = 2001 in Hp.\"\
+      , \"error\": \"(-32003, 'Coq: Syntax error: [ltac_use_default] expected after\
+      \ [tactic] (in [tactic_command]).')\", \"verified_prefix\": [\"intros i m o\
+      \ H.\", \"destruct H as [Him [Hmo [Hoi Hprod]]].\", \"assert (Hsorted : forall\
+      \ x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 ->\
+      \ x + y + z <= 671).\", \"{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.\", \"destruct\
+      \ (eq_nat_dec x 1) as [Hx1 | Hx1].\", \"- subst x.\", \"assert (Hy3 : 3 <=\
+      \ y) by nia.\"], \"total_goals\": 1, \"goals\": [\"i, m, o  : nat\\nHim  :\
+      \ i <> m\\nHmo  : m <> o\\nHoi  : o <> i\\nHprod  : i * m * o = 2001\\ny, z\
+      \  : nat\\nHxy  : 1 <= y\\nHyz  : y <= z\\nHxyneq  : 1 <> y\\nHyzneq  : y <>\
+      \ z\\nHp  : 1 * y * z = 2001\\nHy3  : 3 <= y\\n|-1 + y + z <= 671\"], \"automation\"\
+      : [\"nia.\"], \"inspection\": \"InspectProofState(tactics=verified prefix,\
+      \ start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros i m o H.\ndestruct H as [Him\
+      \ [Hmo [Hoi Hprod]]].\nassert (Hsorted :\n  forall x y z : nat,\n    x <= y\
+      \ -> y <= z -> x <> y -> y <> z ->\n    x * y * z = 2001 -> x + y + z <= 671).\n\
+      {\n  intros x y z Hxy Hyz Hxyneq Hyzneq Hp.\n  destruct (eq_nat_dec x 1) as\
+      \ [Hx1 | Hx1].\n  - subst x.\n    simpl in Hp.\n    assert (Hbound : 3 * z\
+      \ <= y * z) by nia.\n    nia.\n  - destruct (eq_nat_dec x 2) as [Hx2 | Hx2].\n\
+      \    + subst x.\n      nia.\n    + assert (Hx3 : 3 <= x) by nia.\n      assert\
+      \ (Hy4 : 4 <= y) by nia.\n      assert (Hxy12 : 12 <= x * y) by nia.\n    \
+      \  assert (Hbound : 12 * z <= (x * y) * z) by nia.\n      nia.\n}\ndestruct\
+      \ (le_gt_dec i m) as [Himle | Hmil].\n- destruct (le_gt_dec m o) as [Hmole\
+      \ | Homl].\n  + eapply Hsorted; nia.\n  + destruct (le_gt_dec i o) as [Hiole\
+      \ | Hoil].\n    * eapply Hsorted; nia.\n    * eapply Hsorted; nia.\n- destruct\
+      \ (le_gt_dec i o) as [Hiole | Hoil].\n  + destruct (le_gt_dec m o) as [Hmole\
+      \ | Homl].\n    * eapply Hsorted; nia.\n    * eapply Hsorted; nia.\n  + eapply\
+      \ Hsorted; nia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"\
+      failing_tactic\": \"assert (Hbound : 3 * z <= y * z) by nia.\", \"error\":\
+      \ \"(-32003, 'Coq: Tactic failure:  Cannot find witness.')\", \"verified_prefix\"\
+      : [\"intros i m o H.\", \"destruct H as [Him [Hmo [Hoi Hprod]]].\", \"assert\
+      \ (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x\
+      \ * y * z = 2001 -> x + y + z <= 671).\", \"{ intros x y z Hxy Hyz Hxyneq Hyzneq\
+      \ Hp.\", \"destruct (eq_nat_dec x 1) as [Hx1 | Hx1].\", \"- subst x.\", \"\
+      simpl in Hp.\"], \"total_goals\": 1, \"goals\": [\"i, m, o  : nat\\nHim  :\
+      \ i <> m\\nHmo  : m <> o\\nHoi  : o <> i\\nHprod  : i * m * o = 2001\\ny, z\
+      \  : nat\\nHxy  : 1 <= y\\nHyz  : y <= z\\nHxyneq  : 1 <> y\\nHyzneq  : y <>\
+      \ z\\nHp  : (y + 0) * z = 2001\\n|-1 + y + z <= 671\"], \"automation\": [null],\
+      \ \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\
+      \n\n[ASSISTANT]\n```rocq\nintros i m o H.\ndestruct H as [Him [Hmo [Hoi Hprod]]].\n\
+      assert (Hsorted :\n  forall x y z : nat,\n    x <= y -> y <= z -> x <> y ->\
+      \ y <> z ->\n    x * y * z = 2001 -> x + y + z <= 671).\n{\n  intros x y z\
+      \ Hxy Hyz Hxyneq Hyzneq Hp.\n  destruct (eq_nat_dec x 1) as [Hx1 | Hx1].\n\
+      \  - subst x.\n    simpl in Hp.\n    destruct (eq_nat_dec y 2) as [Hy2 | Hy2].\n\
+      \    + subst y.\n      nia.\n    + assert (Hy3 : 3 <= y) by nia.\n      assert\
+      \ (Hbound : 3 * z <= y * z).\n      { apply Nat.mul_le_mono_r. exact Hy3. }\n\
+      \      replace (y + 0)%nat with y in Hp by lia.\n      rewrite Hp in Hbound.\n\
+      \      nia.\n  - destruct (eq_nat_dec x 2) as [Hx2 | Hx2].\n    + subst x.\n\
+      \      nia.\n    + assert (Hx3 : 3 <= x) by nia.\n      assert (Hy4 : 4 <=\
+      \ y) by nia.\n      assert (Hxy12 : 12 <= x * y).\n      { change 3 * 4 <=\
+      \ x * y.\n        apply Nat.mul_le_mono; assumption. }\n      assert (Hbound\
+      \ : 12 * z <= (x * y) * z).\n      { apply Nat.mul_le_mono_r. exact Hxy12.\
+      \ }\n      rewrite Hp in Hbound.\n      nia.\n}\ndestruct (le_gt_dec i m) as\
+      \ [Himle | Hmil].\n- destruct (le_gt_dec m o) as [Hmole | Homl].\n  + eapply\
+      \ Hsorted; nia.\n  + destruct (le_gt_dec i o) as [Hiole | Hoil].\n    * eapply\
+      \ Hsorted; nia.\n    * eapply Hsorted; nia.\n- destruct (le_gt_dec i o) as\
+      \ [Hiole | Hoil].\n  + destruct (le_gt_dec m o) as [Hmole | Homl].\n    * eapply\
+      \ Hsorted; nia.\n    * eapply Hsorted; nia.\n  + eapply Hsorted; nia.\n```\n\
+      \n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"{\
+      \ change 3 * 4 <= x * y.\", \"error\": \"(-32003, 'Coq: Syntax error: [ltac_use_default]\
+      \ expected after [tactic] (in [tactic_command]).')\", \"verified_prefix\":\
+      \ [\"intros i m o H.\", \"destruct H as [Him [Hmo [Hoi Hprod]]].\", \"assert\
+      \ (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x\
+      \ * y * z = 2001 -> x + y + z <= 671).\", \"{ intros x y z Hxy Hyz Hxyneq Hyzneq\
+      \ Hp.\", \"destruct (eq_nat_dec x 1) as [Hx1 | Hx1].\", \"- subst x.\", \"\
+      simpl in Hp.\", \"destruct (eq_nat_dec y 2) as [Hy2 | Hy2].\", \"+ subst y.\"\
+      , \"nia.\", \"+ assert (Hy3 : 3 <= y) by nia.\", \"assert (Hbound : 3 * z <=\
+      \ y * z).\", \"{ apply Nat.mul_le_mono_r. exact Hy3. }\", \"replace (y + 0)%nat\
+      \ with y in Hp by lia.\", \"rewrite Hp in Hbound.\", \"nia.\", \"- destruct\
+      \ (eq_nat_dec x 2) as [Hx2 | Hx2].\", \"+ subst x.\", \"nia.\", \"+ assert\
+      \ (Hx3 : 3 <= x) by nia.\", \"assert (Hy4 : 4 <= y) by nia.\", \"assert (Hxy12\
+      \ : 12 <= x * y).\"], \"total_goals\": 2, \"goals\": [\"i, m, o  : nat\\nHim\
+      \  : i <> m\\nHmo  : m <> o\\nHoi  : o <> i\\nHprod  : i * m * o = 2001\\nx,\
+      \ y, z  : nat\\nHxy  : x <= y\\nHyz  : y <= z\\nHxyneq  : x <> y\\nHyzneq \
+      \ : y <> z\\nHp  : x * y * z = 2001\\nHx1  : x <> 1\\nHx2  : x <> 2\\nHx3 \
+      \ : 3 <= x\\nHy4  : 4 <= y\\n|-12 <= x * y\", \"i, m, o  : nat\\nHim  : i <>\
+      \ m\\nHmo  : m <> o\\nHoi  : o <> i\\nHprod  : i * m * o = 2001\\nx, y, z \
+      \ : nat\\nHxy  : x <= y\\nHyz  : y <= z\\nHxyneq  : x <> y\\nHyzneq  : y <>\
+      \ z\\nHp  : x * y * z = 2001\\nHx1  : x <> 1\\nHx2  : x <> 2\\nHx3  : 3 <=\
+      \ x\\nHy4  : 4 <= y\\nHxy12  : 12 <= x * y\\n|-x + y + z <= 671\"], \"automation\"\
+      : [\"lia.\", \"nia.\"], \"inspection\": \"InspectProofState(tactics=verified\
+      \ prefix, start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros i m o H.\ndestruct\
+      \ H as [Him [Hmo [Hoi Hprod]]].\nassert (Hsorted :\n  forall x y z : nat,\n\
+      \    x <= y -> y <= z -> x <> y -> y <> z ->\n    x * y * z = 2001 -> x + y\
+      \ + z <= 671).\n{\n  intros x y z Hxy Hyz Hxyneq Hyzneq Hp.\n  destruct (eq_nat_dec\
+      \ x 1) as [Hx1 | Hx1].\n  - subst x.\n    simpl in Hp.\n    destruct (eq_nat_dec\
+      \ y 2) as [Hy2 | Hy2].\n    + subst y.\n      nia.\n    + assert (Hy3 : 3 <=\
+      \ y) by nia.\n      assert (Hbound : 3 * z <= y * z).\n      { apply Nat.mul_le_mono_r.\
+      \ exact Hy3. }\n      replace (y + 0)%nat with y in Hp by lia.\n      rewrite\
+      \ Hp in Hbound.\n      nia.\n  - destruct (eq_nat_dec x 2) as [Hx2 | Hx2].\n\
+      \    + subst x.\n      nia.\n    + assert (Hx3 : 3 <= x) by nia.\n      assert\
+      \ (Hy4 : 4 <= y) by nia.\n      assert (Hxy12 : 12 <= x * y).\n      {\n  \
+      \      assert (H1 : 3 * 4 <= 3 * y) by nia.\n        assert (H2 : 3 * y <=\
+      \ x * y).\n        { apply Nat.mul_le_mono_r. exact Hx3. }\n        nia.\n\
+      \      }\n      assert (Hbound : 12 * z <= (x * y) * z).\n      { apply Nat.mul_le_mono_r.\
+      \ exact Hxy12. }\n      rewrite Hp in Hbound.\n      nia.\n}\ndestruct (le_gt_dec\
+      \ i m) as [Himle | Hmil].\n- destruct (le_gt_dec m o) as [Hmole | Homl].\n\
+      \  + apply Hsorted; nia.\n  + destruct (le_gt_dec i o) as [Hiole | Hoil].\n\
+      \    * assert (Hp' : i * o * m = 2001) by nia.\n      eapply Hsorted; nia.\n\
+      \    * assert (Hp' : o * i * m = 2001) by nia.\n      eapply Hsorted; nia.\n\
+      - destruct (le_gt_dec i o) as [Hiole | Hoil].\n  + destruct (le_gt_dec m o)\
+      \ as [Hmole | Homl].\n    * assert (Hp' : m * i * o = 2001) by nia.\n     \
+      \ eapply Hsorted; nia.\n    * assert (Hp' : m * o * i = 2001) by nia.\n   \
+      \   eapply Hsorted; nia.\n  + assert (Hp' : o * m * i = 2001) by nia.\n   \
+      \ eapply Hsorted; nia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\"\
+      , \"failing_tactic\": \"eapply Hsorted; nia.\", \"error\": \"(-32003, 'Coq:\
+      \ Tactic failure:  Cannot find witness.')\", \"verified_prefix\": [\"intros\
+      \ i m o H.\", \"destruct H as [Him [Hmo [Hoi Hprod]]].\", \"assert (Hsorted\
+      \ : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z =\
+      \ 2001 -> x + y + z <= 671).\", \"{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.\"\
+      , \"destruct (eq_nat_dec x 1) as [Hx1 | Hx1].\", \"- subst x.\", \"simpl in\
+      \ Hp.\", \"destruct (eq_nat_dec y 2) as [Hy2 | Hy2].\", \"+ subst y.\", \"\
+      nia.\", \"+ assert (Hy3 : 3 <= y) by nia.\", \"assert (Hbound : 3 * z <= y\
+      \ * z).\", \"{ apply Nat.mul_le_mono_r. exact Hy3. }\", \"replace (y + 0)%nat\
+      \ with y in Hp by lia.\", \"rewrite Hp in Hbound.\", \"nia.\", \"- destruct\
+      \ (eq_nat_dec x 2) as [Hx2 | Hx2].\", \"+ subst x.\", \"nia.\", \"+ assert\
+      \ (Hx3 : 3 <= x) by nia.\", \"assert (Hy4 : 4 <= y) by nia.\", \"assert (Hxy12\
+      \ : 12 <= x * y).\", \"{ assert (H1 : 3 * 4 <= 3 * y) by nia.\", \"assert (H2\
+      \ : 3 * y <= x * y).\", \"{ apply Nat.mul_le_mono_r. exact Hx3. }\", \"nia.\"\
+      , \"}\", \"assert (Hbound : 12 * z <= (x * y) * z).\", \"{ apply Nat.mul_le_mono_r.\
+      \ exact Hxy12. }\", \"rewrite Hp in Hbound.\", \"nia.\", \"}\", \"destruct\
+      \ (le_gt_dec i m) as [Himle | Hmil].\", \"- destruct (le_gt_dec m o) as [Hmole\
+      \ | Homl].\", \"+ apply Hsorted; nia.\", \"+ destruct (le_gt_dec i o) as [Hiole\
+      \ | Hoil].\", \"* assert (Hp' : i * o * m = 2001) by nia.\"], \"total_goals\"\
+      : 1, \"goals\": [\"i, m, o  : nat\\nHim  : i <> m\\nHmo  : m <> o\\nHoi  :\
+      \ o <> i\\nHprod  : i * m * o = 2001\\nHsorted  : forall x y z : nat,\\nx <=\
+      \ y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <= 671\\\
+      nHimle  : i <= m\\nHoml  : m > o\\nHiole  : i <= o\\nHp'  : i * o * m = 2001\\\
+      n|-i + m + o <= 671\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified\
+      \ prefix, start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros i m o H.\ndestruct\
+      \ H as [Him [Hmo [Hoi Hprod]]].\nassert (Hsorted :\n  forall x y z : nat,\n\
+      \    x <= y -> y <= z -> x <> y -> y <> z ->\n    x * y * z = 2001 -> x + y\
+      \ + z <= 671).\n{\n  intros x y z Hxy Hyz Hxyneq Hyzneq Hp.\n  destruct (eq_nat_dec\
+      \ x 1) as [Hx1 | Hx1].\n  - subst x.\n    simpl in Hp.\n    destruct (eq_nat_dec\
+      \ y 2) as [Hy2 | Hy2].\n    + subst y.\n      nia.\n    + assert (Hy3 : 3 <=\
+      \ y) by nia.\n      assert (Hbound : 3 * z <= y * z).\n      { apply Nat.mul_le_mono_r.\
+      \ exact Hy3. }\n      replace (y + 0)%nat with y in Hp by lia.\n      rewrite\
+      \ Hp in Hbound.\n      nia.\n  - destruct (eq_nat_dec x 2) as [Hx2 | Hx2].\n\
+      \    + subst x.\n      nia.\n    + assert (Hx3 : 3 <= x) by nia.\n      assert\
+      \ (Hy4 : 4 <= y) by nia.\n      assert (Hxy12 : 12 <= x * y).\n      {\n  \
+      \      assert (H1 : 3 * 4 <= 3 * y) by nia.\n        assert (H2 : 3 * y <=\
+      \ x * y).\n        { apply Nat.mul_le_mono_r. exact Hx3. }\n        nia.\n\
+      \      }\n      assert (Hbound : 12 * z <= (x * y) * z).\n      { apply Nat.mul_le_mono_r.\
+      \ exact Hxy12. }\n      rewrite Hp in Hbound.\n      nia.\n}\ndestruct (le_gt_dec\
+      \ i m) as [Himle | Hmil].\n- destruct (le_gt_dec m o) as [Hmole | Homl].\n\
+      \  + apply Hsorted; nia.\n  + destruct (le_gt_dec i o) as [Hiole | Hoil].\n\
+      \    * assert (Ho_m : o <> m).\n      { intro E. apply Hmo. symmetry. exact\
+      \ E. }\n      assert (H : i + o + m <= 671).\n      {\n        apply Hsorted\
+      \ with (x := i) (y := o) (z := m).\n        - exact Hiole.\n        - nia.\n\
+      \        - exact Him.\n        - exact Ho_m.\n        - nia.\n      }\n   \
+      \   nia.\n    * assert (H : o + i + m <= 671).\n      {\n        apply Hsorted\
+      \ with (x := o) (y := i) (z := m).\n        - nia.\n        - exact Himle.\n\
+      \        - intro E. apply Hoi. symmetry. exact E.\n        - exact Hmo.\n \
+      \       - nia.\n      }\n      nia.\n- destruct (le_gt_dec i o) as [Hiole |\
+      \ Hoil].\n  + destruct (le_gt_dec m o) as [Hmole | Homl].\n    * assert (H\
+      \ : i + m + o <= 671).\n      {\n        apply Hsorted with (x := i) (y :=\
+      \ m) (z := o).\n        - exact Himle.\n        - exact Hmole.\n        - exact\
+      \ Him.\n        - exact Hmo.\n        - exact Hprod.\n      }\n      exact\
+      \ H.\n    * assert (H : m + o + i <= 671).\n      {\n        apply Hsorted\
+      \ with (x := m) (y := o) (z := i).\n        - nia.\n        - exact Hiole.\n\
+      \        - intro E. apply Hmo. symmetry. exact E.\n        - intro E. apply\
+      \ Him. symmetry. exact E.\n        - nia.\n      }\n      nia.\n  + assert\
+      \ (H : o + m + i <= 671).\n    {\n      apply Hsorted with (x := o) (y := m)\
+      \ (z := i).\n      - nia.\n      - nia.\n      - intro E. apply Hmo. symmetry.\
+      \ exact E.\n      - intro E. apply Hoi. symmetry. exact E.\n      - nia.\n\
+      \    }\n    nia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"\
+      failing_tactic\": \"- exact Him.\", \"error\": \"(-32003, 'Coq: In environment\\\
+      \\ni, m, o : nat\\\\nHim : i <> m\\\\nHmo : m <> o\\\\nHoi : o <> i\\\\nHprod\
+      \ : i * m * o = 2001\\\\nHsorted :\\\\n  forall x y z : nat,\\\\n  x <= y ->\\\
+      \\n  y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <= 671\\\\\
+      nHimle : i <= m\\\\nHoml : m > o\\\\nHiole : i <= o\\\\nHo_m : o <> m\\\\nThe\
+      \ term \\\"Him\\\" has type \\\"i <> m\\\" while it is expected to have type\
+      \ \\\\n\\\"i <> o\\\" (cannot unify \\\"i = o\\\" and \\\"i = m\\\").')\",\
+      \ \"verified_prefix\": [\"intros i m o H.\", \"destruct H as [Him [Hmo [Hoi\
+      \ Hprod]]].\", \"assert (Hsorted : forall x y z : nat, x <= y -> y <= z ->\
+      \ x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <= 671).\", \"{ intros\
+      \ x y z Hxy Hyz Hxyneq Hyzneq Hp.\", \"destruct (eq_nat_dec x 1) as [Hx1 |\
+      \ Hx1].\", \"- subst x.\", \"simpl in Hp.\", \"destruct (eq_nat_dec y 2) as\
+      \ [Hy2 | Hy2].\", \"+ subst y.\", \"nia.\", \"+ assert (Hy3 : 3 <= y) by nia.\"\
+      , \"assert (Hbound : 3 * z <= y * z).\", \"{ apply Nat.mul_le_mono_r. exact\
+      \ Hy3. }\", \"replace (y + 0)%nat with y in Hp by lia.\", \"rewrite Hp in Hbound.\"\
+      , \"nia.\", \"- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].\", \"+ subst x.\"\
+      , \"nia.\", \"+ assert (Hx3 : 3 <= x) by nia.\", \"assert (Hy4 : 4 <= y) by\
+      \ nia.\", \"assert (Hxy12 : 12 <= x * y).\", \"{ assert (H1 : 3 * 4 <= 3 *\
+      \ y) by nia.\", \"assert (H2 : 3 * y <= x * y).\", \"{ apply Nat.mul_le_mono_r.\
+      \ exact Hx3. }\", \"nia.\", \"}\", \"assert (Hbound : 12 * z <= (x * y) * z).\"\
+      , \"{ apply Nat.mul_le_mono_r. exact Hxy12. }\", \"rewrite Hp in Hbound.\"\
+      , \"nia.\", \"}\", \"destruct (le_gt_dec i m) as [Himle | Hmil].\", \"- destruct\
+      \ (le_gt_dec m o) as [Hmole | Homl].\", \"+ apply Hsorted; nia.\", \"+ destruct\
+      \ (le_gt_dec i o) as [Hiole | Hoil].\", \"* assert (Ho_m : o <> m).\", \"{\
+      \ intro E. apply Hmo. symmetry. exact E. }\", \"assert (H : i + o + m <= 671).\"\
+      , \"{ apply Hsorted with (x := i) (y := o) (z := m).\", \"- exact Hiole.\"\
+      , \"- nia.\"], \"total_goals\": 0, \"goals\": [], \"automation\": [], \"inspection\"\
+      : \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\n\
+      ```rocq\nintros i m o H.\ndestruct H as [Him [Hmo [Hoi Hprod]]].\nassert (Hsorted\
+      \ :\n  forall x y z : nat,\n    x <= y -> y <= z -> x <> y -> y <> z ->\n \
+      \   x * y * z = 2001 -> x + y + z <= 671).\n{\n  intros x y z Hxy Hyz Hxyneq\
+      \ Hyzneq Hp.\n  destruct (eq_nat_dec x 1) as [Hx1 | Hx1].\n  - subst x.\n \
+      \   simpl in Hp.\n    destruct (eq_nat_dec y 2) as [Hy2 | Hy2].\n    + subst\
+      \ y.\n      nia.\n    + assert (Hy3 : 3 <= y) by nia.\n      assert (Hbound\
+      \ : 3 * z <= y * z).\n      { apply Nat.mul_le_mono_r. exact Hy3. }\n     \
+      \ replace (y + 0)%nat with y in Hp by lia.\n      rewrite Hp in Hbound.\n \
+      \     nia.\n  - destruct (eq_nat_dec x 2) as [Hx2 | Hx2].\n    + subst x.\n\
+      \      nia.\n    + assert (Hx3 : 3 <= x) by nia.\n      assert (Hy4 : 4 <=\
+      \ y) by nia.\n      assert (Hxy12 : 12 <= x * y).\n      {\n        assert\
+      \ (H1 : 3 * 4 <= 3 * y) by nia.\n        assert (H2 : 3 * y <= x * y).\n  \
+      \      { apply Nat.mul_le_mono_r. exact Hx3. }\n        nia.\n      }\n   \
+      \   assert (Hbound : 12 * z <= (x * y) * z).\n      { apply Nat.mul_le_mono_r.\
+      \ exact Hxy12. }\n      rewrite Hp in Hbound.\n      nia.\n}\ndestruct (le_gt_dec\
+      \ i m) as [Himle | Hmil].\n- destruct (le_gt_dec m o) as [Hmole | Homl].\n\
+      \  + apply Hsorted; nia.\n  + destruct (le_gt_dec i o) as [Hiole | Hoil].\n\
+      \    * assert (Ho_m : o <> m).\n      { intro E. apply Hmo. symmetry. exact\
+      \ E. }\n      assert (H : i + o + m <= 671).\n      {\n        apply Hsorted\
+      \ with (x := i) (y := o) (z := m).\n        - exact Hiole.\n        - nia.\n\
+      \        - intro E. apply Hoi. symmetry. exact E.\n        - exact Ho_m.\n\
+      \        - nia.\n      }\n      nia.\n    * assert (H : o + i + m <= 671).\n\
+      \      {\n        apply Hsorted with (x := o) (y := i) (z := m).\n        -\
+      \ nia.\n        - exact Himle.\n        - intro E. apply Hoi. exact E.\n  \
+      \      - exact Hmo.\n        - nia.\n      }\n      nia.\n- destruct (le_gt_dec\
+      \ i o) as [Hiole | Hoil].\n  + destruct (le_gt_dec m o) as [Hmole | Homl].\n\
+      \    * apply Hsorted; nia.\n    * assert (H : m + o + i <= 671).\n      {\n\
+      \        apply Hsorted with (x := m) (y := o) (z := i).\n        - nia.\n \
+      \       - exact Hiole.\n        - intro E. apply Hmo. symmetry. exact E.\n\
+      \        - intro E. apply Him. symmetry. exact E.\n        - nia.\n      }\n\
+      \      nia.\n  + assert (H : o + m + i <= 671).\n    {\n      apply Hsorted\
+      \ with (x := o) (y := m) (z := i).\n      - nia.\n      - nia.\n      - intro\
+      \ E. apply Hmo. symmetry. exact E.\n      - intro E. apply Hoi. symmetry. exact\
+      \ E.\n      - nia.\n    }\n    nia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\"\
+      : \"rejected\", \"failing_tactic\": \"- exact Hmo.\", \"error\": \"(-32003,\
+      \ 'Coq: In environment\\\\ni, m, o : nat\\\\nHim : i <> m\\\\nHmo : m <> o\\\
+      \\nHoi : o <> i\\\\nHprod : i * m * o = 2001\\\\nHsorted :\\\\n  forall x y\
+      \ z : nat,\\\\n  x <= y ->\\\\n  y <= z -> x <> y -> y <> z -> x * y * z =\
+      \ 2001 -> x + y + z <= 671\\\\nHimle : i <= m\\\\nHoml : m > o\\\\nHoil : i\
+      \ > o\\\\nThe term \\\"Hmo\\\" has type \\\"m <> o\\\" while it is expected\
+      \ to have type \\\\n\\\"i <> m\\\" (cannot unify \\\"i = m\\\" and \\\"m =\
+      \ o\\\").')\", \"verified_prefix\": [\"intros i m o H.\", \"destruct H as [Him\
+      \ [Hmo [Hoi Hprod]]].\", \"assert (Hsorted : forall x y z : nat, x <= y ->\
+      \ y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <= 671).\", \"\
+      { intros x y z Hxy Hyz Hxyneq Hyzneq Hp.\", \"destruct (eq_nat_dec x 1) as\
+      \ [Hx1 | Hx1].\", \"- subst x.\", \"simpl in Hp.\", \"destruct (eq_nat_dec\
+      \ y 2) as [Hy2 | Hy2].\", \"+ subst y.\", \"nia.\", \"+ assert (Hy3 : 3 <=\
+      \ y) by nia.\", \"assert (Hbound : 3 * z <= y * z).\", \"{ apply Nat.mul_le_mono_r.\
+      \ exact Hy3. }\", \"replace (y + 0)%nat with y in Hp by lia.\", \"rewrite Hp\
+      \ in Hbound.\", \"nia.\", \"- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].\",\
+      \ \"+ subst x.\", \"nia.\", \"+ assert (Hx3 : 3 <= x) by nia.\", \"assert (Hy4\
+      \ : 4 <= y) by nia.\", \"assert (Hxy12 : 12 <= x * y).\", \"{ assert (H1 :\
+      \ 3 * 4 <= 3 * y) by nia.\", \"assert (H2 : 3 * y <= x * y).\", \"{ apply Nat.mul_le_mono_r.\
+      \ exact Hx3. }\", \"nia.\", \"}\", \"assert (Hbound : 12 * z <= (x * y) * z).\"\
+      , \"{ apply Nat.mul_le_mono_r. exact Hxy12. }\", \"rewrite Hp in Hbound.\"\
+      , \"nia.\", \"}\", \"destruct (le_gt_dec i m) as [Himle | Hmil].\", \"- destruct\
+      \ (le_gt_dec m o) as [Hmole | Homl].\", \"+ apply Hsorted; nia.\", \"+ destruct\
+      \ (le_gt_dec i o) as [Hiole | Hoil].\", \"* assert (Ho_m : o <> m).\", \"{\
+      \ intro E. apply Hmo. symmetry. exact E. }\", \"assert (H : i + o + m <= 671).\"\
+      , \"{ apply Hsorted with (x := i) (y := o) (z := m).\", \"- exact Hiole.\"\
+      , \"- nia.\", \"- intro E. apply Hoi. symmetry. exact E.\", \"- exact Ho_m.\"\
+      , \"- nia.\", \"}\", \"nia.\", \"* assert (H : o + i + m <= 671).\", \"{ apply\
+      \ Hsorted with (x := o) (y := i) (z := m).\", \"- nia.\", \"- exact Himle.\"\
+      , \"- intro E. apply Hoi. exact E.\"], \"total_goals\": 0, \"goals\": [], \"\
+      automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix,\
+      \ start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros i m o H.\ndestruct H as [Him\
+      \ [Hmo [Hoi Hprod]]].\nassert (Hsorted :\n  forall x y z : nat,\n    x <= y\
+      \ -> y <= z -> x <> y -> y <> z ->\n    x * y * z = 2001 -> x + y + z <= 671).\n\
+      {\n  intros x y z Hxy Hyz Hxyneq Hyzneq Hp.\n  destruct (eq_nat_dec x 1) as\
+      \ [Hx1 | Hx1].\n  - subst x.\n    simpl in Hp.\n    destruct (eq_nat_dec y\
+      \ 2) as [Hy2 | Hy2].\n    + subst y.\n      nia.\n    + assert (Hy3 : 3 <=\
+      \ y) by nia.\n      assert (Hbound : 3 * z <= y * z).\n      { apply Nat.mul_le_mono_r.\
+      \ exact Hy3. }\n      replace (y + 0)%nat with y in Hp by lia.\n      rewrite\
+      \ Hp in Hbound.\n      nia.\n  - destruct (eq_nat_dec x 2) as [Hx2 | Hx2].\n\
+      \    + subst x.\n      nia.\n    + assert (Hx3 : 3 <= x) by nia.\n      assert\
+      \ (Hy4 : 4 <= y) by nia.\n      assert (Hxy12 : 12 <= x * y).\n      {\n  \
+      \      assert (H1 : 3 * 4 <= 3 * y) by nia.\n        assert (H2 : 3 * y <=\
+      \ x * y).\n        { apply Nat.mul_le_mono_r. exact Hx3. }\n        nia.\n\
+      \      }\n      assert (Hbound : 12 * z <= (x * y) * z).\n      { apply Nat.mul_le_mono_r.\
+      \ exact Hxy12. }\n      rewrite Hp in Hbound.\n      nia.\n}\ndestruct (le_gt_dec\
+      \ i m) as [Himle | Hmil].\n- destruct (le_gt_dec m o) as [Hmole | Homl].\n\
+      \  + apply Hsorted; nia.\n  + destruct (le_gt_dec i o) as [Hiole | Hoil].\n\
+      \    * assert (Ho_m : o <> m).\n      { intro E. apply Hmo. symmetry. exact\
+      \ E. }\n      assert (H : i + o + m <= 671).\n      {\n        apply Hsorted\
+      \ with (x := i) (y := o) (z := m).\n        - exact Hiole.\n        - nia.\n\
+      \        - intro E. apply Hoi. symmetry. exact E.\n        - exact Ho_m.\n\
+      \        - nia.\n      }\n      nia.\n    * assert (H : o + i + m <= 671).\n\
+      \      {\n        apply Hsorted with (x := o) (y := i) (z := m).\n        -\
+      \ nia.\n        - exact Himle.\n        - exact Hoi.\n        - exact Him.\n\
+      \        - nia.\n      }\n      nia.\n- destruct (le_gt_dec i o) as [Hiole\
+      \ | Hoil].\n  + destruct (le_gt_dec m o) as [Hmole | Homl].\n    * assert (H\
+      \ : m + i + o <= 671).\n      {\n        apply Hsorted with (x := m) (y :=\
+      \ i) (z := o).\n        - nia.\n        - exact Hiole.\n        - exact Him.\n\
+      \        - intro E. apply Hoi. symmetry. exact E.\n        - nia.\n      }\n\
+      \      nia.\n    * assert (H : o + m + i <= 671).\n      {\n        apply Hsorted\
+      \ with (x := o) (y := m) (z := i).\n        - nia.\n        - nia.\n      \
+      \  - intro E. apply Hmo. symmetry. exact E.\n        - intro E. apply Him.\
+      \ symmetry. exact E.\n        - nia.\n      }\n      nia.\n  + assert (H :\
+      \ o + m + i <= 671).\n    {\n      apply Hsorted with (x := o) (y := m) (z\
+      \ := i).\n      - nia.\n      - nia.\n      - intro E. apply Hmo. symmetry.\
+      \ exact E.\n      - intro E. apply Him. symmetry. exact E.\n      - nia.\n\
+      \    }\n    nia.\n```"
+    terminal:
+      theorem_name: amc12_2000_p1
+      problem_file: miniF2F/test/amc/amc12_2000_p1.v
+      source_cell: experiments/output/ace_models_20260910/proof/configs/amc12_2000_p1__selection-medium-1e4aec7dbbe80e7a__gpt-5.6-luna__seed0
+      cache_sha256: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+      result_sha256: b91ccf9cd548b5ef2d13932ad77720374bdf3b3785c06dc1a7bc400084c7733e
+      checker: checked_proof
+      check_sha256: 9e49cb73eb90435f8adae2d430dab86c6c2516df48fe02605e8f32d32e286430
+      status: not_solved
+      submitted_script:
+      - intros i m o H.
+      - destruct H as [Him [Hmo [Hoi Hprod]]].
+      - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <>
+        z -> x * y * z = 2001 -> x + y + z <= 671).'
+      - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+      - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+      - '- subst x.'
+      - simpl in Hp.
+      - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+      - + subst y.
+      - nia.
+      - '+ assert (Hy3 : 3 <= y) by nia.'
+      - 'assert (Hbound : 3 * z <= y * z).'
+      - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+      - replace (y + 0)%nat with y in Hp by lia.
+      - rewrite Hp in Hbound.
+      - nia.
+      - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+      - + subst x.
+      - nia.
+      - '+ assert (Hx3 : 3 <= x) by nia.'
+      - 'assert (Hy4 : 4 <= y) by nia.'
+      - 'assert (Hxy12 : 12 <= x * y).'
+      - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+      - 'assert (H2 : 3 * y <= x * y).'
+      - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+      - nia.
+      - '}'
+      - 'assert (Hbound : 12 * z <= (x * y) * z).'
+      - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+      - rewrite Hp in Hbound.
+      - nia.
+      - '}'
+      - destruct (le_gt_dec i m) as [Himle | Hmil].
+      - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+      - + apply Hsorted; nia.
+      - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+      - '* assert (Ho_m : o <> m).'
+      - '{ intro E. apply Hmo. symmetry. exact E. }'
+      - 'assert (H : i + o + m <= 671).'
+      - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+      - '- exact Hiole.'
+      - '- nia.'
+      - '- intro E. apply Hoi. symmetry. exact E.'
+      - '- exact Ho_m.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '* assert (H : o + i + m <= 671).'
+      - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+      - '- nia.'
+      - '- exact Himle.'
+      - '- exact Hoi.'
+      - '- exact Him.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+      - + destruct (le_gt_dec m o) as [Hmole | Homl].
+      - '* assert (H : m + i + o <= 671).'
+      - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+      - '- nia.'
+      - '- exact Hiole.'
+      - '- exact Him.'
+      - '- intro E. apply Hoi. symmetry. exact E.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '* assert (H : o + m + i <= 671).'
+      - '{ apply Hsorted with (x := o) (y := m) (z := i).'
+      - '- nia.'
+      - '- nia.'
+      - '- intro E. apply Hmo. symmetry. exact E.'
+      - '- intro E. apply Him. symmetry. exact E.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '+ assert (H : o + m + i <= 671).'
+      - '{ apply Hsorted with (x := o) (y := m) (z := i).'
+      - '- nia.'
+      - '- nia.'
+      - '- intro E. apply Hmo. symmetry. exact E.'
+      - '- intro E. apply Him. symmetry. exact E.'
+      - '- nia.'
+      - '}'
+      - nia.
+      accepted_script: []
+      auto_finished: false
+      common_prefix: []
+      accepted_tail: []
+      submitted_tail:
+      - intros i m o H.
+      - destruct H as [Him [Hmo [Hoi Hprod]]].
+      - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <>
+        z -> x * y * z = 2001 -> x + y + z <= 671).'
+      - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+      - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+      - '- subst x.'
+      - simpl in Hp.
+      - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+      - + subst y.
+      - nia.
+      - '+ assert (Hy3 : 3 <= y) by nia.'
+      - 'assert (Hbound : 3 * z <= y * z).'
+      - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+      - replace (y + 0)%nat with y in Hp by lia.
+      - rewrite Hp in Hbound.
+      - nia.
+      - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+      - + subst x.
+      - nia.
+      - '+ assert (Hx3 : 3 <= x) by nia.'
+      - 'assert (Hy4 : 4 <= y) by nia.'
+      - 'assert (Hxy12 : 12 <= x * y).'
+      - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+      - 'assert (H2 : 3 * y <= x * y).'
+      - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+      - nia.
+      - '}'
+      - 'assert (Hbound : 12 * z <= (x * y) * z).'
+      - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+      - rewrite Hp in Hbound.
+      - nia.
+      - '}'
+      - destruct (le_gt_dec i m) as [Himle | Hmil].
+      - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+      - + apply Hsorted; nia.
+      - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+      - '* assert (Ho_m : o <> m).'
+      - '{ intro E. apply Hmo. symmetry. exact E. }'
+      - 'assert (H : i + o + m <= 671).'
+      - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+      - '- exact Hiole.'
+      - '- nia.'
+      - '- intro E. apply Hoi. symmetry. exact E.'
+      - '- exact Ho_m.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '* assert (H : o + i + m <= 671).'
+      - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+      - '- nia.'
+      - '- exact Himle.'
+      - '- exact Hoi.'
+      - '- exact Him.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+      - + destruct (le_gt_dec m o) as [Hmole | Homl].
+      - '* assert (H : m + i + o <= 671).'
+      - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+      - '- nia.'
+      - '- exact Hiole.'
+      - '- exact Him.'
+      - '- intro E. apply Hoi. symmetry. exact E.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '* assert (H : o + m + i <= 671).'
+      - '{ apply Hsorted with (x := o) (y := m) (z := i).'
+      - '- nia.'
+      - '- nia.'
+      - '- intro E. apply Hmo. symmetry. exact E.'
+      - '- intro E. apply Him. symmetry. exact E.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '+ assert (H : o + m + i <= 671).'
+      - '{ apply Hsorted with (x := o) (y := m) (z := i).'
+      - '- nia.'
+      - '- nia.'
+      - '- intro E. apply Hmo. symmetry. exact E.'
+      - '- intro E. apply Him. symmetry. exact E.'
+      - '- nia.'
+      - '}'
+      - nia.
+      detail: Tails are a derived textual diff, not an execution trace. Only accepted_script
+        is certified complete. auto_finished is the recorded assistance flag; absent
+        pre-assistance details are unknown. returned_script matches via the existing
+        tactic splitter; accepted_script preserves the exact checker sequence.
+      returned_script: ''
+      version: 2
+    events:
+    - identifier: e1
+      context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo Hoi]].
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      submitted: nia.
+      status: rejected
+      error: '(-32003, ''Coq: Tactic failure:  Cannot find witness.'')'
+      goals:
+      - 'i, m, o  : nat
+
+        Him  : i <> m
+
+        Hmo  : m <> o
+
+        Hoi  : o <> i /\ i * m * o = 2001
+
+        |-i + m + o <= 671'
+    - identifier: e2
+      context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo [Hoi Hprod]]].
+        - destruct (le_gt_dec i m) as [Himle | Hmil].
+        - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      submitted: + nia.
+      status: rejected
+      error: '(-32003, ''Coq: Tactic failure:  Cannot find witness.'')'
+      goals:
+      - 'i, m, o  : nat
+
+        Him  : i <> m
+
+        Hmo  : m <> o
+
+        Hoi  : o <> i
+
+        Hprod  : i * m * o = 2001
+
+        Himle  : i <= m
+
+        Hmole  : m <= o
+
+        |-i + m + o <= 671'
+      - 'i, m, o  : nat
+
+        Him  : i <> m
+
+        Hmo  : m <> o
+
+        Hoi  : o <> i
+
+        Hprod  : i * m * o = 2001
+
+        Himle  : i <= m
+
+        Homl  : m > o
+
+        |-i + m + o <= 671'
+    - identifier: e3
+      context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo [Hoi Hprod]]].
+        - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y
+          <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+        - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+        - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+        - '- subst x.'
+        - 'assert (Hy3 : 3 <= y) by nia.'
+        - 'assert (Hyy : y * y <= y * z).'
+        - '{ apply Nat.mul_le_mono_l. exact Hyz. }'
+        - simpl in Hp.
+        - nia.
+        - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+        - + subst x.
+        - nia.
+        - '+ assert (Hx3 : 3 <= x) by nia.'
+        - 'assert (Hy4 : 4 <= y) by nia.'
+        - 'assert (Hxy12 : 12 <= x * y).'
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      submitted: '{ apply Nat.mul_le_mono; nia. }'
+      status: rejected
+      error: '(-32003, ''Coq: In environment\ni, m, o : nat\nHim : i <> m\nHmo :
+        m <> o\nHoi : o <> i\nHprod : i * m * o = 2001\nx, y, z : nat\nHxy : x <=
+        y\nHyz : y <= z\nHxyneq : x <> y\nHyzneq : y <> z\nHp : x * y * z = 2001\nHx1
+        : x <> 1\nHx2 : x <> 2\nHx3 : 3 <= x\nHy4 : 4 <= y\nUnable to unify "?M1849
+        * ?M1851 <= ?M1850 * ?M1852" with \n"12 <= x * y".'')'
+      goals:
+      - 'i, m, o  : nat
+
+        Him  : i <> m
+
+        Hmo  : m <> o
+
+        Hoi  : o <> i
+
+        Hprod  : i * m * o = 2001
+
+        x, y, z  : nat
+
+        Hxy  : x <= y
+
+        Hyz  : y <= z
+
+        Hxyneq  : x <> y
+
+        Hyzneq  : y <> z
+
+        Hp  : x * y * z = 2001
+
+        Hx1  : x <> 1
+
+        Hx2  : x <> 2
+
+        Hx3  : 3 <= x
+
+        Hy4  : 4 <= y
+
+        |-12 <= x * y'
+      - 'i, m, o  : nat
+
+        Him  : i <> m
+
+        Hmo  : m <> o
+
+        Hoi  : o <> i
+
+        Hprod  : i * m * o = 2001
+
+        x, y, z  : nat
+
+        Hxy  : x <= y
+
+        Hyz  : y <= z
+
+        Hxyneq  : x <> y
+
+        Hyzneq  : y <> z
+
+        Hp  : x * y * z = 2001
+
+        Hx1  : x <> 1
+
+        Hx2  : x <> 2
+
+        Hx3  : 3 <= x
+
+        Hy4  : 4 <= y
+
+        Hxy12  : 12 <= x * y
+
+        |-x + y + z <= 671'
+    - identifier: e4
+      context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo [Hoi Hprod]]].
+        - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y
+          <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+        - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+        - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+        - '- subst x.'
+        - 'assert (Hy3 : 3 <= y) by nia.'
+        - 'assert (Hyzprod : 3 * z <= y * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+        - simpl in Hp.
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      submitted: rewrite Hp in Hyzprod.
+      status: rejected
+      error: '(-32003, ''Coq: Found no subterm matching "(y + 0) * z" in Hyzprod.'')'
+      goals:
+      - 'i, m, o  : nat
+
+        Him  : i <> m
+
+        Hmo  : m <> o
+
+        Hoi  : o <> i
+
+        Hprod  : i * m * o = 2001
+
+        y, z  : nat
+
+        Hxy  : 1 <= y
+
+        Hyz  : y <= z
+
+        Hxyneq  : 1 <> y
+
+        Hyzneq  : y <> z
+
+        Hp  : (y + 0) * z = 2001
+
+        Hy3  : 3 <= y
+
+        Hyzprod  : 3 * z <= y * z
+
+        |-1 + y + z <= 671'
+    - identifier: e5
+      context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo [Hoi Hprod]]].
+        - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y
+          <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+        - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+        - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+        - '- subst x.'
+        - 'assert (Hy3 : 3 <= y) by nia.'
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      submitted: change y * z = 2001 in Hp.
+      status: rejected
+      error: '(-32003, ''Coq: Syntax error: [ltac_use_default] expected after [tactic]
+        (in [tactic_command]).'')'
+      goals:
+      - 'i, m, o  : nat
+
+        Him  : i <> m
+
+        Hmo  : m <> o
+
+        Hoi  : o <> i
+
+        Hprod  : i * m * o = 2001
+
+        y, z  : nat
+
+        Hxy  : 1 <= y
+
+        Hyz  : y <= z
+
+        Hxyneq  : 1 <> y
+
+        Hyzneq  : y <> z
+
+        Hp  : 1 * y * z = 2001
+
+        Hy3  : 3 <= y
+
+        |-1 + y + z <= 671'
+    - identifier: e6
+      context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo [Hoi Hprod]]].
+        - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y
+          <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+        - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+        - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+        - '- subst x.'
+        - simpl in Hp.
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      submitted: 'assert (Hbound : 3 * z <= y * z) by nia.'
+      status: rejected
+      error: '(-32003, ''Coq: Tactic failure:  Cannot find witness.'')'
+      goals:
+      - 'i, m, o  : nat
+
+        Him  : i <> m
+
+        Hmo  : m <> o
+
+        Hoi  : o <> i
+
+        Hprod  : i * m * o = 2001
+
+        y, z  : nat
+
+        Hxy  : 1 <= y
+
+        Hyz  : y <= z
+
+        Hxyneq  : 1 <> y
+
+        Hyzneq  : y <> z
+
+        Hp  : (y + 0) * z = 2001
+
+        |-1 + y + z <= 671'
+    - identifier: e7
+      context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo [Hoi Hprod]]].
+        - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y
+          <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+        - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+        - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+        - '- subst x.'
+        - simpl in Hp.
+        - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+        - + subst y.
+        - nia.
+        - '+ assert (Hy3 : 3 <= y) by nia.'
+        - 'assert (Hbound : 3 * z <= y * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+        - replace (y + 0)%nat with y in Hp by lia.
+        - rewrite Hp in Hbound.
+        - nia.
+        - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+        - + subst x.
+        - nia.
+        - '+ assert (Hx3 : 3 <= x) by nia.'
+        - 'assert (Hy4 : 4 <= y) by nia.'
+        - 'assert (Hxy12 : 12 <= x * y).'
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      submitted: '{ change 3 * 4 <= x * y.'
+      status: rejected
+      error: '(-32003, ''Coq: Syntax error: [ltac_use_default] expected after [tactic]
+        (in [tactic_command]).'')'
+      goals:
+      - 'i, m, o  : nat
+
+        Him  : i <> m
+
+        Hmo  : m <> o
+
+        Hoi  : o <> i
+
+        Hprod  : i * m * o = 2001
+
+        x, y, z  : nat
+
+        Hxy  : x <= y
+
+        Hyz  : y <= z
+
+        Hxyneq  : x <> y
+
+        Hyzneq  : y <> z
+
+        Hp  : x * y * z = 2001
+
+        Hx1  : x <> 1
+
+        Hx2  : x <> 2
+
+        Hx3  : 3 <= x
+
+        Hy4  : 4 <= y
+
+        |-12 <= x * y'
+      - 'i, m, o  : nat
+
+        Him  : i <> m
+
+        Hmo  : m <> o
+
+        Hoi  : o <> i
+
+        Hprod  : i * m * o = 2001
+
+        x, y, z  : nat
+
+        Hxy  : x <= y
+
+        Hyz  : y <= z
+
+        Hxyneq  : x <> y
+
+        Hyzneq  : y <> z
+
+        Hp  : x * y * z = 2001
+
+        Hx1  : x <> 1
+
+        Hx2  : x <> 2
+
+        Hx3  : 3 <= x
+
+        Hy4  : 4 <= y
+
+        Hxy12  : 12 <= x * y
+
+        |-x + y + z <= 671'
+    - identifier: e8
+      context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo [Hoi Hprod]]].
+        - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y
+          <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+        - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+        - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+        - '- subst x.'
+        - simpl in Hp.
+        - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+        - + subst y.
+        - nia.
+        - '+ assert (Hy3 : 3 <= y) by nia.'
+        - 'assert (Hbound : 3 * z <= y * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+        - replace (y + 0)%nat with y in Hp by lia.
+        - rewrite Hp in Hbound.
+        - nia.
+        - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+        - + subst x.
+        - nia.
+        - '+ assert (Hx3 : 3 <= x) by nia.'
+        - 'assert (Hy4 : 4 <= y) by nia.'
+        - 'assert (Hxy12 : 12 <= x * y).'
+        - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+        - 'assert (H2 : 3 * y <= x * y).'
+        - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+        - nia.
+        - '}'
+        - 'assert (Hbound : 12 * z <= (x * y) * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+        - rewrite Hp in Hbound.
+        - nia.
+        - '}'
+        - destruct (le_gt_dec i m) as [Himle | Hmil].
+        - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+        - + apply Hsorted; nia.
+        - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+        - '* assert (Hp'' : i * o * m = 2001) by nia.'
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      submitted: eapply Hsorted; nia.
+      status: rejected
+      error: '(-32003, ''Coq: Tactic failure:  Cannot find witness.'')'
+      goals:
+      - 'i, m, o  : nat
+
+        Him  : i <> m
+
+        Hmo  : m <> o
+
+        Hoi  : o <> i
+
+        Hprod  : i * m * o = 2001
+
+        Hsorted  : forall x y z : nat,
+
+        x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <=
+        671
+
+        Himle  : i <= m
+
+        Homl  : m > o
+
+        Hiole  : i <= o
+
+        Hp''  : i * o * m = 2001
+
+        |-i + m + o <= 671'
+    - identifier: e9
+      context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo [Hoi Hprod]]].
+        - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y
+          <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+        - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+        - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+        - '- subst x.'
+        - simpl in Hp.
+        - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+        - + subst y.
+        - nia.
+        - '+ assert (Hy3 : 3 <= y) by nia.'
+        - 'assert (Hbound : 3 * z <= y * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+        - replace (y + 0)%nat with y in Hp by lia.
+        - rewrite Hp in Hbound.
+        - nia.
+        - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+        - + subst x.
+        - nia.
+        - '+ assert (Hx3 : 3 <= x) by nia.'
+        - 'assert (Hy4 : 4 <= y) by nia.'
+        - 'assert (Hxy12 : 12 <= x * y).'
+        - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+        - 'assert (H2 : 3 * y <= x * y).'
+        - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+        - nia.
+        - '}'
+        - 'assert (Hbound : 12 * z <= (x * y) * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+        - rewrite Hp in Hbound.
+        - nia.
+        - '}'
+        - destruct (le_gt_dec i m) as [Himle | Hmil].
+        - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+        - + apply Hsorted; nia.
+        - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+        - '* assert (Ho_m : o <> m).'
+        - '{ intro E. apply Hmo. symmetry. exact E. }'
+        - 'assert (H : i + o + m <= 671).'
+        - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+        - '- exact Hiole.'
+        - '- nia.'
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      submitted: '- exact Him.'
+      status: rejected
+      error: '(-32003, ''Coq: In environment\ni, m, o : nat\nHim : i <> m\nHmo :
+        m <> o\nHoi : o <> i\nHprod : i * m * o = 2001\nHsorted :\n  forall x y z
+        : nat,\n  x <= y ->\n  y <= z -> x <> y -> y <> z -> x * y * z = 2001 ->
+        x + y + z <= 671\nHimle : i <= m\nHoml : m > o\nHiole : i <= o\nHo_m : o
+        <> m\nThe term "Him" has type "i <> m" while it is expected to have type
+        \n"i <> o" (cannot unify "i = o" and "i = m").'')'
+      goals: []
+    - identifier: e10
+      context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo [Hoi Hprod]]].
+        - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y
+          <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+        - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+        - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+        - '- subst x.'
+        - simpl in Hp.
+        - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+        - + subst y.
+        - nia.
+        - '+ assert (Hy3 : 3 <= y) by nia.'
+        - 'assert (Hbound : 3 * z <= y * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+        - replace (y + 0)%nat with y in Hp by lia.
+        - rewrite Hp in Hbound.
+        - nia.
+        - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+        - + subst x.
+        - nia.
+        - '+ assert (Hx3 : 3 <= x) by nia.'
+        - 'assert (Hy4 : 4 <= y) by nia.'
+        - 'assert (Hxy12 : 12 <= x * y).'
+        - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+        - 'assert (H2 : 3 * y <= x * y).'
+        - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+        - nia.
+        - '}'
+        - 'assert (Hbound : 12 * z <= (x * y) * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+        - rewrite Hp in Hbound.
+        - nia.
+        - '}'
+        - destruct (le_gt_dec i m) as [Himle | Hmil].
+        - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+        - + apply Hsorted; nia.
+        - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+        - '* assert (Ho_m : o <> m).'
+        - '{ intro E. apply Hmo. symmetry. exact E. }'
+        - 'assert (H : i + o + m <= 671).'
+        - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+        - '- exact Hiole.'
+        - '- nia.'
+        - '- intro E. apply Hoi. symmetry. exact E.'
+        - '- exact Ho_m.'
+        - '- nia.'
+        - '}'
+        - nia.
+        - '* assert (H : o + i + m <= 671).'
+        - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+        - '- nia.'
+        - '- exact Himle.'
+        - '- intro E. apply Hoi. exact E.'
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      submitted: '- exact Hmo.'
+      status: rejected
+      error: '(-32003, ''Coq: In environment\ni, m, o : nat\nHim : i <> m\nHmo :
+        m <> o\nHoi : o <> i\nHprod : i * m * o = 2001\nHsorted :\n  forall x y z
+        : nat,\n  x <= y ->\n  y <= z -> x <> y -> y <> z -> x * y * z = 2001 ->
+        x + y + z <= 671\nHimle : i <= m\nHoml : m > o\nHoil : i > o\nThe term "Hmo"
+        has type "m <> o" while it is expected to have type \n"i <> m" (cannot unify
+        "i = m" and "m = o").'')'
+      goals: []
+    - identifier: e11
+      context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo [Hoi Hprod]]].
+        - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y
+          <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+        - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+        - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+        - '- subst x.'
+        - simpl in Hp.
+        - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+        - + subst y.
+        - nia.
+        - '+ assert (Hy3 : 3 <= y) by nia.'
+        - 'assert (Hbound : 3 * z <= y * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+        - replace (y + 0)%nat with y in Hp by lia.
+        - rewrite Hp in Hbound.
+        - nia.
+        - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+        - + subst x.
+        - nia.
+        - '+ assert (Hx3 : 3 <= x) by nia.'
+        - 'assert (Hy4 : 4 <= y) by nia.'
+        - 'assert (Hxy12 : 12 <= x * y).'
+        - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+        - 'assert (H2 : 3 * y <= x * y).'
+        - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+        - nia.
+        - '}'
+        - 'assert (Hbound : 12 * z <= (x * y) * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+        - rewrite Hp in Hbound.
+        - nia.
+        - '}'
+        - destruct (le_gt_dec i m) as [Himle | Hmil].
+        - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+        - + apply Hsorted; nia.
+        - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+        - '* assert (Ho_m : o <> m).'
+        - '{ intro E. apply Hmo. symmetry. exact E. }'
+        - 'assert (H : i + o + m <= 671).'
+        - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+        - '- exact Hiole.'
+        - '- nia.'
+        - '- intro E. apply Hoi. symmetry. exact E.'
+        - '- exact Ho_m.'
+        - '- nia.'
+        - '}'
+        - nia.
+        - '* assert (H : o + i + m <= 671).'
+        - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+        - '- nia.'
+        - '- exact Himle.'
+        - '- exact Hoi.'
+        - '- exact Him.'
+        - '- nia.'
+        - '}'
+        - nia.
+        - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+        - + destruct (le_gt_dec m o) as [Hmole | Homl].
+        - '* assert (H : m + i + o <= 671).'
+        - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+        - '- nia.'
+        - '- exact Hiole.'
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      submitted: '- exact Him.'
+      status: rejected
+      error: '(-32003, ''Coq: In environment\ni, m, o : nat\nHim : i <> m\nHmo :
+        m <> o\nHoi : o <> i\nHprod : i * m * o = 2001\nHsorted :\n  forall x y z
+        : nat,\n  x <= y ->\n  y <= z -> x <> y -> y <> z -> x * y * z = 2001 ->
+        x + y + z <= 671\nHmil : i > m\nHiole : i <= o\nHmole : m <= o\nThe term
+        "Him" has type "i <> m" while it is expected to have type \n"m <> i" (cannot
+        unify "m = i" and "i = m").'')'
+      goals: []
+    submitted:
+    - draft_id: repair-6895729755609e49c78ff071
+      context_id: ctx-ee47be55d5b31fc1c5607029
+      proposed_code: intro E. apply Him. symmetry. exact E.
+      purpose: 'Reverse the equality argument before applying Him: Him has the reverse
+        disequality orientation from the helper premise; The selected helper premise
+        requires m <> i and Him : i <> m is available; preserve the current bullet
+        focus'
+      source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+      error: '(-32003, ''Coq: In environment\ni, m, o : nat\nHim : i <> m\nHmo :
+        m <> o\nHoi : o <> i\nHprod : i * m * o = 2001\nHsorted :\n  forall x y z
+        : nat,\n  x <= y ->\n  y <= z -> x <> y -> y <> z -> x * y * z = 2001 ->
+        x + y + z <= 671\nHmil : i > m\nHiole : i <= o\nHmole : m <= o\nThe term
+        "Him" has type "i <> m" while it is expected to have type \n"m <> i" (cannot
+        unify "m = i" and "i = m").'')'
+      remaining_goals: []
+    prefix:
+    - kind: oracle
+      answer:
+        mode: null
+        content: ''
+        tool_calls:
+        - name: ReadTrainingEvidence
+          args:
+            event: e11
+        justification: null
+    - kind: tool
+      call:
+        name: ReadTrainingEvidence
+        args:
+          event: e11
+      result: '{"identifier": "e11", "context": {"problem_file": "miniF2F/test/amc/amc12_2000_p1.v",
+        "theorem_name": "amc12_2000_p1", "prefix": ["intros i m o H.", "destruct
+        H as [Him [Hmo [Hoi Hprod]]].", "assert (Hsorted : forall x y z : nat, x
+        <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <= 671).",
+        "{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.", "destruct (eq_nat_dec x 1) as
+        [Hx1 | Hx1].", "- subst x.", "simpl in Hp.", "destruct (eq_nat_dec y 2) as
+        [Hy2 | Hy2].", "+ subst y.", "nia.", "+ assert (Hy3 : 3 <= y) by nia.", "assert
+        (Hbound : 3 * z <= y * z).", "{ apply Nat.mul_le_mono_r. exact Hy3. }", "replace
+        (y + 0)%nat with y in Hp by lia.", "rewrite Hp in Hbound.", "nia.", "- destruct
+        (eq_nat_dec x 2) as [Hx2 | Hx2].", "+ subst x.", "nia.", "+ assert (Hx3 :
+        3 <= x) by nia.", "assert (Hy4 : 4 <= y) by nia.", "assert (Hxy12 : 12 <=
+        x * y).", "{ assert (H1 : 3 * 4 <= 3 * y) by nia.", "assert (H2 : 3 * y <=
+        x * y).", "{ apply Nat.mul_le_mono_r. exact Hx3. }", "nia.", "}", "assert
+        (Hbound : 12 * z <= (x * y) * z).", "{ apply Nat.mul_le_mono_r. exact Hxy12.
+        }", "rewrite Hp in Hbound.", "nia.", "}", "destruct (le_gt_dec i m) as [Himle
+        | Hmil].", "- destruct (le_gt_dec m o) as [Hmole | Homl].", "+ apply Hsorted;
+        nia.", "+ destruct (le_gt_dec i o) as [Hiole | Hoil].", "* assert (Ho_m :
+        o <> m).", "{ intro E. apply Hmo. symmetry. exact E. }", "assert (H : i +
+        o + m <= 671).", "{ apply Hsorted with (x := i) (y := o) (z := m).", "- exact
+        Hiole.", "- nia.", "- intro E. apply Hoi. symmetry. exact E.", "- exact Ho_m.",
+        "- nia.", "}", "nia.", "* assert (H : o + i + m <= 671).", "{ apply Hsorted
+        with (x := o) (y := i) (z := m).", "- nia.", "- exact Himle.", "- exact Hoi.",
+        "- exact Him.", "- nia.", "}", "nia.", "- destruct (le_gt_dec i o) as [Hiole
+        | Hoil].", "+ destruct (le_gt_dec m o) as [Hmole | Homl].", "* assert (H
+        : m + i + o <= 671).", "{ apply Hsorted with (x := m) (y := i) (z := o).",
+        "- nia.", "- exact Hiole."], "source": "25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02",
+        "problem_sha256": "bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a",
+        "environment": "Require Import Arith.(''Require Import Lia.'', ''Require
+        Import Lra.'', ''Require Import Psatz.'', ''Require Import Field.'')", "version":
+        1}, "submitted": "- exact Him.", "status": "rejected", "error": "(-32003,
+        ''Coq: In environment\\ni, m, o : nat\\nHim : i <> m\\nHmo : m <> o\\nHoi
+        : o <> i\\nHprod : i * m * o = 2001\\nHsorted :\\n  forall x y z : nat,\\n  x
+        <= y ->\\n  y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <=
+        671\\nHmil : i > m\\nHiole : i <= o\\nHmole : m <= o\\nThe term \"Him\" has
+        type \"i <> m\" while it is expected to have type \\n\"m <> i\" (cannot unify
+        \"m = i\" and \"i = m\").'')", "goals": []}'
+    - kind: oracle
+      answer:
+        mode: null
+        content: ''
+        tool_calls:
+        - name: SubmitLocalRepair
+          args:
+            repair:
+              event: e11
+              diagnosis: Him has the reverse disequality orientation from the helper
+                premise
+              operation: Reverse the equality argument before applying Him
+              preconditions: 'The selected helper premise requires m <> i and Him
+                : i <> m is available; preserve the current bullet focus'
+              code: intro E. apply Him. symmetry. exact E.
+        justification: null
+    - kind: tool
+      call:
+        name: SubmitLocalRepair
+        args:
+          repair:
+            event: e11
+            diagnosis: Him has the reverse disequality orientation from the helper
+              premise
+            operation: Reverse the equality argument before applying Him
+            preconditions: 'The selected helper premise requires m <> i and Him :
+              i <> m is available; preserve the current bullet focus'
+            code: intro E. apply Him. symmetry. exact E.
+      result: '{"draft_id": "repair-6895729755609e49c78ff071", "status": "unverified",
+        "message": "Preserved for the curator even if a later final answer is invalid"}'
+    allow_tools: true
+  answers:
+  - answer:
+      action: done
+      reason: Preserve this unverified local repair; the whole theorem remains unsolved
+- demonstration: curator_checked_unsolved_repair
+  query: ProposeBookEdits
+  args:
+    role: curator
+    book:
+      next_id: 28
+      bullets:
+      - id: rocq-00001
+        section: pitfalls
+        content: 'When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use
+          `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely
+          specializing `Hf` does not connect it to `Hx`.
+
+          '
+        helpful: 5
+        harmful: 0
+      - id: rocq-00002
+        section: tactics
+        content: 'For an induction hypothesis relating recursive `sum_f` expressions,
+          if `rewrite IH` fails after `simpl`, use `change` to expose the successor
+          case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then
+          apply `rewrite IH; lia`.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00003
+        section: tactics
+        content: 'For goals over `nat` with hypotheses such as `(n - 1) * n * (n
+          + 1) = k` and a successor or exact-value conclusion, use `intros` followed
+          by `nia`; it can handle the nonlinear products and truncated subtraction
+          directly.
+
+          '
+        helpful: 4
+        harmful: 3
+      - id: rocq-00004
+        section: tactics
+        content: 'For closed `nat` equalities built from executable finite-list operations
+          such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`;
+          use `reflexivity` afterward if the resulting definitional equality is not
+          closed automatically.
+
+          '
+        helpful: 1
+        harmful: 1
+      - id: rocq-00005
+        section: pitfalls
+        content: 'When applying a recurrence hypothesis whose predecessor uses truncated
+          subtraction, first prove the exact natural-number equality (for example,
+          `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with
+          that equality before applying the hypothesis so its indices unify.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00006
+        section: pitfalls
+        content: 'Under an active `R_scope`, annotate natural-number indices, arithmetic,
+          and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve
+          `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion
+          and comparison-type errors.
+
+          '
+        helpful: 6
+        harmful: 0
+      - id: rocq-00007
+        section: lemmas
+        content: 'For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x
+          y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`,
+          then use `nia` for the resulting arithmetic. When the dividend is normalized
+          as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining
+          `r mod m`.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00009
+        section: strategy
+        content: 'For finite nonnegative real sequences with a fixed-sum product
+          goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a
+          n / INR n)^n` first, preserving an arbitrary sum or average throughout
+          the induction; specialize to `sum_n a n = INR n` only afterward.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00010
+        section: pitfalls
+        content: 'Do not obtain a successor product bound by multiplying an induction
+          hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor:
+          that factor may exceed `1`. An induction proof must retain a bound parameterized
+          by the total sum or average.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00011
+        section: tactics
+        content: 'Before using `nra` in AM-GM base or successor cases, unfold or
+          rewrite the relevant `sum_n` and `prod_n` expressions, including base cases
+          such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <>
+          0` denominator condition; `nra` cannot reason through opaque recursive
+          definitions or supply the global inequality.
+
+          '
+        helpful: 1
+        harmful: 0
+      - id: rocq-00012
+        section: tactics
+        content: 'For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly,
+          use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately
+          for completing-square identities before finishing the resulting linear
+          inequality with `lra`.
+
+          '
+        helpful: 2
+        harmful: 0
+      - id: rocq-00013
+        section: lemmas
+        content: 'For positivity of a recursive real product whose successor factor
+          is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via
+          `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product
+          with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity
+          through opaque recursive products.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00014
+        section: lemmas
+        content: 'For natural-number product bounds, use `Nat.mul_le_mono` to combine
+          factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r`
+          to multiply an established inequality by a nonnegative factor; provide
+          the premises in the lemma''s expected order instead of guessing a multiplication-monotonicity
+          API.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00015
+        section: lemmas
+        content: 'To lift a natural bound into `R`, expose the coercion and apply
+          `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <= INR c;
+          apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to
+          the natural positivity hypothesis rather than using a nonexistent `.mpr`
+          projection.
+
+          '
+        helpful: 1
+        harmful: 0
+      - id: rocq-00016
+        section: pitfalls
+        content: 'For real equations involving a single reciprocal `1 / x`, after
+          proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity
+          with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then
+          use `ring` and `nra` on the resulting polynomial equation instead of relying
+          on `field_simplify` to normalize it.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00017
+        section: tactics
+        content: 'To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt
+          0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in
+          the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \/ t
+          = -1` by `lra`.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00018
+        section: pitfalls
+        content: 'For bounded natural searches involving `Nat.lcm` or `Nat.gcd`,
+          avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive
+          evaluation can stack-overflow; reduce only explicitly closed numeral cases,
+          using `change` to expose a known numeral equality when needed.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00019
+        section: strategy
+        content: 'When proving a least witness by finite exclusion, first split with
+          `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch
+          immediately, handle the finitely many numeral cases explicitly under `Hlt`,
+          and discharge any residual symbolic successor branch directly from `Hlt`
+          rather than using blanket `all:` tactics or unstable numbered selectors.
+
+          '
+        helpful: 1
+        harmful: 1
+      - id: rocq-00020
+        section: tactics
+        content: 'For instantiated recurrence equations containing closed casts and
+          natural sums, use `cbv [INR]` to evaluate the casts, then normalize each
+          index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`;
+          after these rewrites, `lra` can solve the resulting linear real-equation
+          chain.
+
+          '
+        helpful: 0
+        harmful: 1
+      - id: rocq-00021
+        section: tactics
+        content: 'For an explicit `Ensemble` built from nested `Add`, first unfold
+          `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`,
+          and `Union` equivalences; once the resulting disjunctions and `False` cases
+          are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer
+          by layer, prove each freshness premise by unfolding `In` and `Add` and
+          inverting membership hypotheses, and finish the empty base with `card_empty`.
+
+          '
+        helpful: 1
+        harmful: 0
+      - id: rocq-00022
+        section: lemmas
+        content: "For trigonometric goals involving complementary or doubled angles,\
+          \ use the library lemma with the exact goal orientation\u2014such as `sin_PI_x`\
+          \ or `sin_2a`, rewriting with it before `reflexivity` when necessary. For\
+          \ positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x`\
+          \ and `x < PI` explicitly.\n"
+        helpful: 0
+        harmful: 0
+      - id: rocq-00023
+        section: lemmas
+        content: 'For logarithmic inequalities and identities, derive `0 < ln a`
+          from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting
+          with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that
+          the base `t` is positive, normalize the casted exponent with `cbv [INR]`,
+          and use the resulting instantiated equality directly.
+
+          '
+        helpful: 1
+        harmful: 0
+      - id: rocq-00024
+        section: tactics
+        content: 'For an unbounded quadratic equation over `nat` that `nia` cannot
+          solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound.
+          In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono;
+          lia`, then let `nia` derive the contradiction from the original equation.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00025
+        section: pitfalls
+        content: 'A closed cast such as `INR 4` is not necessarily definitionally
+          convertible to `(4 : R)`, so `change` may fail. First prove an explicit
+          equality, for example with `cbv [INR]; ring`, and rewrite with that equality
+          before applying real arithmetic.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00026
+        section: lemmas
+        content: 'For a target or hypothesis containing `ln (a * b)`, explicitly
+          rewrite it with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation
+          does not expose this logarithmic product identity on its own.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00027
+        section: lemmas
+        content: 'For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^
+          2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from
+          `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 :
+          R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.
+
+          '
+        helpful: 0
+        harmful: 0
+    evidence: Unsolved source; check the local repair and its focus
+    contexts:
+    - problem_file: miniF2F/test/amc/amc12_2000_p1.v
+      theorem_name: amc12_2000_p1
+      prefix:
+      - intros i m o H.
+      - destruct H as [Him [Hmo [Hoi Hprod]]].
+      - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <>
+        z -> x * y * z = 2001 -> x + y + z <= 671).'
+      - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+      - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+      - '- subst x.'
+      - simpl in Hp.
+      - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+      - + subst y.
+      - nia.
+      - '+ assert (Hy3 : 3 <= y) by nia.'
+      - 'assert (Hbound : 3 * z <= y * z).'
+      - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+      - replace (y + 0)%nat with y in Hp by lia.
+      - rewrite Hp in Hbound.
+      - nia.
+      - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+      - + subst x.
+      - nia.
+      - '+ assert (Hx3 : 3 <= x) by nia.'
+      - 'assert (Hy4 : 4 <= y) by nia.'
+      - 'assert (Hxy12 : 12 <= x * y).'
+      - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+      - 'assert (H2 : 3 * y <= x * y).'
+      - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+      - nia.
+      - '}'
+      - 'assert (Hbound : 12 * z <= (x * y) * z).'
+      - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+      - rewrite Hp in Hbound.
+      - nia.
+      - '}'
+      - destruct (le_gt_dec i m) as [Himle | Hmil].
+      - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+      - + apply Hsorted; nia.
+      - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+      - '* assert (Ho_m : o <> m).'
+      - '{ intro E. apply Hmo. symmetry. exact E. }'
+      - 'assert (H : i + o + m <= 671).'
+      - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+      - '- exact Hiole.'
+      - '- nia.'
+      - '- intro E. apply Hoi. symmetry. exact E.'
+      - '- exact Ho_m.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '* assert (H : o + i + m <= 671).'
+      - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+      - '- nia.'
+      - '- exact Himle.'
+      - '- exact Hoi.'
+      - '- exact Him.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+      - + destruct (le_gt_dec m o) as [Hmole | Homl].
+      - '* assert (H : m + i + o <= 671).'
+      - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+      - '- nia.'
+      - '- exact Hiole.'
+      source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+      problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+      environment: Require Import Arith.('Require Import Lia.', 'Require Import Lra.',
+        'Require Import Psatz.', 'Require Import Field.')
+      version: 1
+    - problem_file: miniF2F/test/amc/amc12_2000_p1.v
+      theorem_name: amc12_2000_p1
+      prefix:
+      - intros i m o H.
+      - destruct H as [Him [Hmo [Hoi Hprod]]].
+      - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <>
+        z -> x * y * z = 2001 -> x + y + z <= 671).'
+      - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+      - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+      - '- subst x.'
+      - simpl in Hp.
+      - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+      - + subst y.
+      - nia.
+      - '+ assert (Hy3 : 3 <= y) by nia.'
+      - 'assert (Hbound : 3 * z <= y * z).'
+      - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+      - replace (y + 0)%nat with y in Hp by lia.
+      - rewrite Hp in Hbound.
+      - nia.
+      - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+      - + subst x.
+      - nia.
+      - '+ assert (Hx3 : 3 <= x) by nia.'
+      - 'assert (Hy4 : 4 <= y) by nia.'
+      - 'assert (Hxy12 : 12 <= x * y).'
+      - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+      - 'assert (H2 : 3 * y <= x * y).'
+      - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+      - nia.
+      - '}'
+      - 'assert (Hbound : 12 * z <= (x * y) * z).'
+      - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+      - rewrite Hp in Hbound.
+      - nia.
+      - '}'
+      - destruct (le_gt_dec i m) as [Himle | Hmil].
+      - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+      - + apply Hsorted; nia.
+      - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+      - '* assert (Ho_m : o <> m).'
+      - '{ intro E. apply Hmo. symmetry. exact E. }'
+      - 'assert (H : i + o + m <= 671).'
+      - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+      - '- exact Hiole.'
+      - '- nia.'
+      - '- intro E. apply Hoi. symmetry. exact E.'
+      - '- exact Ho_m.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '* assert (H : o + i + m <= 671).'
+      - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+      - '- nia.'
+      - '- exact Himle.'
+      - '- exact Hoi.'
+      - '- exact Him.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+      - + destruct (le_gt_dec m o) as [Hmole | Homl].
+      - '* assert (H : m + i + o <= 671).'
+      - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+      - '- nia.'
+      - '- exact Hiole.'
+      - '- intro E. apply Him. symmetry. exact E.'
+      source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+      problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+      environment: Require Import Arith.('Require Import Lia.', 'Require Import Lra.',
+        'Require Import Psatz.', 'Require Import Field.')
+      version: 1
+    drafts:
+    - draft_id: repair-6895729755609e49c78ff071
+      context_id: ctx-ee47be55d5b31fc1c5607029
+      proposed_code: intro E. apply Him. symmetry. exact E.
+      purpose: 'Reverse the equality argument before applying Him: Him has the reverse
+        disequality orientation from the helper premise; The selected helper premise
+        requires m <> i and Him : i <> m is available; preserve the current bullet
+        focus'
+      source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+      error: '(-32003, ''Coq: In environment\ni, m, o : nat\nHim : i <> m\nHmo :
+        m <> o\nHoi : o <> i\nHprod : i * m * o = 2001\nHsorted :\n  forall x y z
+        : nat,\n  x <= y ->\n  y <= z -> x <> y -> y <> z -> x * y * z = 2001 ->
+        x + y + z <= 671\nHmil : i > m\nHiole : i <= o\nHmole : m <= o\nThe term
+        "Him" has type "i <> m" while it is expected to have type \n"m <> i" (cannot
+        unify "m = i" and "i = m").'')'
+      remaining_goals: []
+    receipts:
+    - context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo [Hoi Hprod]]].
+        - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y
+          <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+        - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+        - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+        - '- subst x.'
+        - simpl in Hp.
+        - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+        - + subst y.
+        - nia.
+        - '+ assert (Hy3 : 3 <= y) by nia.'
+        - 'assert (Hbound : 3 * z <= y * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+        - replace (y + 0)%nat with y in Hp by lia.
+        - rewrite Hp in Hbound.
+        - nia.
+        - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+        - + subst x.
+        - nia.
+        - '+ assert (Hx3 : 3 <= x) by nia.'
+        - 'assert (Hy4 : 4 <= y) by nia.'
+        - 'assert (Hxy12 : 12 <= x * y).'
+        - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+        - 'assert (H2 : 3 * y <= x * y).'
+        - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+        - nia.
+        - '}'
+        - 'assert (Hbound : 12 * z <= (x * y) * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+        - rewrite Hp in Hbound.
+        - nia.
+        - '}'
+        - destruct (le_gt_dec i m) as [Himle | Hmil].
+        - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+        - + apply Hsorted; nia.
+        - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+        - '* assert (Ho_m : o <> m).'
+        - '{ intro E. apply Hmo. symmetry. exact E. }'
+        - 'assert (H : i + o + m <= 671).'
+        - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+        - '- exact Hiole.'
+        - '- nia.'
+        - '- intro E. apply Hoi. symmetry. exact E.'
+        - '- exact Ho_m.'
+        - '- nia.'
+        - '}'
+        - nia.
+        - '* assert (H : o + i + m <= 671).'
+        - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+        - '- nia.'
+        - '- exact Himle.'
+        - '- exact Hoi.'
+        - '- exact Him.'
+        - '- nia.'
+        - '}'
+        - nia.
+        - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+        - + destruct (le_gt_dec m o) as [Hmole | Homl].
+        - '* assert (H : m + i + o <= 671).'
+        - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+        - '- nia.'
+        - '- exact Hiole.'
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      snippet: '- intro E. apply Him. symmetry. exact E.'
+      status: executed_open
+      checked:
+        feedback:
+          success: false
+          failing_index: 63
+          failing_tactic: Qed.
+          error_message: '(-32003, ''Coq:  (in proof amc12_2000_p1): Attempt to save
+            an incomplete proof\n(there are remaining open goals).'')'
+          remaining_goals: []
+          proof_so_far:
+          - intros i m o H.
+          - destruct H as [Him [Hmo [Hoi Hprod]]].
+          - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y ->
+            y <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+          - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+          - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+          - '- subst x.'
+          - simpl in Hp.
+          - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+          - + subst y.
+          - nia.
+          - '+ assert (Hy3 : 3 <= y) by nia.'
+          - 'assert (Hbound : 3 * z <= y * z).'
+          - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+          - replace (y + 0)%nat with y in Hp by lia.
+          - rewrite Hp in Hbound.
+          - nia.
+          - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+          - + subst x.
+          - nia.
+          - '+ assert (Hx3 : 3 <= x) by nia.'
+          - 'assert (Hy4 : 4 <= y) by nia.'
+          - 'assert (Hxy12 : 12 <= x * y).'
+          - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+          - 'assert (H2 : 3 * y <= x * y).'
+          - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+          - nia.
+          - '}'
+          - 'assert (Hbound : 12 * z <= (x * y) * z).'
+          - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+          - rewrite Hp in Hbound.
+          - nia.
+          - '}'
+          - destruct (le_gt_dec i m) as [Himle | Hmil].
+          - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+          - + apply Hsorted; nia.
+          - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+          - '* assert (Ho_m : o <> m).'
+          - '{ intro E. apply Hmo. symmetry. exact E. }'
+          - 'assert (H : i + o + m <= 671).'
+          - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+          - '- exact Hiole.'
+          - '- nia.'
+          - '- intro E. apply Hoi. symmetry. exact E.'
+          - '- exact Ho_m.'
+          - '- nia.'
+          - '}'
+          - nia.
+          - '* assert (H : o + i + m <= 671).'
+          - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+          - '- nia.'
+          - '- exact Himle.'
+          - '- exact Hoi.'
+          - '- exact Him.'
+          - '- nia.'
+          - '}'
+          - nia.
+          - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+          - + destruct (le_gt_dec m o) as [Hmole | Homl].
+          - '* assert (H : m + i + o <= 671).'
+          - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+          - '- nia.'
+          - '- exact Hiole.'
+          - '- intro E. apply Him. symmetry. exact E.'
+          finished: false
+          probe: null
+          auto_finished: false
+        outcome: incomplete
+        elapsed: 1.3120146291330457
+        rpc_calls: 102
+        view: '{"outcome": "incomplete", "failing_tactic": "Qed.", "error": "(-32003,
+          ''Coq:  (in proof amc12_2000_p1): Attempt to save an incomplete proof\\n(there
+          are remaining open goals).'')", "verified_prefix": ["intros i m o H.",
+          "destruct H as [Him [Hmo [Hoi Hprod]]].", "assert (Hsorted : forall x y
+          z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x
+          + y + z <= 671).", "{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.", "destruct
+          (eq_nat_dec x 1) as [Hx1 | Hx1].", "- subst x.", "simpl in Hp.", "destruct
+          (eq_nat_dec y 2) as [Hy2 | Hy2].", "+ subst y.", "nia.", "+ assert (Hy3
+          : 3 <= y) by nia.", "assert (Hbound : 3 * z <= y * z).", "{ apply Nat.mul_le_mono_r.
+          exact Hy3. }", "replace (y + 0)%nat with y in Hp by lia.", "rewrite Hp
+          in Hbound.", "nia.", "- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].", "+
+          subst x.", "nia.", "+ assert (Hx3 : 3 <= x) by nia.", "assert (Hy4 : 4
+          <= y) by nia.", "assert (Hxy12 : 12 <= x * y).", "{ assert (H1 : 3 * 4
+          <= 3 * y) by nia.", "assert (H2 : 3 * y <= x * y).", "{ apply Nat.mul_le_mono_r.
+          exact Hx3. }", "nia.", "}", "assert (Hbound : 12 * z <= (x * y) * z).",
+          "{ apply Nat.mul_le_mono_r. exact Hxy12. }", "rewrite Hp in Hbound.", "nia.",
+          "}", "destruct (le_gt_dec i m) as [Himle | Hmil].", "- destruct (le_gt_dec
+          m o) as [Hmole | Homl].", "+ apply Hsorted; nia.", "+ destruct (le_gt_dec
+          i o) as [Hiole | Hoil].", "* assert (Ho_m : o <> m).", "{ intro E. apply
+          Hmo. symmetry. exact E. }", "assert (H : i + o + m <= 671).", "{ apply
+          Hsorted with (x := i) (y := o) (z := m).", "- exact Hiole.", "- nia.",
+          "- intro E. apply Hoi. symmetry. exact E.", "- exact Ho_m.", "- nia.",
+          "}", "nia.", "* assert (H : o + i + m <= 671).", "{ apply Hsorted with
+          (x := o) (y := i) (z := m).", "- nia.", "- exact Himle.", "- exact Hoi.",
+          "- exact Him.", "- nia.", "}", "nia.", "- destruct (le_gt_dec i o) as [Hiole
+          | Hoil].", "+ destruct (le_gt_dec m o) as [Hmole | Homl].", "* assert (H
+          : m + i + o <= 671).", "{ apply Hsorted with (x := m) (y := i) (z := o).",
+          "- nia.", "- exact Hiole.", "- intro E. apply Him. symmetry. exact E."],
+          "total_goals": 0, "goals": [], "automation": [], "inspection": "InspectProofState(tactics=verified
+          prefix, start=4)"}'
+      elapsed: 1.3120146291330457
+      rpc_calls: 102
+    prefix:
+    - kind: oracle
+      answer:
+        mode: null
+        content: ''
+        tool_calls:
+        - name: FindBookRules
+          args:
+            query: orientation of disequality in helper lemma premises
+        - name: CheckAdviceSnippet
+          args:
+            context: c1
+            snippet: '- intro E. apply Him. symmetry. exact E.'
+        justification: null
+    - kind: tool
+      call:
+        name: FindBookRules
+        args:
+          query: orientation of disequality in helper lemma premises
+      result: '[{"alias": "b13", "id": "rocq-00014", "content": "For natural-number
+        product bounds, use `Nat.mul_le_mono` to combine factor inequalities such
+        as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply
+        an established inequality by a nonnegative factor; provide the premises in
+        the lemma''s expected order instead of guessing a multiplication-monotonicity
+        API.\n"}, {"alias": "b21", "id": "rocq-00022", "content": "For trigonometric
+        goals involving complementary or doubled angles, use the library lemma with
+        the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting
+        with it before `reflexivity` when necessary. For positivity of `sin x`, apply
+        `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n"}, {"alias":
+        "b1", "id": "rocq-00001", "content": "When `Hf : forall x, f x = polynomial
+        x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before
+        invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n"},
+        {"alias": "b16", "id": "rocq-00017", "content": "To turn `Rabs t = 1` into
+        a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch
+        rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left
+        t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n"}, {"alias": "b12", "id": "rocq-00013",
+        "content": "For positivity of a recursive real product whose successor factor
+        is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`,
+        prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos;
+        assumption`; `nra` does not infer positivity through opaque recursive products.\n"}]'
+    - kind: tool
+      call:
+        name: CheckAdviceSnippet
+        args:
+          context: c1
+          snippet: '- intro E. apply Him. symmetry. exact E.'
+      result: '{"receipt": "r1", "context": "c2", "status": "executed_open", "error":
+        "(-32003, ''Coq:  (in proof amc12_2000_p1): Attempt to save an incomplete
+        proof\\n(there are remaining open goals).'')", "goals": []}'
+    allow_tools: true
+  answers:
+  - answer:
+      reasoning: A missing local helper-premise repair, not a complete source proof
+      decisions:
+      - draft: d1
+        action: add
+        closest_rule: b13
+        section: pitfalls
+        content: When an instantiated helper requires a disequality in the reverse
+          orientation from an available hypothesis, introduce the alleged equality,
+          apply that hypothesis, reverse the equality with symmetry, and finish with
+          the introduced equality. Check which variable pair each helper premise
+          requires.
+        reason: Existing product-bound guidance does not cover reversing a disequality
+          premise
+        receipts:
+        - r1
+        failure_receipt: ''
+- demonstration: reducer_checked_unsolved_repair
+  query: ProposeBookEdits
+  args:
+    role: reducer
+    book:
+      next_id: 28
+      bullets:
+      - id: rocq-00001
+        section: pitfalls
+        content: 'When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use
+          `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely
+          specializing `Hf` does not connect it to `Hx`.
+
+          '
+        helpful: 5
+        harmful: 0
+      - id: rocq-00002
+        section: tactics
+        content: 'For an induction hypothesis relating recursive `sum_f` expressions,
+          if `rewrite IH` fails after `simpl`, use `change` to expose the successor
+          case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then
+          apply `rewrite IH; lia`.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00003
+        section: tactics
+        content: 'For goals over `nat` with hypotheses such as `(n - 1) * n * (n
+          + 1) = k` and a successor or exact-value conclusion, use `intros` followed
+          by `nia`; it can handle the nonlinear products and truncated subtraction
+          directly.
+
+          '
+        helpful: 4
+        harmful: 3
+      - id: rocq-00004
+        section: tactics
+        content: 'For closed `nat` equalities built from executable finite-list operations
+          such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`;
+          use `reflexivity` afterward if the resulting definitional equality is not
+          closed automatically.
+
+          '
+        helpful: 1
+        harmful: 1
+      - id: rocq-00005
+        section: pitfalls
+        content: 'When applying a recurrence hypothesis whose predecessor uses truncated
+          subtraction, first prove the exact natural-number equality (for example,
+          `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with
+          that equality before applying the hypothesis so its indices unify.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00006
+        section: pitfalls
+        content: 'Under an active `R_scope`, annotate natural-number indices, arithmetic,
+          and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve
+          `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion
+          and comparison-type errors.
+
+          '
+        helpful: 6
+        harmful: 0
+      - id: rocq-00007
+        section: lemmas
+        content: 'For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x
+          y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`,
+          then use `nia` for the resulting arithmetic. When the dividend is normalized
+          as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining
+          `r mod m`.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00009
+        section: strategy
+        content: 'For finite nonnegative real sequences with a fixed-sum product
+          goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a
+          n / INR n)^n` first, preserving an arbitrary sum or average throughout
+          the induction; specialize to `sum_n a n = INR n` only afterward.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00010
+        section: pitfalls
+        content: 'Do not obtain a successor product bound by multiplying an induction
+          hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor:
+          that factor may exceed `1`. An induction proof must retain a bound parameterized
+          by the total sum or average.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00011
+        section: tactics
+        content: 'Before using `nra` in AM-GM base or successor cases, unfold or
+          rewrite the relevant `sum_n` and `prod_n` expressions, including base cases
+          such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <>
+          0` denominator condition; `nra` cannot reason through opaque recursive
+          definitions or supply the global inequality.
+
+          '
+        helpful: 1
+        harmful: 0
+      - id: rocq-00012
+        section: tactics
+        content: 'For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly,
+          use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately
+          for completing-square identities before finishing the resulting linear
+          inequality with `lra`.
+
+          '
+        helpful: 2
+        harmful: 0
+      - id: rocq-00013
+        section: lemmas
+        content: 'For positivity of a recursive real product whose successor factor
+          is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via
+          `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product
+          with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity
+          through opaque recursive products.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00014
+        section: lemmas
+        content: 'For natural-number product bounds, use `Nat.mul_le_mono` to combine
+          factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r`
+          to multiply an established inequality by a nonnegative factor; provide
+          the premises in the lemma''s expected order instead of guessing a multiplication-monotonicity
+          API.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00015
+        section: lemmas
+        content: 'To lift a natural bound into `R`, expose the coercion and apply
+          `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <= INR c;
+          apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to
+          the natural positivity hypothesis rather than using a nonexistent `.mpr`
+          projection.
+
+          '
+        helpful: 1
+        harmful: 0
+      - id: rocq-00016
+        section: pitfalls
+        content: 'For real equations involving a single reciprocal `1 / x`, after
+          proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity
+          with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then
+          use `ring` and `nra` on the resulting polynomial equation instead of relying
+          on `field_simplify` to normalize it.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00017
+        section: tactics
+        content: 'To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt
+          0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in
+          the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \/ t
+          = -1` by `lra`.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00018
+        section: pitfalls
+        content: 'For bounded natural searches involving `Nat.lcm` or `Nat.gcd`,
+          avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive
+          evaluation can stack-overflow; reduce only explicitly closed numeral cases,
+          using `change` to expose a known numeral equality when needed.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00019
+        section: strategy
+        content: 'When proving a least witness by finite exclusion, first split with
+          `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch
+          immediately, handle the finitely many numeral cases explicitly under `Hlt`,
+          and discharge any residual symbolic successor branch directly from `Hlt`
+          rather than using blanket `all:` tactics or unstable numbered selectors.
+
+          '
+        helpful: 1
+        harmful: 1
+      - id: rocq-00020
+        section: tactics
+        content: 'For instantiated recurrence equations containing closed casts and
+          natural sums, use `cbv [INR]` to evaluate the casts, then normalize each
+          index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`;
+          after these rewrites, `lra` can solve the resulting linear real-equation
+          chain.
+
+          '
+        helpful: 0
+        harmful: 1
+      - id: rocq-00021
+        section: tactics
+        content: 'For an explicit `Ensemble` built from nested `Add`, first unfold
+          `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`,
+          and `Union` equivalences; once the resulting disjunctions and `False` cases
+          are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer
+          by layer, prove each freshness premise by unfolding `In` and `Add` and
+          inverting membership hypotheses, and finish the empty base with `card_empty`.
+
+          '
+        helpful: 1
+        harmful: 0
+      - id: rocq-00022
+        section: lemmas
+        content: "For trigonometric goals involving complementary or doubled angles,\
+          \ use the library lemma with the exact goal orientation\u2014such as `sin_PI_x`\
+          \ or `sin_2a`, rewriting with it before `reflexivity` when necessary. For\
+          \ positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x`\
+          \ and `x < PI` explicitly.\n"
+        helpful: 0
+        harmful: 0
+      - id: rocq-00023
+        section: lemmas
+        content: 'For logarithmic inequalities and identities, derive `0 < ln a`
+          from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting
+          with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that
+          the base `t` is positive, normalize the casted exponent with `cbv [INR]`,
+          and use the resulting instantiated equality directly.
+
+          '
+        helpful: 1
+        harmful: 0
+      - id: rocq-00024
+        section: tactics
+        content: 'For an unbounded quadratic equation over `nat` that `nia` cannot
+          solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound.
+          In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono;
+          lia`, then let `nia` derive the contradiction from the original equation.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00025
+        section: pitfalls
+        content: 'A closed cast such as `INR 4` is not necessarily definitionally
+          convertible to `(4 : R)`, so `change` may fail. First prove an explicit
+          equality, for example with `cbv [INR]; ring`, and rewrite with that equality
+          before applying real arithmetic.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00026
+        section: lemmas
+        content: 'For a target or hypothesis containing `ln (a * b)`, explicitly
+          rewrite it with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation
+          does not expose this logarithmic product identity on its own.
+
+          '
+        helpful: 0
+        harmful: 0
+      - id: rocq-00027
+        section: lemmas
+        content: 'For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^
+          2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from
+          `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 :
+          R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.
+
+          '
+        helpful: 0
+        harmful: 0
+    evidence: '[{"role": "curator", "status": "complete", "base_sha256": "1e4aec7dbbe80e7a320db17a7c18fe0859bfc00898837c297be248a05dbde067",
+      "plan": {"reasoning": "A missing local helper-premise repair, not a complete
+      source proof", "decisions": [{"draft": "d1", "action": "add", "closest_rule":
+      "b13", "section": "pitfalls", "content": "When an instantiated helper requires
+      a disequality in the reverse orientation from an available hypothesis, introduce
+      the alleged equality, apply that hypothesis, reverse the equality with symmetry,
+      and finish with the introduced equality. Check which variable pair each helper
+      premise requires.", "reason": "Existing product-bound guidance does not cover
+      reversing a disequality premise", "receipts": ["r1"], "failure_receipt": ""}]},
+      "diagnostics": []}]'
+    contexts:
+    - problem_file: miniF2F/test/amc/amc12_2000_p1.v
+      theorem_name: amc12_2000_p1
+      prefix:
+      - intros i m o H.
+      - destruct H as [Him [Hmo [Hoi Hprod]]].
+      - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <>
+        z -> x * y * z = 2001 -> x + y + z <= 671).'
+      - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+      - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+      - '- subst x.'
+      - simpl in Hp.
+      - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+      - + subst y.
+      - nia.
+      - '+ assert (Hy3 : 3 <= y) by nia.'
+      - 'assert (Hbound : 3 * z <= y * z).'
+      - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+      - replace (y + 0)%nat with y in Hp by lia.
+      - rewrite Hp in Hbound.
+      - nia.
+      - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+      - + subst x.
+      - nia.
+      - '+ assert (Hx3 : 3 <= x) by nia.'
+      - 'assert (Hy4 : 4 <= y) by nia.'
+      - 'assert (Hxy12 : 12 <= x * y).'
+      - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+      - 'assert (H2 : 3 * y <= x * y).'
+      - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+      - nia.
+      - '}'
+      - 'assert (Hbound : 12 * z <= (x * y) * z).'
+      - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+      - rewrite Hp in Hbound.
+      - nia.
+      - '}'
+      - destruct (le_gt_dec i m) as [Himle | Hmil].
+      - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+      - + apply Hsorted; nia.
+      - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+      - '* assert (Ho_m : o <> m).'
+      - '{ intro E. apply Hmo. symmetry. exact E. }'
+      - 'assert (H : i + o + m <= 671).'
+      - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+      - '- exact Hiole.'
+      - '- nia.'
+      - '- intro E. apply Hoi. symmetry. exact E.'
+      - '- exact Ho_m.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '* assert (H : o + i + m <= 671).'
+      - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+      - '- nia.'
+      - '- exact Himle.'
+      - '- exact Hoi.'
+      - '- exact Him.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+      - + destruct (le_gt_dec m o) as [Hmole | Homl].
+      - '* assert (H : m + i + o <= 671).'
+      - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+      - '- nia.'
+      - '- exact Hiole.'
+      source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+      problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+      environment: Require Import Arith.('Require Import Lia.', 'Require Import Lra.',
+        'Require Import Psatz.', 'Require Import Field.')
+      version: 1
+    - problem_file: miniF2F/test/amc/amc12_2000_p1.v
+      theorem_name: amc12_2000_p1
+      prefix:
+      - intros i m o H.
+      - destruct H as [Him [Hmo [Hoi Hprod]]].
+      - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <>
+        z -> x * y * z = 2001 -> x + y + z <= 671).'
+      - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+      - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+      - '- subst x.'
+      - simpl in Hp.
+      - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+      - + subst y.
+      - nia.
+      - '+ assert (Hy3 : 3 <= y) by nia.'
+      - 'assert (Hbound : 3 * z <= y * z).'
+      - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+      - replace (y + 0)%nat with y in Hp by lia.
+      - rewrite Hp in Hbound.
+      - nia.
+      - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+      - + subst x.
+      - nia.
+      - '+ assert (Hx3 : 3 <= x) by nia.'
+      - 'assert (Hy4 : 4 <= y) by nia.'
+      - 'assert (Hxy12 : 12 <= x * y).'
+      - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+      - 'assert (H2 : 3 * y <= x * y).'
+      - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+      - nia.
+      - '}'
+      - 'assert (Hbound : 12 * z <= (x * y) * z).'
+      - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+      - rewrite Hp in Hbound.
+      - nia.
+      - '}'
+      - destruct (le_gt_dec i m) as [Himle | Hmil].
+      - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+      - + apply Hsorted; nia.
+      - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+      - '* assert (Ho_m : o <> m).'
+      - '{ intro E. apply Hmo. symmetry. exact E. }'
+      - 'assert (H : i + o + m <= 671).'
+      - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+      - '- exact Hiole.'
+      - '- nia.'
+      - '- intro E. apply Hoi. symmetry. exact E.'
+      - '- exact Ho_m.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '* assert (H : o + i + m <= 671).'
+      - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+      - '- nia.'
+      - '- exact Himle.'
+      - '- exact Hoi.'
+      - '- exact Him.'
+      - '- nia.'
+      - '}'
+      - nia.
+      - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+      - + destruct (le_gt_dec m o) as [Hmole | Homl].
+      - '* assert (H : m + i + o <= 671).'
+      - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+      - '- nia.'
+      - '- exact Hiole.'
+      - '- intro E. apply Him. symmetry. exact E.'
+      source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+      problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+      environment: Require Import Arith.('Require Import Lia.', 'Require Import Lra.',
+        'Require Import Psatz.', 'Require Import Field.')
+      version: 1
+    drafts:
+    - draft_id: repair-6895729755609e49c78ff071
+      context_id: ctx-ee47be55d5b31fc1c5607029
+      proposed_code: intro E. apply Him. symmetry. exact E.
+      purpose: 'Reverse the equality argument before applying Him: Him has the reverse
+        disequality orientation from the helper premise; The selected helper premise
+        requires m <> i and Him : i <> m is available; preserve the current bullet
+        focus'
+      source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+      error: '(-32003, ''Coq: In environment\ni, m, o : nat\nHim : i <> m\nHmo :
+        m <> o\nHoi : o <> i\nHprod : i * m * o = 2001\nHsorted :\n  forall x y z
+        : nat,\n  x <= y ->\n  y <= z -> x <> y -> y <> z -> x * y * z = 2001 ->
+        x + y + z <= 671\nHmil : i > m\nHiole : i <= o\nHmole : m <= o\nThe term
+        "Him" has type "i <> m" while it is expected to have type \n"m <> i" (cannot
+        unify "m = i" and "i = m").'')'
+      remaining_goals: []
+    receipts:
+    - context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo [Hoi Hprod]]].
+        - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y
+          <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+        - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+        - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+        - '- subst x.'
+        - simpl in Hp.
+        - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+        - + subst y.
+        - nia.
+        - '+ assert (Hy3 : 3 <= y) by nia.'
+        - 'assert (Hbound : 3 * z <= y * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+        - replace (y + 0)%nat with y in Hp by lia.
+        - rewrite Hp in Hbound.
+        - nia.
+        - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+        - + subst x.
+        - nia.
+        - '+ assert (Hx3 : 3 <= x) by nia.'
+        - 'assert (Hy4 : 4 <= y) by nia.'
+        - 'assert (Hxy12 : 12 <= x * y).'
+        - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+        - 'assert (H2 : 3 * y <= x * y).'
+        - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+        - nia.
+        - '}'
+        - 'assert (Hbound : 12 * z <= (x * y) * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+        - rewrite Hp in Hbound.
+        - nia.
+        - '}'
+        - destruct (le_gt_dec i m) as [Himle | Hmil].
+        - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+        - + apply Hsorted; nia.
+        - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+        - '* assert (Ho_m : o <> m).'
+        - '{ intro E. apply Hmo. symmetry. exact E. }'
+        - 'assert (H : i + o + m <= 671).'
+        - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+        - '- exact Hiole.'
+        - '- nia.'
+        - '- intro E. apply Hoi. symmetry. exact E.'
+        - '- exact Ho_m.'
+        - '- nia.'
+        - '}'
+        - nia.
+        - '* assert (H : o + i + m <= 671).'
+        - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+        - '- nia.'
+        - '- exact Himle.'
+        - '- exact Hoi.'
+        - '- exact Him.'
+        - '- nia.'
+        - '}'
+        - nia.
+        - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+        - + destruct (le_gt_dec m o) as [Hmole | Homl].
+        - '* assert (H : m + i + o <= 671).'
+        - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+        - '- nia.'
+        - '- exact Hiole.'
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      snippet: '- intro E. apply Him. symmetry. exact E.'
+      status: executed_open
+      checked:
+        feedback:
+          success: false
+          failing_index: 63
+          failing_tactic: Qed.
+          error_message: '(-32003, ''Coq:  (in proof amc12_2000_p1): Attempt to save
+            an incomplete proof\n(there are remaining open goals).'')'
+          remaining_goals: []
+          proof_so_far:
+          - intros i m o H.
+          - destruct H as [Him [Hmo [Hoi Hprod]]].
+          - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y ->
+            y <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+          - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+          - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+          - '- subst x.'
+          - simpl in Hp.
+          - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+          - + subst y.
+          - nia.
+          - '+ assert (Hy3 : 3 <= y) by nia.'
+          - 'assert (Hbound : 3 * z <= y * z).'
+          - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+          - replace (y + 0)%nat with y in Hp by lia.
+          - rewrite Hp in Hbound.
+          - nia.
+          - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+          - + subst x.
+          - nia.
+          - '+ assert (Hx3 : 3 <= x) by nia.'
+          - 'assert (Hy4 : 4 <= y) by nia.'
+          - 'assert (Hxy12 : 12 <= x * y).'
+          - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+          - 'assert (H2 : 3 * y <= x * y).'
+          - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+          - nia.
+          - '}'
+          - 'assert (Hbound : 12 * z <= (x * y) * z).'
+          - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+          - rewrite Hp in Hbound.
+          - nia.
+          - '}'
+          - destruct (le_gt_dec i m) as [Himle | Hmil].
+          - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+          - + apply Hsorted; nia.
+          - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+          - '* assert (Ho_m : o <> m).'
+          - '{ intro E. apply Hmo. symmetry. exact E. }'
+          - 'assert (H : i + o + m <= 671).'
+          - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+          - '- exact Hiole.'
+          - '- nia.'
+          - '- intro E. apply Hoi. symmetry. exact E.'
+          - '- exact Ho_m.'
+          - '- nia.'
+          - '}'
+          - nia.
+          - '* assert (H : o + i + m <= 671).'
+          - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+          - '- nia.'
+          - '- exact Himle.'
+          - '- exact Hoi.'
+          - '- exact Him.'
+          - '- nia.'
+          - '}'
+          - nia.
+          - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+          - + destruct (le_gt_dec m o) as [Hmole | Homl].
+          - '* assert (H : m + i + o <= 671).'
+          - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+          - '- nia.'
+          - '- exact Hiole.'
+          - '- intro E. apply Him. symmetry. exact E.'
+          finished: false
+          probe: null
+          auto_finished: false
+        outcome: incomplete
+        elapsed: 1.3120146291330457
+        rpc_calls: 102
+        view: '{"outcome": "incomplete", "failing_tactic": "Qed.", "error": "(-32003,
+          ''Coq:  (in proof amc12_2000_p1): Attempt to save an incomplete proof\\n(there
+          are remaining open goals).'')", "verified_prefix": ["intros i m o H.",
+          "destruct H as [Him [Hmo [Hoi Hprod]]].", "assert (Hsorted : forall x y
+          z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x
+          + y + z <= 671).", "{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.", "destruct
+          (eq_nat_dec x 1) as [Hx1 | Hx1].", "- subst x.", "simpl in Hp.", "destruct
+          (eq_nat_dec y 2) as [Hy2 | Hy2].", "+ subst y.", "nia.", "+ assert (Hy3
+          : 3 <= y) by nia.", "assert (Hbound : 3 * z <= y * z).", "{ apply Nat.mul_le_mono_r.
+          exact Hy3. }", "replace (y + 0)%nat with y in Hp by lia.", "rewrite Hp
+          in Hbound.", "nia.", "- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].", "+
+          subst x.", "nia.", "+ assert (Hx3 : 3 <= x) by nia.", "assert (Hy4 : 4
+          <= y) by nia.", "assert (Hxy12 : 12 <= x * y).", "{ assert (H1 : 3 * 4
+          <= 3 * y) by nia.", "assert (H2 : 3 * y <= x * y).", "{ apply Nat.mul_le_mono_r.
+          exact Hx3. }", "nia.", "}", "assert (Hbound : 12 * z <= (x * y) * z).",
+          "{ apply Nat.mul_le_mono_r. exact Hxy12. }", "rewrite Hp in Hbound.", "nia.",
+          "}", "destruct (le_gt_dec i m) as [Himle | Hmil].", "- destruct (le_gt_dec
+          m o) as [Hmole | Homl].", "+ apply Hsorted; nia.", "+ destruct (le_gt_dec
+          i o) as [Hiole | Hoil].", "* assert (Ho_m : o <> m).", "{ intro E. apply
+          Hmo. symmetry. exact E. }", "assert (H : i + o + m <= 671).", "{ apply
+          Hsorted with (x := i) (y := o) (z := m).", "- exact Hiole.", "- nia.",
+          "- intro E. apply Hoi. symmetry. exact E.", "- exact Ho_m.", "- nia.",
+          "}", "nia.", "* assert (H : o + i + m <= 671).", "{ apply Hsorted with
+          (x := o) (y := i) (z := m).", "- nia.", "- exact Himle.", "- exact Hoi.",
+          "- exact Him.", "- nia.", "}", "nia.", "- destruct (le_gt_dec i o) as [Hiole
+          | Hoil].", "+ destruct (le_gt_dec m o) as [Hmole | Homl].", "* assert (H
+          : m + i + o <= 671).", "{ apply Hsorted with (x := m) (y := i) (z := o).",
+          "- nia.", "- exact Hiole.", "- intro E. apply Him. symmetry. exact E."],
+          "total_goals": 0, "goals": [], "automation": [], "inspection": "InspectProofState(tactics=verified
+          prefix, start=4)"}'
+      elapsed: 1.3120146291330457
+      rpc_calls: 102
+    prefix: []
+    allow_tools: true
+  answers:
+  - answer:
+      reasoning: A missing local helper-premise repair, not a complete source proof
+      decisions:
+      - draft: d1
+        action: add
+        closest_rule: b13
+        section: pitfalls
+        content: When an instantiated helper requires a disequality in the reverse
+          orientation from an available hypothesis, introduce the alleged equality,
+          apply that hypothesis, reverse the equality with symmetry, and finish with
+          the introduced equality. Check which variable pair each helper premise
+          requires.
+        reason: Existing product-bound guidance does not cover reversing a disequality
+          premise
+        receipts:
+        - r1
+        failure_receipt: ''
+- demonstration: reviewer_accepts_distinct_helper_operation
+  query: JudgeBookEdit
+  args:
+    action: add
+    proposed_rule: When an instantiated helper requires a disequality in the reverse
+      orientation from an available hypothesis, introduce the alleged equality, apply
+      that hypothesis, reverse the equality with symmetry, and finish with the introduced
+      equality. Check which variable pair each helper premise requires.
+    target: b13
+    rules: '[{"alias": "b1", "id": "rocq-00001", "section": "pitfalls", "content":
+      "When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite
+      Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing
+      `Hf` does not connect it to `Hx`.\n"}, {"alias": "b2", "id": "rocq-00002",
+      "section": "tactics", "content": "For an induction hypothesis relating recursive
+      `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose
+      the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S
+      n`; then apply `rewrite IH; lia`.\n"}, {"alias": "b3", "id": "rocq-00003",
+      "section": "tactics", "content": "For goals over `nat` with hypotheses such
+      as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use
+      `intros` followed by `nia`; it can handle the nonlinear products and truncated
+      subtraction directly.\n"}, {"alias": "b4", "id": "rocq-00004", "section": "tactics",
+      "content": "For closed `nat` equalities built from executable finite-list operations
+      such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`;
+      use `reflexivity` afterward if the resulting definitional equality is not closed
+      automatically.\n"}, {"alias": "b5", "id": "rocq-00005", "section": "pitfalls",
+      "content": "When applying a recurrence hypothesis whose predecessor uses truncated
+      subtraction, first prove the exact natural-number equality (for example, `((2
+      * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality
+      before applying the hypothesis so its indices unify.\n"}, {"alias": "b6", "id":
+      "rocq-00006", "section": "pitfalls", "content": "Under an active `R_scope`,
+      annotate natural-number indices, arithmetic, and order conditions with `%nat`
+      (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for
+      real-valued conclusions to avoid coercion and comparison-type errors.\n"},
+      {"alias": "b7", "id": "rocq-00007", "section": "lemmas", "content": "For nat
+      modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis
+      `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting
+      arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add`
+      first and simplify the remaining `r mod m`.\n"}, {"alias": "b8", "id": "rocq-00009",
+      "section": "strategy", "content": "For finite nonnegative real sequences with
+      a fixed-sum product goal, prove the stronger normalized inequality `prod_n
+      a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average
+      throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n"},
+      {"alias": "b9", "id": "rocq-00010", "section": "pitfalls", "content": "Do not
+      obtain a successor product bound by multiplying an induction hypothesis such
+      as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may
+      exceed `1`. An induction proof must retain a bound parameterized by the total
+      sum or average.\n"}, {"alias": "b10", "id": "rocq-00011", "section": "tactics",
+      "content": "Before using `nra` in AM-GM base or successor cases, unfold or
+      rewrite the relevant `sum_n` and `prod_n` expressions, including base cases
+      such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator
+      condition; `nra` cannot reason through opaque recursive definitions or supply
+      the global inequality.\n"}, {"alias": "b11", "id": "rocq-00012", "section":
+      "tactics", "content": "For a real goal `0 <= t^2` where `Rle_0_sqr` does not
+      unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`;
+      use `ring` separately for completing-square identities before finishing the
+      resulting linear inequality with `lra`.\n"}, {"alias": "b12", "id": "rocq-00013",
+      "section": "lemmas", "content": "For positivity of a recursive real product
+      whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain
+      `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the
+      product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity
+      through opaque recursive products.\n"}, {"alias": "b13", "id": "rocq-00014",
+      "section": "lemmas", "content": "For natural-number product bounds, use `Nat.mul_le_mono`
+      to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r`
+      to multiply an established inequality by a nonnegative factor; provide the
+      premises in the lemma''s expected order instead of guessing a multiplication-monotonicity
+      API.\n"}, {"alias": "b14", "id": "rocq-00015", "section": "lemmas", "content":
+      "To lift a natural bound into `R`, expose the coercion and apply `le_INR`:
+      for example, prove `2 <= INR c` with `change INR 2 <= INR c; apply le_INR;
+      lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity
+      hypothesis rather than using a nonexistent `.mpr` projection.\n"}, {"alias":
+      "b15", "id": "rocq-00016", "section": "pitfalls", "content": "For real equations
+      involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly
+      by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x *
+      / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting
+      polynomial equation instead of relying on `field_simplify` to normalize it.\n"},
+      {"alias": "b16", "id": "rocq-00017", "section": "tactics", "content": "To turn
+      `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative
+      branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with
+      `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n"}, {"alias": "b17",
+      "id": "rocq-00018", "section": "pitfalls", "content": "For bounded natural
+      searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`,
+      or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce
+      only explicitly closed numeral cases, using `change` to expose a known numeral
+      equality when needed.\n"}, {"alias": "b18", "id": "rocq-00019", "section":
+      "strategy", "content": "When proving a least witness by finite exclusion, first
+      split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound
+      branch immediately, handle the finitely many numeral cases explicitly under
+      `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt`
+      rather than using blanket `all:` tactics or unstable numbered selectors.\n"},
+      {"alias": "b19", "id": "rocq-00020", "section": "tactics", "content": "For
+      instantiated recurrence equations containing closed casts and natural sums,
+      use `cbv [INR]` to evaluate the casts, then normalize each index explicitly
+      with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites,
+      `lra` can solve the resulting linear real-equation chain.\n"}, {"alias": "b20",
+      "id": "rocq-00021", "section": "tactics", "content": "For an explicit `Ensemble`
+      built from nested `Add`, first unfold `Add` and rewrite membership using the
+      corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the
+      resulting disjunctions and `False` cases are exposed, use `intuition; lia`.
+      For cardinality, apply `card_add` layer by layer, prove each freshness premise
+      by unfolding `In` and `Add` and inverting membership hypotheses, and finish
+      the empty base with `card_empty`.\n"}, {"alias": "b21", "id": "rocq-00022",
+      "section": "lemmas", "content": "For trigonometric goals involving complementary
+      or doubled angles, use the library lemma with the exact goal orientation\u2014such
+      as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary.
+      For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and
+      `x < PI` explicitly.\n"}, {"alias": "b22", "id": "rocq-00023", "section": "lemmas",
+      "content": "For logarithmic inequalities and identities, derive `0 < ln a`
+      from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting
+      with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the
+      base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use
+      the resulting instantiated equality directly.\n"}, {"alias": "b23", "id": "rocq-00024",
+      "section": "tactics", "content": "For an unbounded quadratic equation over
+      `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)`
+      to obtain a finite bound. In the other branch derive `k * k <= b * b` with
+      `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction
+      from the original equation.\n"}, {"alias": "b24", "id": "rocq-00025", "section":
+      "pitfalls", "content": "A closed cast such as `INR 4` is not necessarily definitionally
+      convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality,
+      for example with `cbv [INR]; ring`, and rewrite with that equality before applying
+      real arithmetic.\n"}, {"alias": "b25", "id": "rocq-00026", "section": "lemmas",
+      "content": "For a target or hypothesis containing `ln (a * b)`, explicitly
+      rewrite it with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation
+      does not expose this logarithmic product identity on its own.\n"}, {"alias":
+      "b26", "id": "rocq-00027", "section": "lemmas", "content": "For real square-root
+      goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2`
+      to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`,
+      first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n"}]'
+    receipts:
+    - context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo [Hoi Hprod]]].
+        - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y
+          <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+        - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+        - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+        - '- subst x.'
+        - simpl in Hp.
+        - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+        - + subst y.
+        - nia.
+        - '+ assert (Hy3 : 3 <= y) by nia.'
+        - 'assert (Hbound : 3 * z <= y * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+        - replace (y + 0)%nat with y in Hp by lia.
+        - rewrite Hp in Hbound.
+        - nia.
+        - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+        - + subst x.
+        - nia.
+        - '+ assert (Hx3 : 3 <= x) by nia.'
+        - 'assert (Hy4 : 4 <= y) by nia.'
+        - 'assert (Hxy12 : 12 <= x * y).'
+        - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+        - 'assert (H2 : 3 * y <= x * y).'
+        - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+        - nia.
+        - '}'
+        - 'assert (Hbound : 12 * z <= (x * y) * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+        - rewrite Hp in Hbound.
+        - nia.
+        - '}'
+        - destruct (le_gt_dec i m) as [Himle | Hmil].
+        - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+        - + apply Hsorted; nia.
+        - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+        - '* assert (Ho_m : o <> m).'
+        - '{ intro E. apply Hmo. symmetry. exact E. }'
+        - 'assert (H : i + o + m <= 671).'
+        - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+        - '- exact Hiole.'
+        - '- nia.'
+        - '- intro E. apply Hoi. symmetry. exact E.'
+        - '- exact Ho_m.'
+        - '- nia.'
+        - '}'
+        - nia.
+        - '* assert (H : o + i + m <= 671).'
+        - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+        - '- nia.'
+        - '- exact Himle.'
+        - '- exact Hoi.'
+        - '- exact Him.'
+        - '- nia.'
+        - '}'
+        - nia.
+        - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+        - + destruct (le_gt_dec m o) as [Hmole | Homl].
+        - '* assert (H : m + i + o <= 671).'
+        - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+        - '- nia.'
+        - '- exact Hiole.'
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      snippet: '- intro E. apply Him. symmetry. exact E.'
+      status: executed_open
+      checked:
+        feedback:
+          success: false
+          failing_index: 63
+          failing_tactic: Qed.
+          error_message: '(-32003, ''Coq:  (in proof amc12_2000_p1): Attempt to save
+            an incomplete proof\n(there are remaining open goals).'')'
+          remaining_goals: []
+          proof_so_far:
+          - intros i m o H.
+          - destruct H as [Him [Hmo [Hoi Hprod]]].
+          - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y ->
+            y <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+          - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+          - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+          - '- subst x.'
+          - simpl in Hp.
+          - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+          - + subst y.
+          - nia.
+          - '+ assert (Hy3 : 3 <= y) by nia.'
+          - 'assert (Hbound : 3 * z <= y * z).'
+          - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+          - replace (y + 0)%nat with y in Hp by lia.
+          - rewrite Hp in Hbound.
+          - nia.
+          - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+          - + subst x.
+          - nia.
+          - '+ assert (Hx3 : 3 <= x) by nia.'
+          - 'assert (Hy4 : 4 <= y) by nia.'
+          - 'assert (Hxy12 : 12 <= x * y).'
+          - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+          - 'assert (H2 : 3 * y <= x * y).'
+          - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+          - nia.
+          - '}'
+          - 'assert (Hbound : 12 * z <= (x * y) * z).'
+          - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+          - rewrite Hp in Hbound.
+          - nia.
+          - '}'
+          - destruct (le_gt_dec i m) as [Himle | Hmil].
+          - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+          - + apply Hsorted; nia.
+          - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+          - '* assert (Ho_m : o <> m).'
+          - '{ intro E. apply Hmo. symmetry. exact E. }'
+          - 'assert (H : i + o + m <= 671).'
+          - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+          - '- exact Hiole.'
+          - '- nia.'
+          - '- intro E. apply Hoi. symmetry. exact E.'
+          - '- exact Ho_m.'
+          - '- nia.'
+          - '}'
+          - nia.
+          - '* assert (H : o + i + m <= 671).'
+          - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+          - '- nia.'
+          - '- exact Himle.'
+          - '- exact Hoi.'
+          - '- exact Him.'
+          - '- nia.'
+          - '}'
+          - nia.
+          - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+          - + destruct (le_gt_dec m o) as [Hmole | Homl].
+          - '* assert (H : m + i + o <= 671).'
+          - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+          - '- nia.'
+          - '- exact Hiole.'
+          - '- intro E. apply Him. symmetry. exact E.'
+          finished: false
+          probe: null
+          auto_finished: false
+        outcome: incomplete
+        elapsed: 1.3120146291330457
+        rpc_calls: 102
+        view: '{"outcome": "incomplete", "failing_tactic": "Qed.", "error": "(-32003,
+          ''Coq:  (in proof amc12_2000_p1): Attempt to save an incomplete proof\\n(there
+          are remaining open goals).'')", "verified_prefix": ["intros i m o H.",
+          "destruct H as [Him [Hmo [Hoi Hprod]]].", "assert (Hsorted : forall x y
+          z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x
+          + y + z <= 671).", "{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.", "destruct
+          (eq_nat_dec x 1) as [Hx1 | Hx1].", "- subst x.", "simpl in Hp.", "destruct
+          (eq_nat_dec y 2) as [Hy2 | Hy2].", "+ subst y.", "nia.", "+ assert (Hy3
+          : 3 <= y) by nia.", "assert (Hbound : 3 * z <= y * z).", "{ apply Nat.mul_le_mono_r.
+          exact Hy3. }", "replace (y + 0)%nat with y in Hp by lia.", "rewrite Hp
+          in Hbound.", "nia.", "- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].", "+
+          subst x.", "nia.", "+ assert (Hx3 : 3 <= x) by nia.", "assert (Hy4 : 4
+          <= y) by nia.", "assert (Hxy12 : 12 <= x * y).", "{ assert (H1 : 3 * 4
+          <= 3 * y) by nia.", "assert (H2 : 3 * y <= x * y).", "{ apply Nat.mul_le_mono_r.
+          exact Hx3. }", "nia.", "}", "assert (Hbound : 12 * z <= (x * y) * z).",
+          "{ apply Nat.mul_le_mono_r. exact Hxy12. }", "rewrite Hp in Hbound.", "nia.",
+          "}", "destruct (le_gt_dec i m) as [Himle | Hmil].", "- destruct (le_gt_dec
+          m o) as [Hmole | Homl].", "+ apply Hsorted; nia.", "+ destruct (le_gt_dec
+          i o) as [Hiole | Hoil].", "* assert (Ho_m : o <> m).", "{ intro E. apply
+          Hmo. symmetry. exact E. }", "assert (H : i + o + m <= 671).", "{ apply
+          Hsorted with (x := i) (y := o) (z := m).", "- exact Hiole.", "- nia.",
+          "- intro E. apply Hoi. symmetry. exact E.", "- exact Ho_m.", "- nia.",
+          "}", "nia.", "* assert (H : o + i + m <= 671).", "{ apply Hsorted with
+          (x := o) (y := i) (z := m).", "- nia.", "- exact Himle.", "- exact Hoi.",
+          "- exact Him.", "- nia.", "}", "nia.", "- destruct (le_gt_dec i o) as [Hiole
+          | Hoil].", "+ destruct (le_gt_dec m o) as [Hmole | Homl].", "* assert (H
+          : m + i + o <= 671).", "{ apply Hsorted with (x := m) (y := i) (z := o).",
+          "- nia.", "- exact Hiole.", "- intro E. apply Him. symmetry. exact E."],
+          "total_goals": 0, "goals": [], "automation": [], "inspection": "InspectProofState(tactics=verified
+          prefix, start=4)"}'
+      elapsed: 1.3120146291330457
+      rpc_calls: 102
+  answers:
+  - answer:
+      relation: new_operation
+      closest_rule: b13
+      reason: Existing product-bound guidance addresses arithmetic; it does not explain
+        reversing the exact disequality premise rejected here
+- demonstration: reviewer_routes_repeated_operation_to_example
+  query: JudgeBookEdit
+  args:
+    action: add
+    proposed_rule: When an instantiated helper requires a disequality in the reverse
+      orientation from an available hypothesis, introduce the alleged equality, apply
+      that hypothesis, reverse the equality with symmetry, and finish with the introduced
+      equality. Check which variable pair each helper premise requires.
+    target: b27
+    rules: '[{"alias": "b1", "content": "When `Hf : forall x, f x = polynomial x`
+      and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before
+      invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n"},
+      {"alias": "b2", "content": "For an induction hypothesis relating recursive
+      `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose
+      the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S
+      n`; then apply `rewrite IH; lia`.\n"}, {"alias": "b3", "content": "For goals
+      over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor
+      or exact-value conclusion, use `intros` followed by `nia`; it can handle the
+      nonlinear products and truncated subtraction directly.\n"}, {"alias": "b4",
+      "content": "For closed `nat` equalities built from executable finite-list operations
+      such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`;
+      use `reflexivity` afterward if the resulting definitional equality is not closed
+      automatically.\n"}, {"alias": "b5", "content": "When applying a recurrence
+      hypothesis whose predecessor uses truncated subtraction, first prove the exact
+      natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1`
+      by `simpl; lia`), then rewrite with that equality before applying the hypothesis
+      so its indices unify.\n"}, {"alias": "b6", "content": "Under an active `R_scope`,
+      annotate natural-number indices, arithmetic, and order conditions with `%nat`
+      (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for
+      real-valued conclusions to avoid coercion and comparison-type errors.\n"},
+      {"alias": "b7", "content": "For nat modulo goals, explicitly instantiate `Nat.div_mod_eq
+      x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then
+      use `nia` for the resulting arithmetic. When the dividend is normalized as
+      `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod
+      m`.\n"}, {"alias": "b8", "content": "For finite nonnegative real sequences
+      with a fixed-sum product goal, prove the stronger normalized inequality `prod_n
+      a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average
+      throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n"},
+      {"alias": "b9", "content": "Do not obtain a successor product bound by multiplying
+      an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative
+      factor: that factor may exceed `1`. An induction proof must retain a bound
+      parameterized by the total sum or average.\n"}, {"alias": "b10", "content":
+      "Before using `nra` in AM-GM base or successor cases, unfold or rewrite the
+      relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n
+      a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition;
+      `nra` cannot reason through opaque recursive definitions or supply the global
+      inequality.\n"}, {"alias": "b11", "content": "For a real goal `0 <= t^2` where
+      `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring;
+      apply Rle_0_sqr`; use `ring` separately for completing-square identities before
+      finishing the resulting linear inequality with `lra`.\n"}, {"alias": "b12",
+      "content": "For positivity of a recursive real product whose successor factor
+      is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`,
+      prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos;
+      assumption`; `nra` does not infer positivity through opaque recursive products.\n"},
+      {"alias": "b13", "content": "For natural-number product bounds, use `Nat.mul_le_mono`
+      to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r`
+      to multiply an established inequality by a nonnegative factor; provide the
+      premises in the lemma''s expected order instead of guessing a multiplication-monotonicity
+      API.\n"}, {"alias": "b14", "content": "To lift a natural bound into `R`, expose
+      the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change
+      INR 2 <= INR c; apply le_INR; lia`; for strict positivity of a cast, apply
+      `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent
+      `.mpr` projection.\n"}, {"alias": "b15", "content": "For real equations involving
+      a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by
+      `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x
+      = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial
+      equation instead of relying on `field_simplify` to normalize it.\n"}, {"alias":
+      "b16", "content": "To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt
+      0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the
+      negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by
+      `lra`.\n"}, {"alias": "b17", "content": "For bounded natural searches involving
+      `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`,
+      since recursive evaluation can stack-overflow; reduce only explicitly closed
+      numeral cases, using `change` to expose a known numeral equality when needed.\n"},
+      {"alias": "b18", "content": "When proving a least witness by finite exclusion,
+      first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound
+      branch immediately, handle the finitely many numeral cases explicitly under
+      `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt`
+      rather than using blanket `all:` tactics or unstable numbered selectors.\n"},
+      {"alias": "b19", "content": "For instantiated recurrence equations containing
+      closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then
+      normalize each index explicitly with `replace (a + b)%nat with c%nat in H by
+      reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation
+      chain.\n"}, {"alias": "b20", "content": "For an explicit `Ensemble` built from
+      nested `Add`, first unfold `Add` and rewrite membership using the corresponding
+      `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions
+      and `False` cases are exposed, use `intuition; lia`. For cardinality, apply
+      `card_add` layer by layer, prove each freshness premise by unfolding `In` and
+      `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n"},
+      {"alias": "b21", "content": "For trigonometric goals involving complementary
+      or doubled angles, use the library lemma with the exact goal orientation\u2014such
+      as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary.
+      For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and
+      `x < PI` explicitly.\n"}, {"alias": "b22", "content": "For logarithmic inequalities
+      and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing`
+      to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln
+      t`, use `ln_pow` with a proof that the base `t` is positive, normalize the
+      casted exponent with `cbv [INR]`, and use the resulting instantiated equality
+      directly.\n"}, {"alias": "b23", "content": "For an unbounded quadratic equation
+      over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b
+      k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with
+      `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction
+      from the original equation.\n"}, {"alias": "b24", "content": "A closed cast
+      such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`,
+      so `change` may fail. First prove an explicit equality, for example with `cbv
+      [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n"},
+      {"alias": "b25", "content": "For a target or hypothesis containing `ln (a *
+      b)`, explicitly rewrite it with `ln_mult a b Ha Hb` before calling `nra`; arithmetic
+      automation does not expose this logarithmic product identity on its own.\n"},
+      {"alias": "b26", "content": "For real square-root goals, use `pow2_sqrt` to
+      prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t
+      ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt
+      ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n"}, {"alias":
+      "b27", "content": "When an instantiated helper requires a disequality in the
+      reverse orientation from an available hypothesis, introduce the alleged equality,
+      apply that hypothesis, reverse the equality with symmetry, and finish with
+      the introduced equality. Check which variable pair each helper premise requires."}]'
+    receipts:
+    - context:
+        problem_file: miniF2F/test/amc/amc12_2000_p1.v
+        theorem_name: amc12_2000_p1
+        prefix:
+        - intros i m o H.
+        - destruct H as [Him [Hmo [Hoi Hprod]]].
+        - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y
+          <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+        - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+        - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+        - '- subst x.'
+        - simpl in Hp.
+        - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+        - + subst y.
+        - nia.
+        - '+ assert (Hy3 : 3 <= y) by nia.'
+        - 'assert (Hbound : 3 * z <= y * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+        - replace (y + 0)%nat with y in Hp by lia.
+        - rewrite Hp in Hbound.
+        - nia.
+        - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+        - + subst x.
+        - nia.
+        - '+ assert (Hx3 : 3 <= x) by nia.'
+        - 'assert (Hy4 : 4 <= y) by nia.'
+        - 'assert (Hxy12 : 12 <= x * y).'
+        - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+        - 'assert (H2 : 3 * y <= x * y).'
+        - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+        - nia.
+        - '}'
+        - 'assert (Hbound : 12 * z <= (x * y) * z).'
+        - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+        - rewrite Hp in Hbound.
+        - nia.
+        - '}'
+        - destruct (le_gt_dec i m) as [Himle | Hmil].
+        - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+        - + apply Hsorted; nia.
+        - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+        - '* assert (Ho_m : o <> m).'
+        - '{ intro E. apply Hmo. symmetry. exact E. }'
+        - 'assert (H : i + o + m <= 671).'
+        - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+        - '- exact Hiole.'
+        - '- nia.'
+        - '- intro E. apply Hoi. symmetry. exact E.'
+        - '- exact Ho_m.'
+        - '- nia.'
+        - '}'
+        - nia.
+        - '* assert (H : o + i + m <= 671).'
+        - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+        - '- nia.'
+        - '- exact Himle.'
+        - '- exact Hoi.'
+        - '- exact Him.'
+        - '- nia.'
+        - '}'
+        - nia.
+        - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+        - + destruct (le_gt_dec m o) as [Hmole | Homl].
+        - '* assert (H : m + i + o <= 671).'
+        - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+        - '- nia.'
+        - '- exact Hiole.'
+        source: 25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02
+        problem_sha256: bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a
+        environment: Require Import Arith.('Require Import Lia.', 'Require Import
+          Lra.', 'Require Import Psatz.', 'Require Import Field.')
+        version: 1
+      snippet: '- intro E. apply Him. symmetry. exact E.'
+      status: executed_open
+      checked:
+        feedback:
+          success: false
+          failing_index: 63
+          failing_tactic: Qed.
+          error_message: '(-32003, ''Coq:  (in proof amc12_2000_p1): Attempt to save
+            an incomplete proof\n(there are remaining open goals).'')'
+          remaining_goals: []
+          proof_so_far:
+          - intros i m o H.
+          - destruct H as [Him [Hmo [Hoi Hprod]]].
+          - 'assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y ->
+            y <> z -> x * y * z = 2001 -> x + y + z <= 671).'
+          - '{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.'
+          - destruct (eq_nat_dec x 1) as [Hx1 | Hx1].
+          - '- subst x.'
+          - simpl in Hp.
+          - destruct (eq_nat_dec y 2) as [Hy2 | Hy2].
+          - + subst y.
+          - nia.
+          - '+ assert (Hy3 : 3 <= y) by nia.'
+          - 'assert (Hbound : 3 * z <= y * z).'
+          - '{ apply Nat.mul_le_mono_r. exact Hy3. }'
+          - replace (y + 0)%nat with y in Hp by lia.
+          - rewrite Hp in Hbound.
+          - nia.
+          - '- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].'
+          - + subst x.
+          - nia.
+          - '+ assert (Hx3 : 3 <= x) by nia.'
+          - 'assert (Hy4 : 4 <= y) by nia.'
+          - 'assert (Hxy12 : 12 <= x * y).'
+          - '{ assert (H1 : 3 * 4 <= 3 * y) by nia.'
+          - 'assert (H2 : 3 * y <= x * y).'
+          - '{ apply Nat.mul_le_mono_r. exact Hx3. }'
+          - nia.
+          - '}'
+          - 'assert (Hbound : 12 * z <= (x * y) * z).'
+          - '{ apply Nat.mul_le_mono_r. exact Hxy12. }'
+          - rewrite Hp in Hbound.
+          - nia.
+          - '}'
+          - destruct (le_gt_dec i m) as [Himle | Hmil].
+          - '- destruct (le_gt_dec m o) as [Hmole | Homl].'
+          - + apply Hsorted; nia.
+          - + destruct (le_gt_dec i o) as [Hiole | Hoil].
+          - '* assert (Ho_m : o <> m).'
+          - '{ intro E. apply Hmo. symmetry. exact E. }'
+          - 'assert (H : i + o + m <= 671).'
+          - '{ apply Hsorted with (x := i) (y := o) (z := m).'
+          - '- exact Hiole.'
+          - '- nia.'
+          - '- intro E. apply Hoi. symmetry. exact E.'
+          - '- exact Ho_m.'
+          - '- nia.'
+          - '}'
+          - nia.
+          - '* assert (H : o + i + m <= 671).'
+          - '{ apply Hsorted with (x := o) (y := i) (z := m).'
+          - '- nia.'
+          - '- exact Himle.'
+          - '- exact Hoi.'
+          - '- exact Him.'
+          - '- nia.'
+          - '}'
+          - nia.
+          - '- destruct (le_gt_dec i o) as [Hiole | Hoil].'
+          - + destruct (le_gt_dec m o) as [Hmole | Homl].
+          - '* assert (H : m + i + o <= 671).'
+          - '{ apply Hsorted with (x := m) (y := i) (z := o).'
+          - '- nia.'
+          - '- exact Hiole.'
+          - '- intro E. apply Him. symmetry. exact E.'
+          finished: false
+          probe: null
+          auto_finished: false
+        outcome: incomplete
+        elapsed: 1.3120146291330457
+        rpc_calls: 102
+        view: '{"outcome": "incomplete", "failing_tactic": "Qed.", "error": "(-32003,
+          ''Coq:  (in proof amc12_2000_p1): Attempt to save an incomplete proof\\n(there
+          are remaining open goals).'')", "verified_prefix": ["intros i m o H.",
+          "destruct H as [Him [Hmo [Hoi Hprod]]].", "assert (Hsorted : forall x y
+          z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x
+          + y + z <= 671).", "{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.", "destruct
+          (eq_nat_dec x 1) as [Hx1 | Hx1].", "- subst x.", "simpl in Hp.", "destruct
+          (eq_nat_dec y 2) as [Hy2 | Hy2].", "+ subst y.", "nia.", "+ assert (Hy3
+          : 3 <= y) by nia.", "assert (Hbound : 3 * z <= y * z).", "{ apply Nat.mul_le_mono_r.
+          exact Hy3. }", "replace (y + 0)%nat with y in Hp by lia.", "rewrite Hp
+          in Hbound.", "nia.", "- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].", "+
+          subst x.", "nia.", "+ assert (Hx3 : 3 <= x) by nia.", "assert (Hy4 : 4
+          <= y) by nia.", "assert (Hxy12 : 12 <= x * y).", "{ assert (H1 : 3 * 4
+          <= 3 * y) by nia.", "assert (H2 : 3 * y <= x * y).", "{ apply Nat.mul_le_mono_r.
+          exact Hx3. }", "nia.", "}", "assert (Hbound : 12 * z <= (x * y) * z).",
+          "{ apply Nat.mul_le_mono_r. exact Hxy12. }", "rewrite Hp in Hbound.", "nia.",
+          "}", "destruct (le_gt_dec i m) as [Himle | Hmil].", "- destruct (le_gt_dec
+          m o) as [Hmole | Homl].", "+ apply Hsorted; nia.", "+ destruct (le_gt_dec
+          i o) as [Hiole | Hoil].", "* assert (Ho_m : o <> m).", "{ intro E. apply
+          Hmo. symmetry. exact E. }", "assert (H : i + o + m <= 671).", "{ apply
+          Hsorted with (x := i) (y := o) (z := m).", "- exact Hiole.", "- nia.",
+          "- intro E. apply Hoi. symmetry. exact E.", "- exact Ho_m.", "- nia.",
+          "}", "nia.", "* assert (H : o + i + m <= 671).", "{ apply Hsorted with
+          (x := o) (y := i) (z := m).", "- nia.", "- exact Himle.", "- exact Hoi.",
+          "- exact Him.", "- nia.", "}", "nia.", "- destruct (le_gt_dec i o) as [Hiole
+          | Hoil].", "+ destruct (le_gt_dec m o) as [Hmole | Homl].", "* assert (H
+          : m + i + o <= 671).", "{ apply Hsorted with (x := m) (y := i) (z := o).",
+          "- nia.", "- exact Hiole.", "- intro E. apply Him. symmetry. exact E."],
+          "total_goals": 0, "goals": [], "automation": [], "inspection": "InspectProofState(tactics=verified
+          prefix, start=4)"}'
+      elapsed: 1.3120146291330457
+      rpc_calls: 102
+  answers:
+  - answer:
+      relation: duplicate
+      closest_rule: b27
+      reason: This exact operation is already present; retain the checked example
+        without growing the prompt
