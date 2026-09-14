@@ -29,6 +29,7 @@ from prove_ace import _ace_examples  # pyright: ignore[reportPrivateUsage]
 from runtime.stall import stalled, view_of_feedback
 from runtime.tool_budget import ToolLimits, clip_utf8
 from runtime.grounded_control import DecisionControl
+from ace import rocq_snippets as rs
 
 
 @search_policy
@@ -129,6 +130,12 @@ class ProposeProofScriptGrounded(
     verified_prefix: str = ""
     lesson: str = ""
     control: DecisionControl | None = None
+    snippet_checks: bool = False
+    snippet_contexts: tuple[rs.SnippetContext, ...] = ()
+
+    @property
+    def snippet_catalog(self) -> str:
+        return rs.context_catalog(self.snippet_contexts)
 
     def parser(
         self,
@@ -138,9 +145,24 @@ class ProposeProofScriptGrounded(
             ReadSkill | SearchRocq | InspectProofState,
         ]
     ]:
-        return dp.last_code_block.wrap_errors.response_with(
-            ReadSkill | SearchRocq | InspectProofState
+        if not self.snippet_checks:
+            return dp.last_code_block.wrap_errors.response_with(
+                ReadSkill | SearchRocq | InspectProofState
+            )
+        parser: dp.Parser[
+            dp.Response[
+                str | dp.WrappedParseError,
+                ReadSkill
+                | SearchRocq
+                | InspectProofState
+                | rs.CheckRocqSnippet,
+            ]
+        ] = dp.last_code_block.wrap_errors.response_with(
+            ReadSkill | SearchRocq | InspectProofState | rs.CheckRocqSnippet
         )
+        # The optional tool is handled by the same strategy. Keeping the
+        # legacy query's generic type preserves existing subclasses.
+        return cast(Any, parser)
 
     def advertised_tools(self) -> Sequence[type[dp.AbstractTool[Any]]]:
         tools = self.parser().settings.tools
@@ -160,6 +182,26 @@ class ChooseProofBridge(ProposeProofScriptGrounded):
 @dataclass
 class ChooseProofStructure(ProposeProofScriptGrounded):
     """Choose an invariant, case split or structural opener, then verify."""
+
+
+@dataclass
+class ProposeProofScriptGroundedSnippets(ProposeProofScriptGrounded):
+    """Versioned flagship tool interface; legacy templates stay untouched."""
+
+
+@dataclass
+class ResolveProofReferenceSnippets(ResolveProofReference):
+    """Context-bound reference decisions."""
+
+
+@dataclass
+class ChooseProofBridgeSnippets(ChooseProofBridge):
+    """Context-bound bridge decisions."""
+
+
+@dataclass
+class ChooseProofStructureSnippets(ChooseProofStructure):
+    """Context-bound structural decisions."""
 
 
 def _last_feedback(checks: Sequence[ag.Checked]) -> ag.Checked | None:
@@ -196,6 +238,7 @@ def prove_theorem_grounded(
     compact_history: bool = False,
     feedback_version: int = 1,
     prompt_turn_budget: int | None = None,
+    snippet_tools: bool = False,
 ) -> dp.Strategy[dp.Branch | dp.Compute | dp.Fail, dp.PromptingPolicy, str]:
     if feedback_version not in (1, 2):
         raise ValueError("Unknown goal feedback version")
@@ -212,6 +255,12 @@ def prove_theorem_grounded(
     audited: set[tuple[str, ...]] = set()
     useful_prefix: tuple[str, ...] | None = None
     exploration_used = False
+    snippet_contexts: dict[str, rs.SnippetContext] = {}
+    snippet_receipts: dict[tuple[str, str], rs.SnippetReceipt] = {}
+    snippet_probes = 0
+    if snippet_tools:
+        initial = rs.context_for(problem_file, theorem_name)
+        snippet_contexts[initial.identifier] = initial
     for _ in range(turn_budget):
         if spent >= verifier_seconds:
             yield from dp.fail(label="verifier_budget_exhausted")
@@ -464,6 +513,18 @@ def prove_theorem_grounded(
         # No free-form advice enters the validated-admission arm. The old
         # artifact is retained only for an explicit admission ablation.
         rendered = "" if admission else playbook
+        if snippet_tools:
+            query_class = {
+                ProposeProofScriptGrounded: ProposeProofScriptGroundedSnippets,
+                ResolveProofReference: ResolveProofReferenceSnippets,
+                ChooseProofBridge: ChooseProofBridgeSnippets,
+                ChooseProofStructure: ChooseProofStructureSnippets,
+            }[query_class]
+        if snippet_tools and last is not None:
+            current = rs.context_for(
+                problem_file, theorem_name, tuple(last.feedback.proof_so_far)
+            )
+            snippet_contexts[current.identifier] = current
         query = query_class(
             spec=spec,
             available_skills=sk.list_skills(),
@@ -487,6 +548,8 @@ def prove_theorem_grounded(
             )
             if polished
             else None,
+            snippet_checks=snippet_tools and snippet_probes < 4,
+            snippet_contexts=tuple(snippet_contexts.values())[-6:],
         )
         if compact_history:
             from prove_coverage_cycle import compact_query
@@ -564,7 +627,50 @@ def prove_theorem_grounded(
         )
         if isinstance(response.parsed, dp.ToolRequests):
             for i, call in enumerate(response.parsed.tool_calls):
-                if isinstance(call, ReadSkill):
+                if isinstance(call, rs.CheckRocqSnippet):
+                    key = (call.context_id, call.snippet)
+                    if spent >= verifier_seconds:
+                        yield from dp.fail(label="verifier_budget_exhausted")
+                    if not snippet_tools or snippet_probes >= 4:
+                        result = "Snippet probe allowance exhausted; submit a proof."
+                    elif call.context_id not in snippet_contexts:
+                        result = "Unknown context_id; use a supplied context."
+                    elif key in snippet_receipts:
+                        result = snippet_receipts[key].render(
+                            limits.view_bytes
+                        )
+                        events.record(
+                            "snippet",
+                            "reused",
+                            receipt=snippet_receipts[key].identifier,
+                        )
+                    else:
+                        receipt = yield from dp.compute(rs.check_snippet)(
+                            snippet_contexts[call.context_id],
+                            call.snippet,
+                            dict(
+                                seconds=min(
+                                    limits.seconds, verifier_seconds - spent
+                                ),
+                                rpc_calls=limits.rpc_calls,
+                                view_bytes=limits.view_bytes,
+                            ),
+                        )
+                        spent += receipt.elapsed
+                        snippet_receipts[key] = receipt
+                        if receipt.status == "completed":
+                            return "\n".join(
+                                receipt.checked.feedback.proof_so_far
+                            )
+                        if receipt.executable:
+                            successor = receipt.successor()
+                            snippet_contexts[successor.identifier] = successor
+                        result = receipt.render(limits.view_bytes)
+                    if snippet_tools and snippet_probes < 4:
+                        # Repetitions and invalid handles still consume the
+                        # interaction allowance, but no additional Rocq work.
+                        snippet_probes += 1
+                elif isinstance(call, ReadSkill):
                     result = clip_utf8(
                         sk.read_skill(call.skill_name), limits.view_bytes
                     )
