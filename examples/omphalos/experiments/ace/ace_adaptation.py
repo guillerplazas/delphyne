@@ -64,7 +64,7 @@ import re
 import shutil
 import uuid
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -854,6 +854,8 @@ _NO_UID = uuid.UUID(int=0)
 
 def _config_name(cfg: "ACEAdaptStepConfig", _uid: uuid.UUID) -> str:
     suffix = f"_round{cfg.repair_round}" if cfg.repair_round else ""
+    if cfg.terminal_evidence_version:
+        suffix += f"_evidence{cfg.terminal_evidence_version}_{cfg.terminal_evidence_sha256[:16]}"
     return f"step{cfg.step:02d}_{cfg.role}_{cfg.bench_name}{suffix}"
 
 
@@ -947,6 +949,14 @@ class ACEAdaptStepConfig:
     repair_evidence: str = ""
     campaign_runtime: str = ""
 
+    terminal_evidence_version: int = 0
+    terminal_evidence_sha256: str = ""
+    """Opt-in receipt contract; requires prove_evidence in the context.
+
+    Pin extract_terminal_evidence(...).sha256() when constructing the config.
+    Zero preserves historical query fields and every frozen prompt.
+    """
+
     # --- inputs ---------------------------------------------------
 
     def _load_playbook(self) -> Playbook:
@@ -969,6 +979,8 @@ class ACEAdaptStepConfig:
         )
 
     def _problem(self) -> tuple[str, str]:
+        if self.terminal_evidence_version == 2:
+            return POOLS["trainX"][self.bench_name]
         return ALL_PROBLEMS[self.bench_name]
 
     def _policy_args(self, max_requests: int | None = None) -> dict[str, Any]:
@@ -1038,14 +1050,28 @@ class ACEAdaptStepConfig:
             f"trajectory for step {self.step} drifted from the hash"
             " recorded at config-creation time"
         )
-        return dp.RunStrategyArgs(
-            strategy="reflect_on_trajectory",
-            args={
+        reflection_args: dict[str, Any] = {
                 "problem_file": problem_file,
                 "outcome": read_outcome(gen_dir),
                 "playbook": self._reflector_playbook(),
                 "trajectory": trajectory,
-            },
+        }
+        strategy_name = "reflect_on_trajectory"
+        if self.terminal_evidence_version:
+            from ace.terminal_evidence import extract_terminal_evidence
+
+            if self.terminal_evidence_version != 2:
+                raise ValueError("Unknown terminal evidence contract")
+            if self.trajectory_override:
+                raise ValueError("Multi-episode receipts require explicit binding")
+            receipt = extract_terminal_evidence(gen_dir, theorem_name)
+            if receipt.sha256() != self.terminal_evidence_sha256:
+                raise ValueError("Terminal evidence drift or missing receipt hash")
+            reflection_args["terminal"] = asdict(receipt)
+            strategy_name = "reflect_on_trajectory_v2"
+        return dp.RunStrategyArgs(
+            strategy=strategy_name,
+            args=reflection_args,
             policy="reflect_on_trajectory_policy",
             policy_args=self._policy_args(self.num_requests),
             budget=self._budget(),

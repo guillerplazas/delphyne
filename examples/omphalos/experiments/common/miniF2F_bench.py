@@ -15,7 +15,8 @@ from runtime.paths import OMPHALOS_ROOT
 
 # pyright: strict
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from functools import cached_property
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -53,50 +54,70 @@ def load_partition(filename: str) -> Mapping[str, tuple[str, str]]:
     return problems
 
 
-TRAIN_PROBLEMS: Mapping[str, tuple[str, str]] = load_partition(
-    "benchmarks/train.txt"
-)
-"""Train: the curated 20-problem development partition (in-sample)."""
+class LazyPartition(Mapping[str, tuple[str, str]]):
+    """Read only the explicitly requested partition, never at import time."""
 
-VALIDATION_PROBLEMS: Mapping[str, tuple[str, str]] = load_partition(
-    "benchmarks/validation.txt"
-)
-"""
-Validation: the tuning partition. Held out of development, but one
-round of infrastructure fixes was mined from its failure traces, so it
-is partly in-sample.
-"""
+    def __init__(self, filename: str) -> None:
+        self.filename = filename
 
-TEST_PROBLEMS: Mapping[str, tuple[str, str]] = load_partition(
-    "benchmarks/test.txt"
-)
-"""Test: fully out-of-sample; never used for any iteration."""
+    @cached_property
+    def _data(self) -> Mapping[str, tuple[str, str]]:
+        data = load_partition(self.filename)
+        assert not set(data) & set(_DEMO_PROBLEMS), (
+            "demonstration problems must not overlap a benchmark partition"
+        )
+        return data
 
-assert (
-    not set(TRAIN_PROBLEMS) & set(VALIDATION_PROBLEMS)
-    and not set(TRAIN_PROBLEMS) & set(TEST_PROBLEMS)
-    and not set(VALIDATION_PROBLEMS) & set(TEST_PROBLEMS)
-), "the benchmark partitions must be pairwise disjoint"
+    def __getitem__(self, key: str) -> tuple[str, str]:
+        return self._data[key]
 
-# Demonstration problems must never appear in any benchmark partition
-# (otherwise the few-shot examples would leak solutions).
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._data)
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+
+TRAIN_PROBLEMS = LazyPartition("benchmarks/train.txt")
+VALIDATION_PROBLEMS = LazyPartition("benchmarks/validation.txt")
+TEST_PROBLEMS = LazyPartition("benchmarks/test.txt")
 _DEMO_PROBLEMS = (
     "algebra_binomnegdiscrineq_10alt28asqp1",
     "induction_sum_odd",
-    "mathd_numbertheory_136",  # probing few-shot (TryTactics workflow)
+    "mathd_numbertheory_136",
 )
-assert not any(
-    p in s
-    for p in _DEMO_PROBLEMS
-    for s in (TRAIN_PROBLEMS, VALIDATION_PROBLEMS, TEST_PROBLEMS)
-), "demonstration problems must not overlap with any benchmark partition"
 
-# All problems any config may reference, keyed by theorem name.
-ALL_PROBLEMS: Mapping[str, tuple[str, str]] = {
-    **TRAIN_PROBLEMS,
-    **VALIDATION_PROBLEMS,
-    **TEST_PROBLEMS,
-}
+
+class LegacyProblems(Mapping[str, tuple[str, str]]):
+    """Compatibility view; enumerating it explicitly opens all three pools."""
+
+    def __getitem__(self, key: str) -> tuple[str, str]:
+        for pool in (TRAIN_PROBLEMS, VALIDATION_PROBLEMS, TEST_PROBLEMS):
+            if key in pool:
+                return pool[key]
+        raise KeyError(key)
+
+    def __iter__(self) -> Iterator[str]:
+        for pool in (TRAIN_PROBLEMS, VALIDATION_PROBLEMS, TEST_PROBLEMS):
+            yield from pool
+
+    def __len__(self) -> int:
+        return sum(
+            map(len, (TRAIN_PROBLEMS, VALIDATION_PROBLEMS, TEST_PROBLEMS))
+        )
+
+
+def check_legacy_partitions() -> None:
+    """Explicit global check; forbidden in development-only campaigns."""
+    train, validation, test = map(
+        set, (TRAIN_PROBLEMS, VALIDATION_PROBLEMS, TEST_PROBLEMS)
+    )
+    assert not (train & validation or train & test or validation & test), (
+        "the benchmark partitions must be pairwise disjoint"
+    )
+
+
+ALL_PROBLEMS: Mapping[str, tuple[str, str]] = LegacyProblems()
 
 
 FRONTIER_MODELS: tuple[str, ...] = (
