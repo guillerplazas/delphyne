@@ -162,6 +162,11 @@ continuation in `experiments/ace_economy_validation.py`, never the retired
 main driver's mixed-scope verifier. This restriction applies to both
 harnesses. No held-out confirmation or default promotion is authorized.
 
+The user's subsequent request adds `ace_economy_session_20260916`: exactly
+80 non-ACE runs with the frozen session reset on validationX, reusing the
+paid ACE-reset controls. The same $50 ceiling covers all three campaigns;
+the first two settled at $12.30419518 and make no further paid calls.
+
 - Every experiment script ends in `ol.OmphalosExperiment(...).run_cli()`
   (`experiments/common/omphalos_launch.py`): per-directory launch lock,
   machine-wide Rocq stream slots (`OMPHALOS_MAX_STREAMS`, default 4),
