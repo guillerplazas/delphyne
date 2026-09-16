@@ -150,6 +150,18 @@ this restriction in both harnesses through this canonical instruction file.
 
 ## Running experiments (since 2026-08-26)
 
+**Current campaign scope, Guille 2026-09-16:** the latest correction is
+**"Never touch testX"**. It supersedes the earlier permission in this session
+and restores the complete closure above, including hashing and mixed
+artifacts. The ACE economics/advisor study and matched-budget follow-up
+use **validationX exclusively**. No trainX or challenge work. The **same
+combined $50 ceiling** covers both campaigns. Topic-based commits are
+explicitly requested. Historical sealed protocols retain their original
+wording as provenance; their test plans are revoked. Use the validation-only
+continuation in `experiments/ace_economy_validation.py`, never the retired
+main driver's mixed-scope verifier. This restriction applies to both
+harnesses. No held-out confirmation or default promotion is authorized.
+
 - Every experiment script ends in `ol.OmphalosExperiment(...).run_cli()`
   (`experiments/common/omphalos_launch.py`): per-directory launch lock,
   machine-wide Rocq stream slots (`OMPHALOS_MAX_STREAMS`, default 4),
