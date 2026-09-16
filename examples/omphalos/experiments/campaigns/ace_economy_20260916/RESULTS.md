@@ -157,3 +157,12 @@ Topic commits separate the preexisting ACE learning implementation,
 its measurements, advisor documentation, the new economics implementation
 and protocols, and these validation-only results. All code changes are
 inside `examples/omphalos/`.
+
+
+**Subsequent matched session-reset follow-up (2026-09-16).**
+The [new comparison](../ace_economy_session_20260916/RESULTS.md) adds
+80 non-ACE reset runs. Both reset arms solve 50/80; ACE is 10.55% cheaper
+($1.50046594 versus $1.67739662). The per-replicate quality gate fails
+and cost p=.136499 remains inconclusive. Combined new spending across
+all three campaigns is now $13.98159180/$50. The earlier results and
+registered verdicts above remain as measured.
