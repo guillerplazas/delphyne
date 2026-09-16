@@ -1,0 +1,208 @@
+{
+  "current_book": "### pitfalls\n- [rocq-00001] When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n\n- [rocq-00005] When applying a recurrence hypothesis whose predecessor uses truncated subtraction, first prove the exact natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality before applying the hypothesis so its indices unify.\n\n- [rocq-00006] Under an active `R_scope`, annotate natural-number indices, arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion and comparison-type errors.\n\n- [rocq-00010] Do not obtain a successor product bound by multiplying an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`. An induction proof must retain a bound parameterized by the total sum or average.\n\n- [rocq-00016] For real equations involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead of relying on `field_simplify` to normalize it.\n\n- [rocq-00018] For bounded natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce only explicitly closed numeral cases, using `change` to expose a known numeral equality when needed.\n\n- [rocq-00025] A closed cast such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality, for example with `cbv [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n\n\n### tactics\n- [rocq-00002] For an induction hypothesis relating recursive `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then apply `rewrite IH; lia`.\n\n- [rocq-00003] For goals over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use `intros` followed by `nia`; it can handle the nonlinear products and truncated subtraction directly.\n\n- [rocq-00004] For closed `nat` equalities built from executable finite-list operations such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`; use `reflexivity` afterward if the resulting definitional equality is not closed automatically.\n\n- [rocq-00011] Before using `nra` in AM-GM base or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition; `nra` cannot reason through opaque recursive definitions or supply the global inequality.\n\n- [rocq-00012] For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately for completing-square identities before finishing the resulting linear inequality with `lra`.\n\n- [rocq-00017] To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n\n- [rocq-00020] For instantiated recurrence equations containing closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then normalize each index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation chain.\n\n- [rocq-00021] For an explicit `Ensemble` built from nested `Add`, first unfold `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions and `False` cases are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer by layer, prove each freshness premise by unfolding `In` and `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n\n- [rocq-00024] For an unbounded quadratic equation over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction from the original equation.\n\n- [rocq-00028] After rewriting a natural-number product by `Nat.mul_1_r`, if the resulting subgoal is exactly `t <= t`, close that branch with `reflexivity`; do not apply a multiplication-monotonicity lemma whose right-hand side has a different shape.\n- [rocq-00029] For natural-number equations whose composite bases are powers of a common base, rewrite the bases explicitly, combine products and powers with `Nat.pow_mul_r` and `Nat.pow_add_r`, normalize the resulting exponents with `nia`, then use `Nat.pow_inj_r` with a positive base to extract equality of exponents and finish with `nia`.\n\n### lemmas\n- [rocq-00007] For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n\n- [rocq-00013] For positivity of a recursive real product whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity through opaque recursive products.\n\n- [rocq-00014] For natural-number product bounds, use `Nat.mul_le_mono` to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply an established inequality by a nonnegative factor; provide the premises in the lemma's expected order instead of guessing a multiplication-monotonicity API.\n\n- [rocq-00015] To lift a natural bound into `R`, expose the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <= INR c; apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent `.mpr` projection.\n\n- [rocq-00022] For trigonometric goals involving complementary or doubled angles, use the library lemma with the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n\n- [rocq-00023] For logarithmic inequalities and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use the resulting instantiated equality directly.\n\n- [rocq-00026] For a target or hypothesis containing `ln (a * b)`, explicitly rewrite it with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation does not expose this logarithmic product identity on its own.\n\n- [rocq-00027] For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n\n\n### strategy\n- [rocq-00009] For finite nonnegative real sequences with a fixed-sum product goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n\n- [rocq-00019] When proving a least witness by finite exclusion, first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch immediately, handle the finitely many numeral cases explicitly under `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors.",
+  "events": [
+    {
+      "context": {
+        "environment": "Require Import ZArith.\nRequire Import Nat.\nRequire Import PArith.\nRequire Import Arith.\nRequire Import Znumtheory.\nRequire Import Lia.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros Hp Hq Hpp Hpq Hpbound Hqbound Heq."
+        ],
+        "problem_file": "miniF2F/test/amc/amc12_2000_p6.v",
+        "problem_sha256": "683be44c862465779357878c4cbd30909ce1b6967cf03395ab0cf59f188e8e19",
+        "source": "166971fc823db5e7eb78efc0ed8ededbbdb463292cd8014979e0754f2e3177f2",
+        "theorem_name": "amc12_2000_p6",
+        "version": 1
+      },
+      "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+      "goals": [
+        "p, q  : Z\nHp  : 0 < p\nHq  : 0 < q\nHpp  : prime p\nHpq  : prime q\nHpbound  : 4 <= p <= 18\nHqbound  : 4 <= q <= 18\nHeq  : p * q - (p + q) = 194\n|-False"
+      ],
+      "identifier": "e1",
+      "status": "rejected",
+      "submitted": "nia."
+    },
+    {
+      "context": {
+        "environment": "Require Import ZArith.\nRequire Import Nat.\nRequire Import PArith.\nRequire Import Arith.\nRequire Import Znumtheory.\nRequire Import Lia.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros Hp Hq Hpp Hpq Hpbound Hqbound Heq."
+        ],
+        "problem_file": "miniF2F/test/amc/amc12_2000_p6.v",
+        "problem_sha256": "683be44c862465779357878c4cbd30909ce1b6967cf03395ab0cf59f188e8e19",
+        "source": "166971fc823db5e7eb78efc0ed8ededbbdb463292cd8014979e0754f2e3177f2",
+        "theorem_name": "amc12_2000_p6",
+        "version": 1
+      },
+      "error": "(-32003, 'Coq: The reference interval_cases was not found in the current environment.')",
+      "goals": [
+        "p, q  : Z\nHp  : 0 < p\nHq  : 0 < q\nHpp  : prime p\nHpq  : prime q\nHpbound  : 4 <= p <= 18\nHqbound  : 4 <= q <= 18\nHeq  : p * q - (p + q) = 194\n|-False"
+      ],
+      "identifier": "e2",
+      "status": "rejected",
+      "submitted": "interval_cases p."
+    },
+    {
+      "context": {
+        "environment": "Require Import ZArith.\nRequire Import Nat.\nRequire Import PArith.\nRequire Import Arith.\nRequire Import Znumtheory.\nRequire Import Lia.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros Hp Hq Hpp Hpq Hpbound Hqbound Heq.",
+          "destruct (Zeven_odd_dec p) as [Hpe | Hpo].",
+          "- destruct (Zeven_ex p Hpe) as [k Hpk].",
+          "assert (Hdiv : (2 | p)%Z).",
+          "{ exists k.",
+          "nia.",
+          "}"
+        ],
+        "problem_file": "miniF2F/test/amc/amc12_2000_p6.v",
+        "problem_sha256": "683be44c862465779357878c4cbd30909ce1b6967cf03395ab0cf59f188e8e19",
+        "source": "166971fc823db5e7eb78efc0ed8ededbbdb463292cd8014979e0754f2e3177f2",
+        "theorem_name": "amc12_2000_p6",
+        "version": 1
+      },
+      "error": "(-32003, 'Coq: Expects a disjunctive pattern with 2 branches.')",
+      "goals": [
+        "p, q  : Z\nHp  : 0 < p\nHq  : 0 < q\nHpp  : prime p\nHpq  : prime q\nHpbound  : 4 <= p <= 18\nHqbound  : 4 <= q <= 18\nHeq  : p * q - (p + q) = 194\nHpe  : Zeven p\nk  : Z\nHpk  : p = 2 * k\nHdiv  : (2 | p)\n|-False"
+      ],
+      "identifier": "e3",
+      "status": "rejected",
+      "submitted": "destruct (prime_divisors p Hpp 2 Hdiv) as [H | H | H | H]."
+    },
+    {
+      "context": {
+        "environment": "Require Import ZArith.\nRequire Import Nat.\nRequire Import PArith.\nRequire Import Arith.\nRequire Import Znumtheory.\nRequire Import Lia.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [],
+        "problem_file": "miniF2F/test/amc/amc12_2000_p6.v",
+        "problem_sha256": "683be44c862465779357878c4cbd30909ce1b6967cf03395ab0cf59f188e8e19",
+        "source": "166971fc823db5e7eb78efc0ed8ededbbdb463292cd8014979e0754f2e3177f2",
+        "theorem_name": "amc12_2000_p6",
+        "version": 1
+      },
+      "error": "",
+      "goals": [],
+      "identifier": "e4",
+      "status": "accepted",
+      "submitted": "intros Hp Hq Hpp Hpq Hpbound Hqbound Heq.\ndestruct (Zeven_odd_dec p) as [Hpe | Hpo].\n- destruct (Zeven_ex p Hpe) as [k Hpk].\nassert (Hdiv : (2 | p)%Z).\n{ exists k.\nnia.\n}\ndestruct (prime_divisors p Hpp 2 Hdiv) as [H | [H | [H | H]]].\nall: nia.\n- destruct (Zeven_odd_dec q) as [Hqe | Hqo].\n+ destruct (Zeven_ex q Hqe) as [k Hqk].\nassert (Hdiv : (2 | q)%Z).\n{ exists k.\nnia.\n}\ndestruct (prime_divisors q Hpq 2 Hdiv) as [H | [H | [H | H]]].\nall: nia.\n+ destruct (Zodd_ex p Hpo) as [a Hpa].\ndestruct (Zodd_ex q Hqo) as [b Hqb].\nassert (Hab : 4 * a * b = 195).\n{ nia.\n}\nassert (Heven : Zeven (4 * a * b)).\n{ replace (4 * a * b)%Z with (2 * (2 * a * b))%Z by ring.\napply Zeven_2p.\n}\nassert (Hodd : Zodd 195).\n{ replace (195%Z) with (2 * 97 + 1)%Z by ring.\napply Zodd_2p_plus_1.\n}\nrewrite Hab in Heven.\nexact (Zeven_not_Zodd 195 Heven Hodd)."
+    }
+  ],
+  "playbook": "### pitfalls\n- [rocq-00001] When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n\n- [rocq-00005] When applying a recurrence hypothesis whose predecessor uses truncated subtraction, first prove the exact natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality before applying the hypothesis so its indices unify.\n\n- [rocq-00006] Under an active `R_scope`, annotate natural-number indices, arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion and comparison-type errors.\n\n- [rocq-00010] Do not obtain a successor product bound by multiplying an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`. An induction proof must retain a bound parameterized by the total sum or average.\n\n- [rocq-00016] For real equations involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead of relying on `field_simplify` to normalize it.\n\n- [rocq-00018] For bounded natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce only explicitly closed numeral cases, using `change` to expose a known numeral equality when needed.\n\n- [rocq-00025] A closed cast such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality, for example with `cbv [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n\n\n### tactics\n- [rocq-00002] For an induction hypothesis relating recursive `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then apply `rewrite IH; lia`.\n\n- [rocq-00003] For goals over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use `intros` followed by `nia`; it can handle the nonlinear products and truncated subtraction directly.\n\n- [rocq-00004] For closed `nat` equalities built from executable finite-list operations such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`; use `reflexivity` afterward if the resulting definitional equality is not closed automatically.\n\n- [rocq-00011] Before using `nra` in AM-GM base or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition; `nra` cannot reason through opaque recursive definitions or supply the global inequality.\n\n- [rocq-00012] For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately for completing-square identities before finishing the resulting linear inequality with `lra`.\n\n- [rocq-00017] To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n\n- [rocq-00020] For instantiated recurrence equations containing closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then normalize each index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation chain.\n\n- [rocq-00021] For an explicit `Ensemble` built from nested `Add`, first unfold `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions and `False` cases are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer by layer, prove each freshness premise by unfolding `In` and `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n\n- [rocq-00024] For an unbounded quadratic equation over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction from the original equation.\n\n\n### lemmas\n- [rocq-00007] For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n\n- [rocq-00013] For positivity of a recursive real product whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity through opaque recursive products.\n\n- [rocq-00014] For natural-number product bounds, use `Nat.mul_le_mono` to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply an established inequality by a nonnegative factor; provide the premises in the lemma's expected order instead of guessing a multiplication-monotonicity API.\n\n- [rocq-00015] To lift a natural bound into `R`, expose the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <= INR c; apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent `.mpr` projection.\n\n- [rocq-00022] For trigonometric goals involving complementary or doubled angles, use the library lemma with the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n\n- [rocq-00023] For logarithmic inequalities and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use the resulting instantiated equality directly.\n\n- [rocq-00026] For a target or hypothesis containing `ln (a * b)`, explicitly rewrite it with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation does not expose this logarithmic product identity on its own.\n\n- [rocq-00027] For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n\n\n### strategy\n- [rocq-00009] For finite nonnegative real sequences with a fixed-sum product goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n\n- [rocq-00019] When proving a least witness by finite exclusion, first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch immediately, handle the finitely many numeral cases explicitly under `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors.",
+  "problem_file": "miniF2F/test/amc/amc12_2000_p6.v",
+  "terminal": {
+    "accepted_script": [
+      "intros Hp Hq Hpp Hpq Hpbound Hqbound Heq.",
+      "destruct (Zeven_odd_dec p) as [Hpe | Hpo].",
+      "- destruct (Zeven_ex p Hpe) as [k Hpk].",
+      "assert (Hdiv : (2 | p)%Z).",
+      "{ exists k.",
+      "nia.",
+      "}",
+      "destruct (prime_divisors p Hpp 2 Hdiv) as [H | [H | [H | H]]].",
+      "all: nia.",
+      "- destruct (Zeven_odd_dec q) as [Hqe | Hqo].",
+      "+ destruct (Zeven_ex q Hqe) as [k Hqk].",
+      "assert (Hdiv : (2 | q)%Z).",
+      "{ exists k.",
+      "nia.",
+      "}",
+      "destruct (prime_divisors q Hpq 2 Hdiv) as [H | [H | [H | H]]].",
+      "all: nia.",
+      "+ destruct (Zodd_ex p Hpo) as [a Hpa].",
+      "destruct (Zodd_ex q Hqo) as [b Hqb].",
+      "assert (Hab : 4 * a * b = 195).",
+      "{ nia.",
+      "}",
+      "assert (Heven : Zeven (4 * a * b)).",
+      "{ replace (4 * a * b)%Z with (2 * (2 * a * b))%Z by ring.",
+      "apply Zeven_2p.",
+      "}",
+      "assert (Hodd : Zodd 195).",
+      "{ replace (195%Z) with (2 * 97 + 1)%Z by ring.",
+      "apply Zodd_2p_plus_1.",
+      "}",
+      "rewrite Hab in Heven.",
+      "exact (Zeven_not_Zodd 195 Heven Hodd)."
+    ],
+    "accepted_tail": [],
+    "auto_finished": false,
+    "cache_sha256": "166971fc823db5e7eb78efc0ed8ededbbdb463292cd8014979e0754f2e3177f2",
+    "check_sha256": "18876ecfd4851973b8b0c03abdaec5daa6b4e95326a9c10add640408c6abb3a2",
+    "checker": "checked_proof",
+    "common_prefix": [
+      "intros Hp Hq Hpp Hpq Hpbound Hqbound Heq.",
+      "destruct (Zeven_odd_dec p) as [Hpe | Hpo].",
+      "- destruct (Zeven_ex p Hpe) as [k Hpk].",
+      "assert (Hdiv : (2 | p)%Z).",
+      "{ exists k.",
+      "nia.",
+      "}",
+      "destruct (prime_divisors p Hpp 2 Hdiv) as [H | [H | [H | H]]].",
+      "all: nia.",
+      "- destruct (Zeven_odd_dec q) as [Hqe | Hqo].",
+      "+ destruct (Zeven_ex q Hqe) as [k Hqk].",
+      "assert (Hdiv : (2 | q)%Z).",
+      "{ exists k.",
+      "nia.",
+      "}",
+      "destruct (prime_divisors q Hpq 2 Hdiv) as [H | [H | [H | H]]].",
+      "all: nia.",
+      "+ destruct (Zodd_ex p Hpo) as [a Hpa].",
+      "destruct (Zodd_ex q Hqo) as [b Hqb].",
+      "assert (Hab : 4 * a * b = 195).",
+      "{ nia.",
+      "}",
+      "assert (Heven : Zeven (4 * a * b)).",
+      "{ replace (4 * a * b)%Z with (2 * (2 * a * b))%Z by ring.",
+      "apply Zeven_2p.",
+      "}",
+      "assert (Hodd : Zodd 195).",
+      "{ replace (195%Z) with (2 * 97 + 1)%Z by ring.",
+      "apply Zodd_2p_plus_1.",
+      "}",
+      "rewrite Hab in Heven.",
+      "exact (Zeven_not_Zodd 195 Heven Hodd)."
+    ],
+    "detail": "Tails are a derived textual diff, not an execution trace. Only accepted_script is certified complete. auto_finished is the recorded assistance flag; absent pre-assistance details are unknown. returned_script matches via the existing tactic splitter; accepted_script preserves the exact checker sequence.",
+    "problem_file": "miniF2F/test/amc/amc12_2000_p6.v",
+    "result_sha256": "3ec6c3d7e71febd73c1f13519de9e2c89a29290c0e5355029d00304c6aa2d32f",
+    "returned_script": "intros Hp Hq Hpp Hpq Hpbound Hqbound Heq.\ndestruct (Zeven_odd_dec p) as [Hpe | Hpo].\n- destruct (Zeven_ex p Hpe) as [k Hpk].\nassert (Hdiv : (2 | p)%Z).\n{ exists k.\nnia.\n}\ndestruct (prime_divisors p Hpp 2 Hdiv) as [H | [H | [H | H]]].\nall: nia.\n- destruct (Zeven_odd_dec q) as [Hqe | Hqo].\n+ destruct (Zeven_ex q Hqe) as [k Hqk].\nassert (Hdiv : (2 | q)%Z).\n{ exists k.\nnia.\n}\ndestruct (prime_divisors q Hpq 2 Hdiv) as [H | [H | [H | H]]].\nall: nia.\n+ destruct (Zodd_ex p Hpo) as [a Hpa].\ndestruct (Zodd_ex q Hqo) as [b Hqb].\nassert (Hab : 4 * a * b = 195).\n{ nia.\n}\nassert (Heven : Zeven (4 * a * b)).\n{ replace (4 * a * b)%Z with (2 * (2 * a * b))%Z by ring.\napply Zeven_2p.\n}\nassert (Hodd : Zodd 195).\n{ replace (195%Z) with (2 * 97 + 1)%Z by ring.\napply Zodd_2p_plus_1.\n}\nrewrite Hab in Heven.\nexact (Zeven_not_Zodd 195 Heven Hodd).",
+    "source_cell": "experiments/output/ace_models_20260910/proof/configs/amc12_2000_p6__selection-medium-1e4aec7dbbe80e7a__gpt-5.6-luna__seed0",
+    "status": "accepted",
+    "submitted_script": [
+      "intros Hp Hq Hpp Hpq Hpbound Hqbound Heq.",
+      "destruct (Zeven_odd_dec p) as [Hpe | Hpo].",
+      "- destruct (Zeven_ex p Hpe) as [k Hpk].",
+      "assert (Hdiv : (2 | p)%Z).",
+      "{ exists k.",
+      "nia.",
+      "}",
+      "destruct (prime_divisors p Hpp 2 Hdiv) as [H | [H | [H | H]]].",
+      "all: nia.",
+      "- destruct (Zeven_odd_dec q) as [Hqe | Hqo].",
+      "+ destruct (Zeven_ex q Hqe) as [k Hqk].",
+      "assert (Hdiv : (2 | q)%Z).",
+      "{ exists k.",
+      "nia.",
+      "}",
+      "destruct (prime_divisors q Hpq 2 Hdiv) as [H | [H | [H | H]]].",
+      "all: nia.",
+      "+ destruct (Zodd_ex p Hpo) as [a Hpa].",
+      "destruct (Zodd_ex q Hqo) as [b Hqb].",
+      "assert (Hab : 4 * a * b = 195).",
+      "{ nia.",
+      "}",
+      "assert (Heven : Zeven (4 * a * b)).",
+      "{ replace (4 * a * b)%Z with (2 * (2 * a * b))%Z by ring.",
+      "apply Zeven_2p.",
+      "}",
+      "assert (Hodd : Zodd 195).",
+      "{ replace (195%Z) with (2 * 97 + 1)%Z by ring.",
+      "apply Zodd_2p_plus_1.",
+      "}",
+      "rewrite Hab in Heven.",
+      "exact (Zeven_not_Zodd 195 Heven Hodd)."
+    ],
+    "submitted_tail": [],
+    "theorem_name": "amc12_2000_p6",
+    "version": 2
+  },
+  "trajectory": "[PROBLEM]\nProve the following theorem in Rocq.\n\n## Imports already in scope\n\n```rocq\nRequire Import ZArith.\nRequire Import Nat.\nRequire Import PArith.\nRequire Import Arith.\nRequire Import Znumtheory.\nRequire Import Lia.\n```\n\n## Theorem\n\n```rocq\nTheorem amc12_2000_p6 (p q : Z) :\n    0 < p -> 0 < q ->\n    prime p -> prime q ->\n    (4 <= p <= 18)%Z ->\n    (4 <= q <= 18)%Z ->\n    p * q - (p + q) <> 194.\n```\n\n## Informal statement\n\nTwo different prime numbers between $4$ and $18$ are chosen. When their sum is\n   subtracted from their product, which of the following numbers could be obtained?\n\n   $\\textbf{(A)}\\ 22 \\qquad\\textbf{(B)}\\ 60 \\qquad\\textbf{(C)}\\ 119 \\qquad\\textbf{(D)}\\\n   180 \\qquad\\textbf{(E)}\\ 231$ Show that it is \\textbf{(C) }119.\n\n## Informal proof sketch\n\nAny two prime numbers between 4 and 18 have an odd product and an even sum. Any odd\n   number minus an even number is an odd number, so we can eliminate A, B, and D. Since\n   the highest two prime numbers we can pick are 13 and 17, the highest number we can\n   make is $(13)(17)-(13+17) = 221 - 30 = 191$. Thus, we can eliminate E. So, the answer\n   must be $\\textbf{(C) }119$.\n\nReply with a fenced code block containing only the body of the proof\n(no `Proof.`, no `Qed.`).\nBefore your first tool call or proposal, name the playbook bullet ids\nyou intend to rely on for this theorem (or say \"none apply\").\nLast verified prefix (preserve it for local suffix repair):\n```rocq\nintros Hp Hq Hpp Hpq Hpbound Hqbound Heq.\ndestruct (Zeven_odd_dec p) as [Hpe | Hpo].\n- destruct (Zeven_ex p Hpe) as [k Hpk].\nassert (Hdiv : (2 | p)%Z).\n{ exists k.\nnia.\n}\n```\n\nFocus decision: choose the next invariant, case split or structural step\nfrom the current goals. Preserve verified work when applicable, avoid\nrepeating the failed plan, and return a complete script for checking.\n\n[ASSISTANT]\nRelevant playbook bullets: none apply; this is a bounded nonlinear integer-arithmetic contradiction, which `nia` can handle directly.\n\n```rocq\nintros Hp Hq Hpp Hpq Hpbound Hqbound Heq.\nnia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"nia.\", \"error\": \"(-32003, 'Coq: Tactic failure:  Cannot find witness.')\", \"verified_prefix\": [\"intros Hp Hq Hpp Hpq Hpbound Hqbound Heq.\"], \"total_goals\": 1, \"goals\": [\"p, q  : Z\\nHp  : 0 < p\\nHq  : 0 < q\\nHpp  : prime p\\nHpq  : prime q\\nHpbound  : 4 <= p <= 18\\nHqbound  : 4 <= q <= 18\\nHeq  : p * q - (p + q) = 194\\n|-False\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\nThe bounds alone permit the pair `(14,16)`, so the failed `nia` cannot use the primality hypotheses automatically. I will inspect the available `prime` characterization and use it to exclude the finite candidates.\n\n[TOOL CALL] SearchRocq(command='Check prime.')\n[TOOL RESULT]\n{\"output\": \"[(3, 'prime\\\\n     : Z -> Prop')]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"p, q  : Z\\nHp  : 0 < p\\nHq  : 0 < q\\nHpp  : prime p\\nHpq  : prime q\\nHpbound  : 4 <= p <= 18\\nHqbound  : 4 <= q <= 18\\nHeq  : p * q - (p + q) = 194\\n|-False\"], \"next\": null}\n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='Print prime.')\n[TOOL RESULT]\n{\"output\": \"[(3, 'Inductive prime (p0 : Z) : Prop :=\\\\n    prime_intro : 1 < p0 ->\\\\n                  (forall n : Z, 1 <= n < p0 -> rel_prime n p0) -> prime p0.\\\\n\\\\nArguments prime p%Z_scope\\\\nArguments prime_intro p%Z_scope _ _%function_scope')]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"p, q  : Z\\nHp  : 0 < p\\nHq  : 0 < q\\nHpp  : prime p\\nHpq  : prime q\\nHpbound  : 4 <= p <= 18\\nHqbound  : 4 <= q <= 18\\nHeq  : p * q - (p + q) = 194\\n|-False\"], \"next\": null}\n\n[TOOL CALL] SearchRocq(command='Search (prime _ -> _).')\n[TOOL RESULT]\n{\"output\": \"[(3, 'prime_ge_2: forall p : Z, prime p -> 2 <= p'), (3, 'prime_div_prime: forall p q : Z, prime p -> prime q -> (p | q) -> p = q'), (3, 'prime_rel_prime:\\\\n  forall p : Z, prime p -> forall a : Z, ~ (p | a) -> rel_prime p a'), (3, 'prime_mult:\\\\n  forall p : Z, prime p -> forall a b : Z, (p | a * b) -> (p | a) \\\\\\\\/ (p | b)'), (3, 'rel_prime_le_prime: forall a p : Z, prime p -> 1 <= a < p -> rel_prime a p'), (3, 'Zpow_facts.prime_power_prime:\\\\n  forall p q n : Z, 0 <= n -> prime p -> prime q -> (p | q ^ n) -> p = q'), (3, 'prime_rect:\\\\n  forall (p : Z) (P : Type),\\\\n  (1 < p -> (forall n : Z, 1 <= n < p -> rel_prime n p) -> P) -> prime p -> P'), (3, 'prime_rec:\\\\n  forall (p : Z) (P : Set),\\\\n  (1 < p -> (forall n : Z, 1 <= n < p -> rel_prime n p) -> P) -> prime p -> P'), (3, 'prime_ind:\\\\n  forall (p : Z) (P : Prop),\\\\n  (1 < p -> (forall n : Z, 1 <= n < p -> rel_prime n p) -> P) -> prime p -> P'), (3, 'prime_sind:\\\\n  forall (p : Z) (P : SProp),\\\\n  (1 < p -> (forall n : Z, 1 <= n < p -> rel_prime n p) -> P) -> prime p -> P'), (3, 'Zpow_facts.Zdivide_power_2:\\\\n  forall x p n : Z,\\\\n  0 <= n -> 0 <= x -> prime p -> (x | p ^ n) -> exists m : Z, x = p ^ m'), (3, 'prime_divisors:\\\\n  forall p : Z,\\\\n  prime p -> forall a : Z, (a | p) -> a = -1 \\\\\\\\/ a = 1 \\\\\\\\/ a = p \\\\\\\\/ a = - p')]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"p, q  : Z\\nHp  : 0 < p\\nHq  : 0 < q\\nHpp  : prime p\\nHpq  : prime q\\nHpbound  : 4 <= p <= 18\\nHqbound  : 4 <= q <= 18\\nHeq  : p * q - (p + q) = 194\\n|-False\"], \"next\": null}\n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='Print rel_prime.')\n[TOOL RESULT]\n{\"output\": \"[(3, 'rel_prime = fun a b : Z => Zis_gcd a b 1\\\\n     : Z -> Z -> Prop\\\\n\\\\nArguments rel_prime (a b)%Z_scope')]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"p, q  : Z\\nHp  : 0 < p\\nHq  : 0 < q\\nHpp  : prime p\\nHpq  : prime q\\nHpbound  : 4 <= p <= 18\\nHqbound  : 4 <= q <= 18\\nHeq  : p * q - (p + q) = 194\\n|-False\"], \"next\": null}\n\n[ASSISTANT]\n```rocq\nintros Hp Hq Hpp Hpq Hpbound Hqbound Heq.\ninterval_cases p.\nall: norm_num at Heq; try nia.\nall: assert (Hdiv : (2 | p)%Z) by (exists (p / 2)%Z; nia).\nall: destruct (prime_divisors p Hpp 2 Hdiv) as [H | H | H | H];\n  nia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"interval_cases p.\", \"error\": \"(-32003, 'Coq: The reference interval_cases was not found in the current environment.')\", \"verified_prefix\": [\"intros Hp Hq Hpp Hpq Hpbound Hqbound Heq.\"], \"total_goals\": 1, \"goals\": [\"p, q  : Z\\nHp  : 0 < p\\nHq  : 0 < q\\nHpp  : prime p\\nHpq  : prime q\\nHpbound  : 4 <= p <= 18\\nHqbound  : 4 <= q <= 18\\nHeq  : p * q - (p + q) = 194\\n|-False\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\nThe imports do not provide `interval_cases`. I will instead use the prime-divisor lemma to prove that neither bounded prime is divisible by 2, then obtain odd representations and contradict the parity of `Heq`.\n\n[TOOL CALL] SearchRocq(command='Search (_ | _ -> _ \\\\/ _).')\n[TOOL RESULT]\n{\"output\": \"[]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"p, q  : Z\\nHp  : 0 < p\\nHq  : 0 < q\\nHpp  : prime p\\nHpq  : prime q\\nHpbound  : 4 <= p <= 18\\nHqbound  : 4 <= q <= 18\\nHeq  : p * q - (p + q) = 194\\n|-False\"], \"next\": null}\n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='Check Z.even_or_odd.')\n[TOOL RESULT]\nPetanqueError: (-32003, 'Coq: The reference Z.even_or_odd was not found in the current environment.')\n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='SearchPattern (exists k : Z, _ = 2 * k + 1).')\n[TOOL RESULT]\n{\"output\": \"[(3, 'Zodd_ex: forall n : Z, Zodd n -> exists m : Z, n = 2 * m + 1')]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"p, q  : Z\\nHp  : 0 < p\\nHq  : 0 < q\\nHpp  : prime p\\nHpq  : prime q\\nHpbound  : 4 <= p <= 18\\nHqbound  : 4 <= q <= 18\\nHeq  : p * q - (p + q) = 194\\n|-False\"], \"next\": null}\n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='SearchPattern (Zodd _).')\n[TOOL RESULT]\n{\"output\": \"[(3, 'Zodd_pred: forall n : Z, Zeven n -> Zodd (Z.pred n)'), (3, 'Zodd_Sn: forall n : Z, Zeven n -> Zodd (Z.succ n)'), (3, 'Zodd_mult_Zodd: forall a b : Z, Zodd a -> Zodd b -> Zodd (a * b)'), (3, 'Zeven_plus_Zodd: forall a b : Z, Zeven a -> Zodd b -> Zodd (a + b)'), (3, 'Zodd_plus_Zeven: forall a b : Z, Zodd a -> Zeven b -> Zodd (a + b)'), (3, 'Zodd_2p_plus_1: forall p : Z, Zodd (2 * p + 1)')]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"p, q  : Z\\nHp  : 0 < p\\nHq  : 0 < q\\nHpp  : prime p\\nHpq  : prime q\\nHpbound  : 4 <= p <= 18\\nHqbound  : 4 <= q <= 18\\nHeq  : p * q - (p + q) = 194\\n|-False\"], \"next\": null}\n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='Check Zodd.')\n[TOOL RESULT]\n{\"output\": \"[(3, 'Zodd\\\\n     : Z -> Prop')]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"p, q  : Z\\nHp  : 0 < p\\nHq  : 0 < q\\nHpp  : prime p\\nHpq  : prime q\\nHpbound  : 4 <= p <= 18\\nHqbound  : 4 <= q <= 18\\nHeq  : p * q - (p + q) = 194\\n|-False\"], \"next\": null}\n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='SearchPattern (Zeven _ \\\\/ Zodd _).')\n[TOOL RESULT]\n{\"output\": \"[]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"p, q  : Z\\nHp  : 0 < p\\nHq  : 0 < q\\nHpp  : prime p\\nHpq  : prime q\\nHpbound  : 4 <= p <= 18\\nHqbound  : 4 <= q <= 18\\nHeq  : p * q - (p + q) = 194\\n|-False\"], \"next\": null}\n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='Print Zeven.')\n[TOOL RESULT]\n{\"output\": \"[(3, 'Zeven =\\\\nfun z : Z =>\\\\nmatch z with\\\\n| 0 | Z.pos _~0 | Z.neg _~0 => True\\\\n| _ => False\\\\nend\\\\n     : Z -> Prop\\\\n\\\\nArguments Zeven z%Z_scope')]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"p, q  : Z\\nHp  : 0 < p\\nHq  : 0 < q\\nHpp  : prime p\\nHpq  : prime q\\nHpbound  : 4 <= p <= 18\\nHqbound  : 4 <= q <= 18\\nHeq  : p * q - (p + q) = 194\\n|-False\"], \"next\": null}\n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='Search (Zeven _).')\n[TOOL RESULT]\n{\"output\": \"[(3, 'Zeven_odd_dec: forall n : Z, {Zeven n} + {Zodd n}'), (3, 'Zeven_equiv: forall z : Z, Zeven z <-> Z.Even z'), (3, 'Zeven_mult_Zeven_l: forall a b : Z, Zeven a -> Zeven (a * b)'), (3, 'Zeven_mult_Zeven_r: forall a b : Z, Zeven b -> Zeven (a * b)'), (3, 'Zeven_Sn: forall n : Z, Zodd n -> Zeven (Z.succ n)'), (3, 'Zodd_Sn: forall n : Z, Zeven n -> Zodd (Z.succ n)'), (3, 'Zeven_pred: forall n : Z, Zodd n -> Zeven (Z.pred n)'), (3, 'Zodd_pred: forall n : Z, Zeven n -> Zodd (Z.pred n)'), (3, 'Zeven_not_Zodd: forall n : Z, Zeven n -> ~ Zodd n'), (3, 'Zodd_not_Zeven: forall n : Z, Zodd n -> ~ Zeven n'), (3, 'Zeven_dec: forall n : Z, {Zeven n} + {~ Zeven n}'), (3, 'Zeven_plus_Zeven: forall a b : Z, Zeven a -> Zeven b -> Zeven (a + b)'), (3, 'Zodd_plus_Zeven: forall a b : Z, Zodd a -> Zeven b -> Zodd (a + b)'), (3, 'Zodd_plus_Zodd: forall a b : Z, Zodd a -> Zodd b -> Zeven (a + b)'), (3, 'Zeven_plus_Zodd: forall a b : Z, Zeven a -> Zodd b -> Zodd (a + b)'), (3, 'Zeven_2p: forall p : Z, Zeven (2 * p)'), (3, 'Zeven_odd_bool: forall x : Z, {b : bool | if b then Zeven x else Zodd x}'), (3, 'Zeven_bool_iff: forall n : Z, Z.even n = true <-> Zeven n'), (3, 'Zeven_div2: forall n : Z, Zeven n -> n = 2 * Z.div2 n'), (3, 'Zeven_quot2: forall n : Z, Zeven n -> n = 2 * Z.quot2 n'), (3, 'Zeven_ex: forall n : Z, Zeven n -> exists m : Z, n = 2 * m'), (3, 'Zeven_ex_iff: forall n : Z, Zeven n <-> (exists m : Z, n = 2 * m)')]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"p, q  : Z\\nHp  : 0 < p\\nHq  : 0 < q\\nHpp  : prime p\\nHpq  : prime q\\nHpbound  : 4 <= p <= 18\\nHqbound  : 4 <= q <= 18\\nHeq  : p * q - (p + q) = 194\\n|-False\"], \"next\": null}\n\n[ASSISTANT]\n```rocq\nintros Hp Hq Hpp Hpq Hpbound Hqbound Heq.\ndestruct (Zeven_odd_dec p) as [Hpe | Hpo].\n- destruct (Zeven_ex p Hpe) as [k Hpk].\n  assert (Hdiv : (2 | p)%Z).\n  { exists k.\n    nia.\n  }\n  destruct (prime_divisors p Hpp 2 Hdiv) as [H | H | H | H].\n  all: nia.\n- destruct (Zeven_odd_dec q) as [Hqe | Hqo].\n  + destruct (Zeven_ex q Hqe) as [k Hqk].\n    assert (Hdiv : (2 | q)%Z).\n    { exists k.\n      nia.\n    }\n    destruct (prime_divisors q Hpq 2 Hdiv) as [H | H | H | H].\n    all: nia.\n  + destruct (Zodd_ex p Hpo) as [a Hpa].\n    destruct (Zodd_ex q Hqo) as [b Hqb].\n    assert (Hab : 4 * a * b = 195).\n    { nia.\n    }\n    assert (Heven : Zeven (4 * a * b)).\n    { replace (4 * a * b)%Z with (2 * (2 * a * b))%Z by ring.\n      apply Zeven_2p.\n    }\n    assert (Hodd : Zodd 195).\n    { replace (195%Z) with (2 * 97 + 1)%Z by ring.\n      apply Zodd_2p_plus_1.\n    }\n    rewrite Hab in Heven.\n    exact (Zeven_not_Zodd 195 Heven Hodd).\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"destruct (prime_divisors p Hpp 2 Hdiv) as [H | H | H | H].\", \"error\": \"(-32003, 'Coq: Expects a disjunctive pattern with 2 branches.')\", \"verified_prefix\": [\"intros Hp Hq Hpp Hpq Hpbound Hqbound Heq.\", \"destruct (Zeven_odd_dec p) as [Hpe | Hpo].\", \"- destruct (Zeven_ex p Hpe) as [k Hpk].\", \"assert (Hdiv : (2 | p)%Z).\", \"{ exists k.\", \"nia.\", \"}\"], \"total_goals\": 1, \"goals\": [\"p, q  : Z\\nHp  : 0 < p\\nHq  : 0 < q\\nHpp  : prime p\\nHpq  : prime q\\nHpbound  : 4 <= p <= 18\\nHqbound  : 4 <= q <= 18\\nHeq  : p * q - (p + q) = 194\\nHpe  : Zeven p\\nk  : Z\\nHpk  : p = 2 * k\\nHdiv  : (2 | p)\\n|-False\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros Hp Hq Hpp Hpq Hpbound Hqbound Heq.\ndestruct (Zeven_odd_dec p) as [Hpe | Hpo].\n- destruct (Zeven_ex p Hpe) as [k Hpk].\n  assert (Hdiv : (2 | p)%Z).\n  { exists k.\n    nia.\n  }\n  destruct (prime_divisors p Hpp 2 Hdiv) as [H | [H | [H | H]]].\n  all: nia.\n- destruct (Zeven_odd_dec q) as [Hqe | Hqo].\n  + destruct (Zeven_ex q Hqe) as [k Hqk].\n    assert (Hdiv : (2 | q)%Z).\n    { exists k.\n      nia.\n    }\n    destruct (prime_divisors q Hpq 2 Hdiv) as [H | [H | [H | H]]].\n    all: nia.\n  + destruct (Zodd_ex p Hpo) as [a Hpa].\n    destruct (Zodd_ex q Hqo) as [b Hqb].\n    assert (Hab : 4 * a * b = 195).\n    { nia.\n    }\n    assert (Heven : Zeven (4 * a * b)).\n    { replace (4 * a * b)%Z with (2 * (2 * a * b))%Z by ring.\n      apply Zeven_2p.\n    }\n    assert (Hodd : Zodd 195).\n    { replace (195%Z) with (2 * 97 + 1)%Z by ring.\n      apply Zodd_2p_plus_1.\n    }\n    rewrite Hab in Heven.\n    exact (Zeven_not_Zodd 195 Heven Hodd).\n```"
+}

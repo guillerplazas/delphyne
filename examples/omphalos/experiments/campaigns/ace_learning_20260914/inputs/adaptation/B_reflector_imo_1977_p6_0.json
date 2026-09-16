@@ -1,0 +1,345 @@
+{
+  "current_book": "### pitfalls\n- [rocq-00001] When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n\n- [rocq-00005] When applying a recurrence hypothesis whose predecessor uses truncated subtraction, first prove the exact natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality before applying the hypothesis so its indices unify.\n\n- [rocq-00006] Under an active `R_scope`, annotate natural-number indices, arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion and comparison-type errors.\n\n- [rocq-00010] Do not obtain a successor product bound by multiplying an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`. An induction proof must retain a bound parameterized by the total sum or average.\n\n- [rocq-00016] For real equations involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead of relying on `field_simplify` to normalize it.\n\n- [rocq-00018] For bounded natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce only explicitly closed numeral cases, using `change` to expose a known numeral equality when needed.\n\n- [rocq-00025] A closed cast such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality, for example with `cbv [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n\n\n### tactics\n- [rocq-00002] For an induction hypothesis relating recursive `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then apply `rewrite IH; lia`.\n\n- [rocq-00003] For goals over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use `intros` followed by `nia`; it can handle the nonlinear products and truncated subtraction directly.\n\n- [rocq-00004] For closed `nat` equalities built from executable finite-list operations such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`; use `reflexivity` afterward if the resulting definitional equality is not closed automatically.\n\n- [rocq-00011] Before using `nra` in AM-GM base or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition; `nra` cannot reason through opaque recursive definitions or supply the global inequality.\n\n- [rocq-00012] For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately for completing-square identities before finishing the resulting linear inequality with `lra`.\n\n- [rocq-00017] To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n\n- [rocq-00020] For instantiated recurrence equations containing closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then normalize each index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation chain.\n\n- [rocq-00021] For an explicit `Ensemble` built from nested `Add`, first unfold `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions and `False` cases are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer by layer, prove each freshness premise by unfolding `In` and `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n\n- [rocq-00024] For an unbounded quadratic equation over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction from the original equation.\n\n- [rocq-00028] After rewriting a natural-number product by `Nat.mul_1_r`, if the resulting subgoal is exactly `t <= t`, close that branch with `reflexivity`; do not apply a multiplication-monotonicity lemma whose right-hand side has a different shape.\n- [rocq-00029] For natural-number equations whose composite bases are powers of a common base, rewrite the bases explicitly, combine products and powers with `Nat.pow_mul_r` and `Nat.pow_add_r`, normalize the resulting exponents with `nia`, then use `Nat.pow_inj_r` with a positive base to extract equality of exponents and finish with `nia`.\n\n### lemmas\n- [rocq-00007] For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n\n- [rocq-00013] For positivity of a recursive real product whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity through opaque recursive products.\n\n- [rocq-00014] For natural-number product bounds, use `Nat.mul_le_mono` to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply an established inequality by a nonnegative factor; provide the premises in the lemma's expected order instead of guessing a multiplication-monotonicity API.\n\n- [rocq-00015] To lift a natural bound into `R`, expose the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <= INR c; apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent `.mpr` projection.\n\n- [rocq-00022] For trigonometric goals involving complementary or doubled angles, use the library lemma with the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n\n- [rocq-00023] For logarithmic inequalities and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use the resulting instantiated equality directly.\n\n- [rocq-00026] For a target or hypothesis containing `ln (a * b)`, explicitly rewrite it with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation does not expose this logarithmic product identity on its own.\n\n- [rocq-00027] For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n\n\n### strategy\n- [rocq-00009] For finite nonnegative real sequences with a fixed-sum product goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n\n- [rocq-00019] When proving a least witness by finite exclusion, first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch immediately, handle the finitely many numeral cases explicitly under `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors.",
+  "events": [
+    {
+      "context": {
+        "environment": "Require Import Arith.\nRequire Import PeanoNat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros n Hn.",
+          "induction n using lt_wf_ind.",
+          "destruct n as [|n].",
+          "- lia.",
+          "- assert (Hpos : 0 < S n) by lia."
+        ],
+        "problem_file": "miniF2F/test/imo/imo_1977_p6.v",
+        "problem_sha256": "203ff1263772a699d78b80d7fb0d1fe30414ba6ed81f216c2108392ddcd3c3c3",
+        "source": "2885bd2fc5db6d8fde2efa9ac2b569acf663f272e903e1ebb94408d8ff3b5ca4",
+        "theorem_name": "imo_1977_p6",
+        "version": 1
+      },
+      "error": "(-32003, 'Coq: In environment\\nf : nat -> nat\\nh\u2080 : forall n : nat, 0 < f n\\nh\u2081 : forall n : nat, 0 < n -> f (f n) < f (S n)\\nn : nat\\nHn : 0 < S n\\nH : forall m : nat, m < S n -> 0 < m -> f m = m\\nHpos : 0 < S n\\nThe term \"Hpos\" has type \"0 < S n\" while it is expected to have type \"0 < n\".')",
+      "goals": [
+        "f  : nat -> nat\nh\u2080  : forall n0 : nat, 0 < f n0\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\nn  : nat\nHn  : 0 < S n\nH  : forall m : nat, m < S n -> 0 < m -> f m = m\nHpos  : 0 < S n\n|-f (S n) = S n"
+      ],
+      "identifier": "e1",
+      "status": "rejected",
+      "submitted": "specialize (h\u2081 n Hpos)."
+    },
+    {
+      "context": {
+        "environment": "Require Import Arith.\nRequire Import PeanoNat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros n Hn.",
+          "induction n using lt_wf_ind.",
+          "destruct n as [|n].",
+          "- lia.",
+          "- assert (Hpos : 0 < S n) by lia.",
+          "destruct n as [|n].",
+          "+ assert (Hone : 0 < 1) by lia.",
+          "specialize (h\u2081 1 Hone).",
+          "specialize (h\u2080 (f 1))."
+        ],
+        "problem_file": "miniF2F/test/imo/imo_1977_p6.v",
+        "problem_sha256": "203ff1263772a699d78b80d7fb0d1fe30414ba6ed81f216c2108392ddcd3c3c3",
+        "source": "2885bd2fc5db6d8fde2efa9ac2b569acf663f272e903e1ebb94408d8ff3b5ca4",
+        "theorem_name": "imo_1977_p6",
+        "version": 1
+      },
+      "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+      "goals": [
+        "f  : nat -> nat\nh\u2080  : 0 < f (f 1)\nh\u2081  : f (f 1) < f 2\nHn  : 0 < 1\nH  : forall m : nat, m < 1 -> 0 < m -> f m = m\nHpos, Hone  : 0 < 1\n|-f 1 = 1"
+      ],
+      "identifier": "e2",
+      "status": "rejected",
+      "submitted": "lia."
+    },
+    {
+      "context": {
+        "environment": "Require Import Arith.\nRequire Import PeanoNat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros n Hn.",
+          "induction n using lt_wf_ind.",
+          "destruct n as [|n].",
+          "- lia.",
+          "- destruct n as [|n].",
+          "+ assert (Hone : 0 < 1) by lia.",
+          "specialize (h\u2081 1 Hone).",
+          "specialize (h\u2080 (f 1))."
+        ],
+        "problem_file": "miniF2F/test/imo/imo_1977_p6.v",
+        "problem_sha256": "203ff1263772a699d78b80d7fb0d1fe30414ba6ed81f216c2108392ddcd3c3c3",
+        "source": "2885bd2fc5db6d8fde2efa9ac2b569acf663f272e903e1ebb94408d8ff3b5ca4",
+        "theorem_name": "imo_1977_p6",
+        "version": 1
+      },
+      "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+      "goals": [
+        "f  : nat -> nat\nh\u2080  : 0 < f (f 1)\nh\u2081  : f (f 1) < f 2\nHn  : 0 < 1\nH  : forall m : nat, m < 1 -> 0 < m -> f m = m\nHone  : 0 < 1\n|-f 1 = 1"
+      ],
+      "identifier": "e3",
+      "status": "rejected",
+      "submitted": "nia."
+    },
+    {
+      "context": {
+        "environment": "Require Import Arith.\nRequire Import PeanoNat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros n Hn.",
+          "induction n using lt_wf_ind.",
+          "destruct n as [|n].",
+          "- lia.",
+          "- destruct n as [|n].",
+          "+ assert (Hone : 0 < 1) by lia.",
+          "specialize (h\u2081 1 Hone).",
+          "specialize (h\u2080 (f 1)).",
+          "assert (Hlt : f (f 1) < f 2) by exact h\u2081.",
+          "exfalso.",
+          "revert Hlt.",
+          "generalize (f 1) as k.",
+          "induction k using lt_wf_ind.",
+          "intros Hlt.",
+          "destruct k as [|k].",
+          "* simpl in Hlt."
+        ],
+        "problem_file": "miniF2F/test/imo/imo_1977_p6.v",
+        "problem_sha256": "203ff1263772a699d78b80d7fb0d1fe30414ba6ed81f216c2108392ddcd3c3c3",
+        "source": "2885bd2fc5db6d8fde2efa9ac2b569acf663f272e903e1ebb94408d8ff3b5ca4",
+        "theorem_name": "imo_1977_p6",
+        "version": 1
+      },
+      "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+      "goals": [
+        "f  : nat -> nat\nh\u2080  : 0 < f (f 1)\nh\u2081  : f (f 1) < f 2\nHn  : 0 < 1\nH  : forall m : nat, m < 1 -> 0 < m -> f m = m\nHone  : 0 < 1\nH0  : forall m : nat, m < 0 -> f m < f 2 -> False\nHlt  : f 0 < f 2\n|-False"
+      ],
+      "identifier": "e4",
+      "status": "rejected",
+      "submitted": "lia."
+    },
+    {
+      "context": {
+        "environment": "Require Import Arith.\nRequire Import PeanoNat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros n Hn.",
+          "assert (Hdesc : forall a : nat, 1 < a -> exists t : nat, 0 < t /\\ f t = 1).",
+          "{ apply (well_founded_induction lt_wf).",
+          "intros a IH Ha.",
+          "destruct (Nat.eq_dec (f (a - 1)) 1) as [Heq | Hneq].",
+          "- exists (a - 1).",
+          "split."
+        ],
+        "problem_file": "miniF2F/test/imo/imo_1977_p6.v",
+        "problem_sha256": "203ff1263772a699d78b80d7fb0d1fe30414ba6ed81f216c2108392ddcd3c3c3",
+        "source": "2885bd2fc5db6d8fde2efa9ac2b569acf663f272e903e1ebb94408d8ff3b5ca4",
+        "theorem_name": "imo_1977_p6",
+        "version": 1
+      },
+      "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+      "goals": [
+        "f  : nat -> nat\nh\u2080  : forall n0 : nat, 0 < f n0\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\nn  : nat\nHn  : 0 < n\na  : nat\nIH  : forall y : nat,\ny < a -> forall a0 : nat, 1 < a0 -> exists t : nat, 0 < t /\\ f t = 1\nHa  : nat\nHeq  : f (a - 1) = 1\nH  : 1 < Ha\n|-0 < a - 1",
+        "f  : nat -> nat\nh\u2080  : forall n0 : nat, 0 < f n0\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\nn  : nat\nHn  : 0 < n\na  : nat\nIH  : forall y : nat,\ny < a -> forall a0 : nat, 1 < a0 -> exists t : nat, 0 < t /\\ f t = 1\nHa  : nat\nHeq  : f (a - 1) = 1\nH  : 1 < Ha\n|-f (a - 1) = 1"
+      ],
+      "identifier": "e5",
+      "status": "rejected",
+      "submitted": "+ lia."
+    },
+    {
+      "context": {
+        "environment": "Require Import Arith.\nRequire Import PeanoNat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros n Hn.",
+          "assert (Hdesc : forall v : nat, forall a : nat, f a = v -> 1 < a -> exists t : nat, 0 < t /\\ f t = 1).",
+          "{ apply (well_founded_induction lt_wf).",
+          "intros v IH a Hva Ha.",
+          "destruct (Nat.eq_dec (f (a - 1)) 1) as [Heq | Hneq].",
+          "- exists (a - 1).",
+          "split."
+        ],
+        "problem_file": "miniF2F/test/imo/imo_1977_p6.v",
+        "problem_sha256": "203ff1263772a699d78b80d7fb0d1fe30414ba6ed81f216c2108392ddcd3c3c3",
+        "source": "2885bd2fc5db6d8fde2efa9ac2b569acf663f272e903e1ebb94408d8ff3b5ca4",
+        "theorem_name": "imo_1977_p6",
+        "version": 1
+      },
+      "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+      "goals": [
+        "f  : nat -> nat\nh\u2080  : forall n0 : nat, 0 < f n0\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\nn  : nat\nHn  : 0 < n\nv  : nat\nIH  : forall y : nat,\ny < v ->\nforall v0 a0 : nat, f a0 = v0 -> 1 < a0 -> exists t : nat, 0 < t /\\ f t = 1\na, Hva  : nat\nHa  : f Hva = a\nHeq  : f (a - 1) = 1\nH  : 1 < Hva\n|-0 < a - 1",
+        "f  : nat -> nat\nh\u2080  : forall n0 : nat, 0 < f n0\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\nn  : nat\nHn  : 0 < n\nv  : nat\nIH  : forall y : nat,\ny < v ->\nforall v0 a0 : nat, f a0 = v0 -> 1 < a0 -> exists t : nat, 0 < t /\\ f t = 1\na, Hva  : nat\nHa  : f Hva = a\nHeq  : f (a - 1) = 1\nH  : 1 < Hva\n|-f (a - 1) = 1"
+      ],
+      "identifier": "e6",
+      "status": "rejected",
+      "submitted": "+ lia."
+    },
+    {
+      "context": {
+        "environment": "Require Import Arith.\nRequire Import PeanoNat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros n Hn.",
+          "induction n using lt_wf_ind.",
+          "destruct n as [|n].",
+          "- lia.",
+          "- destruct n as [|n].",
+          "+ assert (H1 : f 1 = 1).",
+          "{ apply Nat.le_antisymm.",
+          "- specialize (h\u2080 1)."
+        ],
+        "problem_file": "miniF2F/test/imo/imo_1977_p6.v",
+        "problem_sha256": "203ff1263772a699d78b80d7fb0d1fe30414ba6ed81f216c2108392ddcd3c3c3",
+        "source": "2885bd2fc5db6d8fde2efa9ac2b569acf663f272e903e1ebb94408d8ff3b5ca4",
+        "theorem_name": "imo_1977_p6",
+        "version": 1
+      },
+      "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+      "goals": [
+        "f  : nat -> nat\nh\u2080  : 0 < f 1\nh\u2081  : forall n : nat, 0 < n -> f (f n) < f (S n)\nHn  : 0 < 1\nH  : forall m : nat, m < 1 -> 0 < m -> f m = m\n|-f 1 <= 1"
+      ],
+      "identifier": "e7",
+      "status": "rejected",
+      "submitted": "lia."
+    },
+    {
+      "context": {
+        "environment": "Require Import Arith.\nRequire Import PeanoNat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros n Hn.",
+          "assert (Hdesc : forall v : nat, forall a : nat, f a = v -> 1 < a -> exists t : nat, 0 < t /\\ f t = 1).",
+          "{ apply (well_founded_induction lt_wf).",
+          "intros v IH a Hva Ha.",
+          "destruct (Nat.eq_dec (f (a - 1)) 1) as [Heq | Hneq].",
+          "- exists (a - 1).",
+          "split."
+        ],
+        "problem_file": "miniF2F/test/imo/imo_1977_p6.v",
+        "problem_sha256": "203ff1263772a699d78b80d7fb0d1fe30414ba6ed81f216c2108392ddcd3c3c3",
+        "source": "2885bd2fc5db6d8fde2efa9ac2b569acf663f272e903e1ebb94408d8ff3b5ca4",
+        "theorem_name": "imo_1977_p6",
+        "version": 1
+      },
+      "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+      "goals": [
+        "f  : nat -> nat\nh\u2080  : forall n0 : nat, 0 < f n0\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\nn  : nat\nHn  : 0 < n\nv  : nat\nIH  : forall y : nat,\ny < v ->\nforall v0 a0 : nat, f a0 = v0 -> 1 < a0 -> exists t : nat, 0 < t /\\ f t = 1\na, Hva  : nat\nHa  : f Hva = a\nHeq  : f (a - 1) = 1\nH  : 1 < Hva\n|-0 < a - 1",
+        "f  : nat -> nat\nh\u2080  : forall n0 : nat, 0 < f n0\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\nn  : nat\nHn  : 0 < n\nv  : nat\nIH  : forall y : nat,\ny < v ->\nforall v0 a0 : nat, f a0 = v0 -> 1 < a0 -> exists t : nat, 0 < t /\\ f t = 1\na, Hva  : nat\nHa  : f Hva = a\nHeq  : f (a - 1) = 1\nH  : 1 < Hva\n|-f (a - 1) = 1"
+      ],
+      "identifier": "e8",
+      "status": "rejected",
+      "submitted": "+ lia."
+    }
+  ],
+  "playbook": "### pitfalls\n- [rocq-00001] When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n\n- [rocq-00005] When applying a recurrence hypothesis whose predecessor uses truncated subtraction, first prove the exact natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality before applying the hypothesis so its indices unify.\n\n- [rocq-00006] Under an active `R_scope`, annotate natural-number indices, arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion and comparison-type errors.\n\n- [rocq-00010] Do not obtain a successor product bound by multiplying an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`. An induction proof must retain a bound parameterized by the total sum or average.\n\n- [rocq-00016] For real equations involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead of relying on `field_simplify` to normalize it.\n\n- [rocq-00018] For bounded natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce only explicitly closed numeral cases, using `change` to expose a known numeral equality when needed.\n\n- [rocq-00025] A closed cast such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality, for example with `cbv [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n\n\n### tactics\n- [rocq-00002] For an induction hypothesis relating recursive `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then apply `rewrite IH; lia`.\n\n- [rocq-00003] For goals over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use `intros` followed by `nia`; it can handle the nonlinear products and truncated subtraction directly.\n\n- [rocq-00004] For closed `nat` equalities built from executable finite-list operations such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`; use `reflexivity` afterward if the resulting definitional equality is not closed automatically.\n\n- [rocq-00011] Before using `nra` in AM-GM base or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition; `nra` cannot reason through opaque recursive definitions or supply the global inequality.\n\n- [rocq-00012] For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately for completing-square identities before finishing the resulting linear inequality with `lra`.\n\n- [rocq-00017] To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n\n- [rocq-00020] For instantiated recurrence equations containing closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then normalize each index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation chain.\n\n- [rocq-00021] For an explicit `Ensemble` built from nested `Add`, first unfold `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions and `False` cases are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer by layer, prove each freshness premise by unfolding `In` and `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n\n- [rocq-00024] For an unbounded quadratic equation over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction from the original equation.\n\n\n### lemmas\n- [rocq-00007] For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n\n- [rocq-00013] For positivity of a recursive real product whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity through opaque recursive products.\n\n- [rocq-00014] For natural-number product bounds, use `Nat.mul_le_mono` to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply an established inequality by a nonnegative factor; provide the premises in the lemma's expected order instead of guessing a multiplication-monotonicity API.\n\n- [rocq-00015] To lift a natural bound into `R`, expose the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <= INR c; apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent `.mpr` projection.\n\n- [rocq-00022] For trigonometric goals involving complementary or doubled angles, use the library lemma with the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n\n- [rocq-00023] For logarithmic inequalities and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use the resulting instantiated equality directly.\n\n- [rocq-00026] For a target or hypothesis containing `ln (a * b)`, explicitly rewrite it with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation does not expose this logarithmic product identity on its own.\n\n- [rocq-00027] For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n\n\n### strategy\n- [rocq-00009] For finite nonnegative real sequences with a fixed-sum product goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n\n- [rocq-00019] When proving a least witness by finite exclusion, first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch immediately, handle the finitely many numeral cases explicitly under `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors.",
+  "problem_file": "miniF2F/test/imo/imo_1977_p6.v",
+  "terminal": {
+    "accepted_script": [],
+    "accepted_tail": [],
+    "auto_finished": false,
+    "cache_sha256": "2885bd2fc5db6d8fde2efa9ac2b569acf663f272e903e1ebb94408d8ff3b5ca4",
+    "check_sha256": "43f8733e4008bae119c1fbd08a0828215ea60a102798db978e4bb54ad74cae28",
+    "checker": "checked_proof",
+    "common_prefix": [],
+    "detail": "Tails are a derived textual diff, not an execution trace. Only accepted_script is certified complete. auto_finished is the recorded assistance flag; absent pre-assistance details are unknown. returned_script matches via the existing tactic splitter; accepted_script preserves the exact checker sequence.",
+    "problem_file": "miniF2F/test/imo/imo_1977_p6.v",
+    "result_sha256": "fceaad3e1bf549b103e0cc3870f016913e3e0999f2976185b97375b3d42e5340",
+    "returned_script": "",
+    "source_cell": "experiments/output/ace_models_20260910/proof/configs/imo_1977_p6__prover-medium-1e4aec7dbbe80e7a__gpt-5.6-luna__seed0",
+    "status": "not_solved",
+    "submitted_script": [
+      "intros n Hn.",
+      "assert (Hdesc : forall v : nat, forall a : nat, f a = v -> 1 < a -> exists t : nat, 0 < t /\\ f t = 1).",
+      "{ apply (well_founded_induction lt_wf).",
+      "intros v IH a Hva Ha.",
+      "destruct (Nat.eq_dec (f (a - 1)) 1) as [Heq | Hneq].",
+      "- exists (a - 1).",
+      "split.",
+      "+ lia.",
+      "+ exact Heq.",
+      "- assert (Ha' : 0 < a - 1) by lia.",
+      "assert (Hy : 1 < f (a - 1)).",
+      "{ specialize (h\u2080 (a - 1)).",
+      "lia.",
+      "}",
+      "assert (Hlt : f (f (a - 1)) < v).",
+      "{ rewrite <- Hva.",
+      "replace a with (S (a - 1)) by lia.",
+      "apply h\u2081.",
+      "lia.",
+      "}",
+      "destruct (IH (f (f (a - 1))) Hlt (f (a - 1)) eq_refl Hy) as [t [Ht Ht1]].",
+      "exists t.",
+      "split; assumption.",
+      "}",
+      "assert (Hone : f 1 = 1).",
+      "{ destruct (Nat.eq_dec (f 1) 1) as [H | H].",
+      "- exact H.",
+      "- assert (Hgt : 1 < f 1) by lia.",
+      "destruct (Hdesc (f 1) 1 eq_refl Hgt) as [t [Ht Ht1]].",
+      "destruct t as [|t].",
+      "+ lia.",
+      "+ destruct t as [|t].",
+      "* exact Ht1.",
+      "* exfalso.",
+      "assert (Hs : f (f (S t)) < f (S (S t))) by (apply h\u2081; lia).",
+      "specialize (h\u2080 (f (S t))).",
+      "lia.",
+      "}",
+      "induction n using lt_wf_ind.",
+      "destruct n as [|n].",
+      "- lia.",
+      "- destruct n as [|n].",
+      "+ exact Hone.",
+      "+ assert (Hp : 0 < S n) by lia.",
+      "specialize (H (S n) ltac:(lia) ltac:(lia)).",
+      "specialize (h\u2081 (S n) Hp).",
+      "nia."
+    ],
+    "submitted_tail": [
+      "intros n Hn.",
+      "assert (Hdesc : forall v : nat, forall a : nat, f a = v -> 1 < a -> exists t : nat, 0 < t /\\ f t = 1).",
+      "{ apply (well_founded_induction lt_wf).",
+      "intros v IH a Hva Ha.",
+      "destruct (Nat.eq_dec (f (a - 1)) 1) as [Heq | Hneq].",
+      "- exists (a - 1).",
+      "split.",
+      "+ lia.",
+      "+ exact Heq.",
+      "- assert (Ha' : 0 < a - 1) by lia.",
+      "assert (Hy : 1 < f (a - 1)).",
+      "{ specialize (h\u2080 (a - 1)).",
+      "lia.",
+      "}",
+      "assert (Hlt : f (f (a - 1)) < v).",
+      "{ rewrite <- Hva.",
+      "replace a with (S (a - 1)) by lia.",
+      "apply h\u2081.",
+      "lia.",
+      "}",
+      "destruct (IH (f (f (a - 1))) Hlt (f (a - 1)) eq_refl Hy) as [t [Ht Ht1]].",
+      "exists t.",
+      "split; assumption.",
+      "}",
+      "assert (Hone : f 1 = 1).",
+      "{ destruct (Nat.eq_dec (f 1) 1) as [H | H].",
+      "- exact H.",
+      "- assert (Hgt : 1 < f 1) by lia.",
+      "destruct (Hdesc (f 1) 1 eq_refl Hgt) as [t [Ht Ht1]].",
+      "destruct t as [|t].",
+      "+ lia.",
+      "+ destruct t as [|t].",
+      "* exact Ht1.",
+      "* exfalso.",
+      "assert (Hs : f (f (S t)) < f (S (S t))) by (apply h\u2081; lia).",
+      "specialize (h\u2080 (f (S t))).",
+      "lia.",
+      "}",
+      "induction n using lt_wf_ind.",
+      "destruct n as [|n].",
+      "- lia.",
+      "- destruct n as [|n].",
+      "+ exact Hone.",
+      "+ assert (Hp : 0 < S n) by lia.",
+      "specialize (H (S n) ltac:(lia) ltac:(lia)).",
+      "specialize (h\u2081 (S n) Hp).",
+      "nia."
+    ],
+    "theorem_name": "imo_1977_p6",
+    "version": 2
+  },
+  "trajectory": "[PROBLEM]\nProve the following theorem in Rocq.\n\n## Imports already in scope\n\n```rocq\nRequire Import Arith.\nRequire Import PeanoNat.\n```\n\n## Theorem\n\n```rocq\nTheorem imo_1977_p6 (f : nat -> nat)\n  (h\u2080 : forall n, 0 < f n)\n  (h\u2081 : forall n, 0 < n -> f (f n) < f (S n)) :\n  forall n, 0 < n -> f n = n.\n```\n\n## Informal statement\n\nLet $f(n)$ be a function $f: \\mathbb{N}^{+}\\to\\mathbb{N}^{+}$. Prove that if $ f(n+1)\n   > f(f(n)) $ for each positive integer $n$, then $f(n)=n$.\n\n## Informal proof sketch\n\nWe will prove this via induction. First we will prove there is a $t$ such that\n   $f(t)=1$ and then that $t=1$ is the only such solution.\n\n   Define the sequence $a_n$ with $a_0>1$ for $a_0\\in \\mathbb{N} $ and\n   $a_k=f(a_{k-1}-1)$. By the given inequality we have that $f(a_n)>f(a_{n+1})$, this\n   can be used to form a inequality chain of decreasing positive integers: $\n   f(a_0)>f(a_1)>f(a_2)>...$\n   By [[Infinite Descent]], this sequence must terminate, and the only way it can\n   terminate is if we input something into $f$ that is outside of its range. This can\n   only happen if $a_n=1$ since the range and domain of $f$ are the positive integers.\n   Since $a_0\\neq 1$, there is a integer $t$ ($a_{n-1}-1$) such that $f(t)=1$.\n\n   Now if $t\\neq 1$, then $f(t)=1>f(f(t-1))$, which is impossible since $f(f(t-1))\\ge 1$\n   by the range of $f$, so we have $t=1$ is the only time when $f(t)=1$.\n\n   Now for the inductive step.\n\n   Assume that $f(n)=n$ for all $n<k$ and these are the only times these values occur.\n   We will prove that $f(k)=k$ and that this is the only time this value occurs. Define\n   the sequence $a_n$ similarly, except that $a_0>k$, by the reasoning above, there is a\n   $a_m$ such that $f(a_m)=1$, by the inductive assumption, this means that\n   $a_m=f(a_{m-1}-1)=1$, we can repeat the inductive assumption to get that\n   $a_{m-k+1}=k$. This implies that $f(a_{m-k}-1)=k$. Thus, there is a $t$ such that\n   $f(t)=k$.\n\n   Now for that $t$, we have $k>f(f(t-1))$, which means that $k+1>t$ by the inductive\n   assumption which implies $t=k$ since we must have $t>k-1$, otherwise $f(t)<k$. So\n   $t=k$ is the only time when $f(t)=k$\n\n   So the inductive step is complete. Therefore, by induction $f(n)=n$ for all positive\n   integers $n$.\n\nReply with a fenced code block containing only the body of the proof\n(no `Proof.`, no `Qed.`).\nBefore your first tool call or proposal, name the playbook bullet ids\nyou intend to rely on for this theorem (or say \"none apply\").\nLast verified prefix (preserve it for local suffix repair):\n```rocq\nintros n Hn.\ninduction n using lt_wf_ind.\ndestruct n as [|n].\n- lia.\n- destruct n as [|n].\n+ assert (H1 : f 1 = 1).\n{ apply Nat.le_antisymm.\n- specialize (h\u2080 1).\n```\n\nFocus decision: identify the cast, normal form or side condition blocking\nthe last step. Choose one bridge justified by the current goal, preserve\nthe verified prefix, and return a complete script using that bridge.\n\n[ASSISTANT]\nPlaybook bullets intended: rocq-00003 (for nonlinear natural arithmetic if it arises), rocq-00024 (for bounded natural contradictions), and rocq-00019 (for least-witness/finite-exclusion structure). The core descent argument is not directly covered by the listed bullets.\n\n[TOOL CALL] ReadSkill(skill_name='proof-templates')\n[TOOL RESULT]\n# Proof Templates\n\nStructured proof skeletons for common patterns in Rocq.\n\n## General Theorem Template\n\n```coq\nTheorem theorem_name : forall (x : A), P x.\nProof.\n  intros x.\n  (* Strategy: [describe approach] *)\n  (* Step 1: [what to prove first] *)\n  admit. (* TODO: fill *)\nAdmitted.\n```\n\n## Induction Template\n\n```coq\nTheorem induction_example : forall n : nat, P n.\nProof.\n  induction n as [|n' IH].\n  - (* Base case: n = 0 *)\n    admit. (* TODO *)\n  - (* Inductive case: n = S n' *)\n    (* IH : P n' *)\n    admit. (* TODO *)\nAdmitted.\n```\n\n## Case Analysis Template\n\n```coq\nTheorem case_example : forall (x : A), P x.\nProof.\n  intros x.\n  destruct x as [a | b].\n  - (* Case 1: x = inl a *)\n    admit. (* TODO *)\n  - (* Case 2: x = inr b *)\n    admit. (* TODO *)\nAdmitted.\n```\n\n## Calculation Chain Template\n\n```coq\nTheorem calc_example : forall n : nat, f n = g n.\nProof.\n  intros n.\n  (* Step-by-step rewriting *)\n  unfold f.\n  rewrite lemma1.\n  rewrite lemma2.\n  unfold g.\n  reflexivity.\nQed.\n```\n\n## Existential Proof Template\n\n```coq\nTheorem exists_example : exists n : nat, P n.\nProof.\n  exists 42. (* witness *)\n  (* Now prove: P 42 *)\n  admit. (* TODO *)\nAdmitted.\n```\n\n## Strong Induction Template\n\n```coq\nRequire Import Arith.\n\nTheorem strong_induction : forall n : nat, P n.\nProof.\n  intros n.\n  induction n as [n IH] using lt_wf_ind.\n  (* IH : forall m, m < n -> P m *)\n  admit. (* TODO *)\nAdmitted.\n```\n\n## Well-Founded Induction Template\n\n```coq\nRequire Import Wf_nat.\n\nTheorem wf_example : forall n : nat, P n.\nProof.\n  apply well_founded_induction with (R := lt).\n  - exact lt_wf.\n  - intros x IH.\n    (* IH : forall y, y < x -> P y *)\n    admit. (* TODO *)\nAdmitted.\n```\n\n## If-Then-Else Template\n\n```coq\nRequire Import Decidable.\n\nTheorem if_example : forall n m : nat, P n m.\nProof.\n  intros n m.\n  destruct (Nat.eq_dec n m) as [Heq | Hneq].\n  - (* Case: n = m *)\n    subst. admit. (* TODO *)\n  - (* Case: n <> m *)\n    admit. (* TODO *)\nAdmitted.\n```\n\n## Uniqueness Proof Template\n\n```coq\nTheorem unique_example : forall x : A,\n  (exists y, P x y) /\\ (forall y1 y2, P x y1 -> P x y2 -> y1 = y2).\nProof.\n  intros x. split.\n  - (* Existence *)\n    exists witness.\n    admit. (* TODO *)\n  - (* Uniqueness *)\n    intros y1 y2 H1 H2.\n    admit. (* TODO *)\nAdmitted.\n```\n\n## Equivalence Proof Template\n\n```coq\nTheorem equiv_example : forall x : A, P x <-> Q x.\nProof.\n  intros x. split.\n  - (* Forward: P x -> Q x *)\n    intros HP.\n    admit. (* TODO *)\n  - (* Backward: Q x -> P x *)\n    intros HQ.\n    admit. (* TODO *)\nAdmitted.\n```\n\n## Proof by Contradiction Template\n\n```coq\nRequire Import Classical.\n\nTheorem contradiction_example : forall x : A, P x.\nProof.\n  intros x.\n  apply NNPP. intros Hnot.\n  (* Hnot : ~P x *)\n  (* Derive a contradiction *)\n  admit. (* TODO *)\nAdmitted.\n```\n\n## Tips for Using Templates\n\n1. Start with the easiest Admitted\n2. Fill TODOs one at a time\n3. Verify frequently with `rocq_compile`\n4. Search the library before proving from scratch\n5. Use `rocq_step_multi` to test multiple tactics at once\n\n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='Search (forall f : nat -> nat, (forall n, 0 < f n) -> (forall n, 0 < n -> f (f n) < f (S n)) -> forall n, 0 < n -> f n = n).')\n[TOOL RESULT]\n{\"output\": \"[]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"f  : nat -> nat\\nh\u2080  : forall n : nat, 0 < f n\\nh\u2081  : forall n : nat, 0 < n -> f (f n) < f (S n)\\n|-forall n : nat, 0 < n -> f n = n\"], \"next\": null}\n\n[TOOL CALL] SearchRocq(command='Check Nat.lt_asymm.')\n[TOOL RESULT]\n{\"output\": \"[(3, 'Nat.lt_asymm\\\\n     : forall n m : nat, n < m -> ~ m < n')]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"f  : nat -> nat\\nh\u2080  : forall n : nat, 0 < f n\\nh\u2081  : forall n : nat, 0 < n -> f (f n) < f (S n)\\n|-forall n : nat, 0 < n -> f n = n\"], \"next\": null}\n\n[TOOL CALL] SearchRocq(command='About lia.')\n[TOOL RESULT]\n{\"output\": \"[(3, 'Ltac Stdlib.micromega.Psatz.lia')]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"f  : nat -> nat\\nh\u2080  : forall n : nat, 0 < f n\\nh\u2081  : forall n : nat, 0 < n -> f (f n) < f (S n)\\n|-forall n : nat, 0 < n -> f n = n\"], \"next\": null}\n\n[ASSISTANT]\nThe theorem needs a global descent/monotonicity argument; a plain induction is insufficient because the hypothesis relates `f (f n)` to `f (S n)`. I\u2019ll inspect the induction shape before committing to a script.\n\n[TOOL CALL] InspectProofState(tactics='intros n Hn.\\ninduction n as [|n IH].', command='', start=0)\n[TOOL RESULT]\n{\"output\": \"\", \"start\": 0, \"total_goals\": 2, \"goals\": [\"f  : nat -> nat\\nh\u2080  : forall n : nat, 0 < f n\\nh\u2081  : forall n : nat, 0 < n -> f (f n) < f (S n)\\nHn  : 0 < 0\\n|-f 0 = 0\", \"f  : nat -> nat\\nh\u2080  : forall n0 : nat, 0 < f n0\\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\\nn  : nat\\nHn  : 0 < S n\\nIH  : 0 < n -> f n = n\\n|-f (S n) = S n\"], \"next\": null}\n\n[ASSISTANT]\n```rocq\nintros n Hn.\ninduction n using lt_wf_ind.\ndestruct n as [|n].\n- lia.\n- assert (Hpos : 0 < S n) by lia.\n  specialize (h\u2081 n Hpos).\n  destruct n as [|n].\n  + simpl in h\u2081.\n    specialize (h\u2080 (f 1)).\n    lia.\n  + specialize (H (S n)).\n    assert (Hn' : 0 < S n) by lia.\n    specialize (H Hn').\n    simpl in H.\n    lia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"specialize (h\u2081 n Hpos).\", \"error\": \"(-32003, 'Coq: In environment\\\\nf : nat -> nat\\\\nh\u2080 : forall n : nat, 0 < f n\\\\nh\u2081 : forall n : nat, 0 < n -> f (f n) < f (S n)\\\\nn : nat\\\\nHn : 0 < S n\\\\nH : forall m : nat, m < S n -> 0 < m -> f m = m\\\\nHpos : 0 < S n\\\\nThe term \\\"Hpos\\\" has type \\\"0 < S n\\\" while it is expected to have type \\\"0 < n\\\".')\", \"verified_prefix\": [\"intros n Hn.\", \"induction n using lt_wf_ind.\", \"destruct n as [|n].\", \"- lia.\", \"- assert (Hpos : 0 < S n) by lia.\"], \"total_goals\": 1, \"goals\": [\"f  : nat -> nat\\nh\u2080  : forall n0 : nat, 0 < f n0\\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\\nn  : nat\\nHn  : 0 < S n\\nH  : forall m : nat, m < S n -> 0 < m -> f m = m\\nHpos  : 0 < S n\\n|-f (S n) = S n\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros n Hn.\ninduction n using lt_wf_ind.\ndestruct n as [|n].\n- lia.\n- assert (Hpos : 0 < S n) by lia.\n  destruct n as [|n].\n  + assert (Hone : 0 < 1) by lia.\n    specialize (h\u2081 1 Hone).\n    specialize (h\u2080 (f 1)).\n    lia.\n  + assert (Hn_pos : 0 < S n) by lia.\n    specialize (h\u2081 (S n) Hn_pos).\n    assert (Hpred : 0 < n) by lia.\n    specialize (H n ltac:(lia) Hpred).\n    specialize (h\u2080 (f (S n))).\n    lia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"lia.\", \"error\": \"(-32003, 'Coq: Tactic failure:  Cannot find witness.')\", \"verified_prefix\": [\"intros n Hn.\", \"induction n using lt_wf_ind.\", \"destruct n as [|n].\", \"- lia.\", \"- assert (Hpos : 0 < S n) by lia.\", \"destruct n as [|n].\", \"+ assert (Hone : 0 < 1) by lia.\", \"specialize (h\u2081 1 Hone).\", \"specialize (h\u2080 (f 1)).\"], \"total_goals\": 1, \"goals\": [\"f  : nat -> nat\\nh\u2080  : 0 < f (f 1)\\nh\u2081  : f (f 1) < f 2\\nHn  : 0 < 1\\nH  : forall m : nat, m < 1 -> 0 < m -> f m = m\\nHpos, Hone  : 0 < 1\\n|-f 1 = 1\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros n Hn.\ninduction n using lt_wf_ind.\ndestruct n as [|n].\n- lia.\n- destruct n as [|n].\n  + assert (Hone : 0 < 1) by lia.\n    specialize (h\u2081 1 Hone).\n    specialize (h\u2080 (f 1)).\n    nia.\n  + assert (Hnpos : 0 < S n) by lia.\n    specialize (h\u2081 (S n) Hnpos).\n    assert (Hprev : 0 < n) by lia.\n    specialize (H (S n) (by lia) Hprev).\n    nia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"nia.\", \"error\": \"(-32003, 'Coq: Tactic failure:  Cannot find witness.')\", \"verified_prefix\": [\"intros n Hn.\", \"induction n using lt_wf_ind.\", \"destruct n as [|n].\", \"- lia.\", \"- destruct n as [|n].\", \"+ assert (Hone : 0 < 1) by lia.\", \"specialize (h\u2081 1 Hone).\", \"specialize (h\u2080 (f 1)).\"], \"total_goals\": 1, \"goals\": [\"f  : nat -> nat\\nh\u2080  : 0 < f (f 1)\\nh\u2081  : f (f 1) < f 2\\nHn  : 0 < 1\\nH  : forall m : nat, m < 1 -> 0 < m -> f m = m\\nHone  : 0 < 1\\n|-f 1 = 1\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='Search (forall f : nat -> nat, (forall n, 0 < f n) -> (forall n, 0 < n -> f (f n) < f (S n)) -> _).')\n[TOOL RESULT]\n{\"output\": \"[]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"f  : nat -> nat\\nh\u2080  : 0 < f (f 1)\\nh\u2081  : f (f 1) < f 2\\nHn  : 0 < 1\\nH  : forall m : nat, m < 1 -> 0 < m -> f m = m\\nHone  : 0 < 1\\n|-f 1 = 1\"], \"next\": null}\n\n[ASSISTANT]\n```rocq\nintros n Hn.\ninduction n using lt_wf_ind.\ndestruct n as [|n].\n- lia.\n- destruct n as [|n].\n  + assert (Hone : 0 < 1) by lia.\n    specialize (h\u2081 1 Hone).\n    specialize (h\u2080 (f 1)).\n    assert (Hlt : f (f 1) < f 2) by exact h\u2081.\n    exfalso.\n    revert Hlt.\n    generalize (f 1) as k.\n    induction k using lt_wf_ind.\n    intros Hlt.\n    destruct k as [|k].\n    * simpl in Hlt.\n      lia.\n    * destruct k as [|k].\n      -- simpl in Hlt.\n         lia.\n      -- specialize (h\u2081 (S (S k)) ltac:(lia)).\n         specialize (H (S k) ltac:(lia) ltac:(lia)).\n         lia.\n  + specialize (h\u2081 (S n) ltac:(lia)).\n    specialize (H (S n) ltac:(lia) ltac:(lia)).\n    lia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"lia.\", \"error\": \"(-32003, 'Coq: Tactic failure:  Cannot find witness.')\", \"verified_prefix\": [\"intros n Hn.\", \"induction n using lt_wf_ind.\", \"destruct n as [|n].\", \"- lia.\", \"- destruct n as [|n].\", \"+ assert (Hone : 0 < 1) by lia.\", \"specialize (h\u2081 1 Hone).\", \"specialize (h\u2080 (f 1)).\", \"assert (Hlt : f (f 1) < f 2) by exact h\u2081.\", \"exfalso.\", \"revert Hlt.\", \"generalize (f 1) as k.\", \"induction k using lt_wf_ind.\", \"intros Hlt.\", \"destruct k as [|k].\", \"* simpl in Hlt.\"], \"total_goals\": 1, \"goals\": [\"f  : nat -> nat\\nh\u2080  : 0 < f (f 1)\\nh\u2081  : f (f 1) < f 2\\nHn  : 0 < 1\\nH  : forall m : nat, m < 1 -> 0 < m -> f m = m\\nHone  : 0 < 1\\nH0  : forall m : nat, m < 0 -> f m < f 2 -> False\\nHlt  : f 0 < f 2\\n|-False\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros n Hn.\nassert (Hdesc :\n  forall a : nat, 1 < a ->\n    exists t : nat, 0 < t /\\ f t = 1).\n{\n  apply (well_founded_induction lt_wf).\n  intros a IH Ha.\n  destruct (Nat.eq_dec (f (a - 1)) 1) as [Heq | Hneq].\n  - exists (a - 1).\n    split.\n    + lia.\n    + exact Heq.\n  - assert (Hpos : 0 < a - 1) by lia.\n    assert (Hlt : f (f (a - 1)) < f a).\n    {\n      replace a with (S (a - 1)) by lia.\n      apply h\u2081.\n      lia.\n    }\n    assert (Hbig : 1 < f (a - 1)) by lia.\n    destruct (IH (f (a - 1)) Hlt Hbig) as [t [Ht Hft]].\n    exists t.\n    split; assumption.\n}\nassert (Hone : f 1 = 1).\n{\n  destruct (Nat.eq_dec (f 1) 1) as [H | H].\n  - exact H.\n  - assert (Hbig : 1 < f 1) by lia.\n    destruct (Hdesc (f 1) Hbig) as [t [Ht Ht1]].\n    destruct (Nat.eq_dec t 1) as [Ht' | Ht'].\n    - subst t.\n      exact Ht1.\n    - assert (Hcontr : f (f (t - 1)) < f t).\n      {\n        replace t with (S (t - 1)) by lia.\n        apply h\u2081.\n        lia.\n      }\n      lia.\n}\ninduction n using lt_wf_ind.\ndestruct n as [|n].\n- lia.\n- destruct n as [|n].\n  + exact Hone.\n  + assert (Hn : 0 < S (S n)) by lia.\n    specialize (H (S n) ltac:(lia) ltac:(lia)).\n    specialize (h\u2081 (S n) ltac:(lia)).\n    lia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"+ lia.\", \"error\": \"(-32003, 'Coq: Tactic failure:  Cannot find witness.')\", \"verified_prefix\": [\"intros n Hn.\", \"assert (Hdesc : forall a : nat, 1 < a -> exists t : nat, 0 < t /\\\\ f t = 1).\", \"{ apply (well_founded_induction lt_wf).\", \"intros a IH Ha.\", \"destruct (Nat.eq_dec (f (a - 1)) 1) as [Heq | Hneq].\", \"- exists (a - 1).\", \"split.\"], \"total_goals\": 2, \"goals\": [\"f  : nat -> nat\\nh\u2080  : forall n0 : nat, 0 < f n0\\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\\nn  : nat\\nHn  : 0 < n\\na  : nat\\nIH  : forall y : nat,\\ny < a -> forall a0 : nat, 1 < a0 -> exists t : nat, 0 < t /\\\\ f t = 1\\nHa  : nat\\nHeq  : f (a - 1) = 1\\nH  : 1 < Ha\\n|-0 < a - 1\", \"f  : nat -> nat\\nh\u2080  : forall n0 : nat, 0 < f n0\\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\\nn  : nat\\nHn  : 0 < n\\na  : nat\\nIH  : forall y : nat,\\ny < a -> forall a0 : nat, 1 < a0 -> exists t : nat, 0 < t /\\\\ f t = 1\\nHa  : nat\\nHeq  : f (a - 1) = 1\\nH  : 1 < Ha\\n|-f (a - 1) = 1\"], \"automation\": [null, \"assumption.\"], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='SearchPattern (forall f : nat -> nat, _ -> _ -> forall n, _).')\n[TOOL RESULT]\n{\"output\": \"[(3, 'Nat.min_monotone:\\\\n  forall f : nat -> nat,\\\\n  Morphisms.Proper (Morphisms.respectful le le) f ->\\\\n  forall x y : nat, Nat.min (f x) (f y) = f (Nat.min x y)'), (3, 'Nat.max_monotone:\\\\n  forall f : nat -> nat,\\\\n  Morphisms.Proper (Morphisms.respectful le le) f ->\\\\n  forall x y : nat, Nat.max (f x) (f y) = f (Nat.max x y)'), (3, 'Nat.min_max_antimonotone:\\\\n  forall f : nat -> nat,\\\\n  Morphisms.Proper (Morphisms.respectful le (Basics.flip le)) f ->\\\\n  forall x y : nat, Nat.min (f x) (f y) = f (Nat.max x y)'), (3, 'Nat.max_min_antimonotone:\\\\n  forall f : nat -> nat,\\\\n  Morphisms.Proper (Morphisms.respectful le (Basics.flip le)) f ->\\\\n  forall x y : nat, Nat.max (f x) (f y) = f (Nat.min x y)'), (3, 'Nat.min_mono:\\\\n  forall f : nat -> nat,\\\\n  Morphisms.Proper (Morphisms.respectful eq eq) f ->\\\\n  Morphisms.Proper (Morphisms.respectful le le) f ->\\\\n  forall x y : nat, Nat.min (f x) (f y) = f (Nat.min x y)'), (3, 'Nat.max_mono:\\\\n  forall f : nat -> nat,\\\\n  Morphisms.Proper (Morphisms.respectful eq eq) f ->\\\\n  Morphisms.Proper (Morphisms.respectful le le) f ->\\\\n  forall x y : nat, Nat.max (f x) (f y) = f (Nat.max x y)'), (3, 'Nat.max_min_antimono:\\\\n  forall f : nat -> nat,\\\\n  Morphisms.Proper (Morphisms.respectful eq eq) f ->\\\\n  Morphisms.Proper (Morphisms.respectful le (Basics.flip le)) f ->\\\\n  forall x y : nat, Nat.max (f x) (f y) = f (Nat.min x y)'), (3, 'Nat.min_max_antimono:\\\\n  forall f : nat -> nat,\\\\n  Morphisms.Proper (Morphisms.respectful eq eq) f ->\\\\n  Morphisms.Proper (Morphisms.respectful le (Basics.flip le)) f ->\\\\n  forall x y : nat, Nat.min (f x) (f y) = f (Nat.max x y)')]\", \"start\": 0, \"total_goals\": 2, \"goals\": [\"f  : nat -> nat\\nh\u2080  : forall n0 : nat, 0 < f n0\\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\\nn  : nat\\nHn  : 0 < n\\na  : nat\\nIH  : forall y : nat,\\ny < a -> forall a0 : nat, 1 < a0 -> exists t : nat, 0 < t /\\\\ f t = 1\\nHa  : nat\\nHeq  : f (a - 1) = 1\\nH  : 1 < Ha\\n|-0 < a - 1\", \"f  : nat -> nat\\nh\u2080  : forall n0 : nat, 0 < f n0\\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\\nn  : nat\\nHn  : 0 < n\\na  : nat\\nIH  : forall y : nat,\\ny < a -> forall a0 : nat, 1 < a0 -> exists t : nat, 0 < t /\\\\ f t = 1\\nHa  : nat\\nHeq  : f (a - 1) = 1\\nH  : 1 < Ha\\n|-f (a - 1) = 1\"], \"next\": null}\n\n[ASSISTANT]\n```rocq\nintros n Hn.\nassert (Hdesc :\n  forall v : nat, forall a : nat, f a = v -> 1 < a ->\n    exists t : nat, 0 < t /\\ f t = 1).\n{\n  apply (well_founded_induction lt_wf).\n  intros v IH a Hva Ha.\n  destruct (Nat.eq_dec (f (a - 1)) 1) as [Heq | Hneq].\n  - exists (a - 1).\n    split.\n    + lia.\n    + exact Heq.\n  - assert (Ha' : 0 < a - 1) by lia.\n    assert (Hbig : 1 < f (a - 1)) by lia.\n    assert (Hstep : f (f (a - 1)) < v).\n    {\n      rewrite <- Hva.\n      replace a with (S (a - 1)) by lia.\n      apply h\u2081.\n      lia.\n    }\n    destruct (IH (f (a - 1)) Hstep (f (a - 1)) eq_refl Hbig)\n      as [t [Ht Ht1]].\n    exists t.\n    split; assumption.\n}\nassert (Hone : f 1 = 1).\n{\n  destruct (Nat.eq_dec (f 1) 1) as [H | H].\n  - exact H.\n  - assert (Hbig : 1 < f 1) by lia.\n    destruct (Hdesc (f 1) 1 eq_refl Hbig) as [t [Ht Ht1]].\n    assert (Htneq : t = 1).\n    {\n      destruct t as [|t].\n      - lia.\n      - destruct t as [|t].\n        + reflexivity.\n        + exfalso.\n          assert (Hs : f (f (S t)) < f (S (S t))) by\n            (apply h\u2081; lia).\n          lia.\n    }\n    subst t.\n    lia.\n}\ninduction n using lt_wf_ind.\ndestruct n as [|n].\n- lia.\n- destruct n as [|n].\n  + exact Hone.\n  + assert (Hp : 0 < n) by lia.\n    specialize (H (S n) ltac:(lia) Hp).\n    specialize (h\u2081 (S n) ltac:(lia)).\n    lia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"+ lia.\", \"error\": \"(-32003, 'Coq: Tactic failure:  Cannot find witness.')\", \"verified_prefix\": [\"intros n Hn.\", \"assert (Hdesc : forall v : nat, forall a : nat, f a = v -> 1 < a -> exists t : nat, 0 < t /\\\\ f t = 1).\", \"{ apply (well_founded_induction lt_wf).\", \"intros v IH a Hva Ha.\", \"destruct (Nat.eq_dec (f (a - 1)) 1) as [Heq | Hneq].\", \"- exists (a - 1).\", \"split.\"], \"total_goals\": 2, \"goals\": [\"f  : nat -> nat\\nh\u2080  : forall n0 : nat, 0 < f n0\\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\\nn  : nat\\nHn  : 0 < n\\nv  : nat\\nIH  : forall y : nat,\\ny < v ->\\nforall v0 a0 : nat, f a0 = v0 -> 1 < a0 -> exists t : nat, 0 < t /\\\\ f t = 1\\na, Hva  : nat\\nHa  : f Hva = a\\nHeq  : f (a - 1) = 1\\nH  : 1 < Hva\\n|-0 < a - 1\", \"f  : nat -> nat\\nh\u2080  : forall n0 : nat, 0 < f n0\\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\\nn  : nat\\nHn  : 0 < n\\nv  : nat\\nIH  : forall y : nat,\\ny < v ->\\nforall v0 a0 : nat, f a0 = v0 -> 1 < a0 -> exists t : nat, 0 < t /\\\\ f t = 1\\na, Hva  : nat\\nHa  : f Hva = a\\nHeq  : f (a - 1) = 1\\nH  : 1 < Hva\\n|-f (a - 1) = 1\"], \"automation\": [null, \"assumption.\"], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\nThe verified prefix reveals the issue: the descent measure was applied to the wrong variable. In the branch, `a` is the value `f Hva`, while `Hva` is the input; hence `1 < a - 1` cannot follow from the available hypotheses. I\u2019ll switch to a direct minimal-counterexample setup rather than trying to repair that invalid descent branch.\n\n[TOOL CALL] SearchRocq(command='Search (_ < _ -> _ = _).')\n[TOOL RESULT]\n{\"output\": \"[(3, 'Nat.mod_small: forall a b : nat, a < b -> a mod b = a'), (3, 'Nat.sqrt_neg: forall a : nat, a < 0 -> Nat.sqrt a = 0'), (3, 'Nat.div_small: forall a b : nat, a < b -> a / b = 0'), (3, 'Nat.pow_neg_r: forall a b : nat, b < 0 -> a ^ b = 0'), (3, 'Nat.lt_succ_pred: forall z n : nat, z < n -> S (Nat.pred n) = n'), (3, 'Nat.succ_pred_pos: forall n : nat, 0 < n -> S (Nat.pred n) = n'), (3, 'leb_correct_conv: forall m n : nat, m < n -> (n <=? m) = false'), (3, 'Nat.shiftr_eq_0: forall a n : nat, Nat.log2 a < n -> Nat.shiftr a n = 0'), (3, 'Nat.div_1_l: forall a : nat, 1 < a -> 1 / a = 0'), (3, 'Nat.land_ones_low:\\\\n  forall a n : nat, Nat.log2 a < n -> Nat.land a (Nat.ones n) = a'), (3, 'Nat.mod_1_l: forall a : nat, 1 < a -> 1 mod a = 1'), (3, 'Nat.bits_above_log2:\\\\n  forall a n : nat, Nat.log2 a < n -> Nat.testbit a n = false'), (3, 'Nat.ones_spec_low:\\\\n  forall n m : nat, m < n -> Nat.testbit (Nat.ones n) m = true'), (3, 'Nat.lor_ones_low:\\\\n  forall a n : nat, Nat.log2 a < n -> Nat.lor a (Nat.ones n) = Nat.ones n'), (3, 'Nat.ldiff_ones_r_low:\\\\n  forall a n : nat, Nat.log2 a < n -> Nat.ldiff a (Nat.ones n) = 0'), (3, 'Nat.land_lnot_diag_low:\\\\n  forall a n : nat, Nat.log2 a < n -> Nat.land a (Nat.lnot a n) = 0'), (3, 'List.nth_repeat_lt:\\\\n  forall [A : Type] (a : A) [m n : nat] (d : A),\\\\n  n < m -> ListDef.nth n (ListDef.repeat a m) d = a'), (3, 'Nat.sqrt_up_eqn:\\\\n  forall a : nat, 0 < a -> Nat.sqrt_up a = S (Nat.sqrt (Nat.pred a))'), (3, 'Znat.Nat2Z.inj_pred:\\\\n  forall n : nat,\\\\n  0 < n -> BinInt.Z.of_nat (Nat.pred n) = BinInt.Z.pred (BinInt.Z.of_nat n)'), (3, 'Nat.add_lnot_diag_low:\\\\n  forall a n : nat, Nat.log2 a < n -> a + Nat.lnot a n = Nat.ones n'), (3, 'Nat.lnot_sub_low:\\\\n  forall a n : nat, Nat.log2 a < n -> Nat.lnot a n = Nat.ones n - a'), (3, 'Nat.ldiff_ones_l_low:\\\\n  forall a n : nat, Nat.log2 a < n -> Nat.ldiff (Nat.ones n) a = Nat.lnot a n'), (3, 'Nat.lor_lnot_diag_low:\\\\n  forall a n : nat, Nat.log2 a < n -> Nat.lor a (Nat.lnot a n) = Nat.ones n'), (3, 'Pnat.nat_of_P_lt_Lt_compare_complement_morphism:\\\\n  forall p q : BinNums.positive,\\\\n  BinPos.Pos.to_nat p < BinPos.Pos.to_nat q ->\\\\n  BinPos.Pos.compare_cont Eq p q = Lt'), (3, 'Nat.log2_up_double:\\\\n  forall a : nat, 0 < a -> Nat.log2_up (2 * a) = S (Nat.log2_up a)'), (3, 'Nat.log2_up_eqn:\\\\n  forall a : nat, 1 < a -> Nat.log2_up a = S (Nat.log2 (Nat.pred a))'), (3, 'Nat.log2_double: forall a : nat, 0 < a -> Nat.log2 (2 * a) = S (Nat.log2 a)'), (3, 'List.seq_nth:\\\\n  forall [len : nat] (start : nat) [n : nat] (d : nat),\\\\n  n < len -> ListDef.nth n (ListDef.seq start len) d = start + n'), (3, 'Nat.ldiff_land_low:\\\\n  forall a b n : nat,\\\\n  Nat.log2 a < n -> Nat.ldiff a b = Nat.land a (Nat.lnot b n)'), (3, 'Nat.lnot_spec_low:\\\\n  forall a n m : nat,\\\\n  m < n -> Nat.testbit (Nat.lnot a n) m = negb (Nat.testbit a m)'), (3, 'Nat.log2_pred_pow2:\\\\n  forall a : nat, 0 < a -> Nat.log2 (Nat.pred (2 ^ a)) = Nat.pred a'), (3, 'List.nth_error_repeat:\\\\n  forall [A : Type] (a : A) [m n : nat],\\\\n  n < m -> List.nth_error (ListDef.repeat a m) n = Some a'), (3, \\\"List.nth_indep:\\\\n  forall [A : Type] (l : list A) [n : nat] (d d' : A),\\\\n  n < length l -> ListDef.nth n l d = ListDef.nth n l d'\\\"), (3, 'Nat.log2_succ_double:\\\\n  forall a : nat, 0 < a -> Nat.log2 (2 * a + 1) = S (Nat.log2 a)'), (3, 'List.firstn_removelast:\\\\n  forall [A : Type] [n : nat] (l : list A),\\\\n  n < length l -> ListDef.firstn n (List.removelast l) = ListDef.firstn n l'), (3, 'Nat.Div0.add_mul_mod_distr_l:\\\\n  forall a b c d : nat, d < c -> (c * a + d) mod (c * b) = c * (a mod b) + d'), (3, 'Nat.Div0.add_mul_mod_distr_r:\\\\n  forall a b c d : nat, d < c -> (a * c + d) mod (b * c) = a mod b * c + d'), (3, 'Nat.lnot_ldiff_low:\\\\n  forall a b n : nat,\\\\n  Nat.log2 a < n ->\\\\n  Nat.log2 b < n -> Nat.lnot (Nat.ldiff a b) n = Nat.lor (Nat.lnot a n) b'), (3, 'Nat.mod_pow2_bits_low:\\\\n  forall a n m : nat, m < n -> Nat.testbit (a mod 2 ^ n) m = Nat.testbit a m'), (3, 'Nat.mul_pow2_bits_low:\\\\n  forall a n m : nat, m < n -> Nat.testbit (a * 2 ^ n) m = false'), (3, 'List.removelast_firstn:\\\\n  forall [A : Type] [n : nat] (l : list A),\\\\n  n < length l ->\\\\n  List.removelast (ListDef.firstn (S n) l) = ListDef.firstn n l'), (3, 'Nat.log2_bits_unique:\\\\n  forall a n : nat,\\\\n  Nat.testbit a n = true ->\\\\n  (forall m : nat, n < m -> Nat.testbit a m = false) -> Nat.log2 a = n'), (3, 'Nat.lnot_lor_low:\\\\n  forall a b n : nat,\\\\n  Nat.log2 a < n ->\\\\n  Nat.log2 b < n ->\\\\n  Nat.lnot (Nat.lor a b) n = Nat.land (Nat.lnot a n) (Nat.lnot b n)'), (3, 'Nat.lnot_land_low:\\\\n  forall a b n : nat,\\\\n  Nat.log2 a < n ->\\\\n  Nat.log2 b < n ->\\\\n  Nat.lnot (Nat.land a b) n = Nat.lor (Nat.lnot a n) (Nat.lnot b n)'), (3, \\\"List.app_nth1:\\\\n  forall [A : Type] (l l' : list A) (d : A) [n : nat],\\\\n  n < length l -> ListDef.nth n (l ++ l') d = ListDef.nth n l d\\\"), (3, 'Nat.log2_up_succ_double:\\\\n  forall a : nat, 0 < a -> Nat.log2_up (2 * a + 1) = 2 + Nat.log2 a'), (3, \\\"List.nth_error_app1:\\\\n  forall [A : Type] (l l' : list A) [n : nat],\\\\n  n < length l -> List.nth_error (l ++ l') n = List.nth_error l n\\\"), (3, \\\"List.nth_error_nth':\\\\n  forall [A : Type] (l : list A) [n : nat] (d : A),\\\\n  n < length l -> List.nth_error l n = Some (ListDef.nth n l d)\\\"), (3, 'List.rev_nth:\\\\n  forall [A : Type] (l : list A) (d : A) [n : nat],\\\\n  n < length l ->\\\\n  ListDef.nth n (List.rev l) d = ListDef.nth (length l - S n) l d'), (3, \\\"List.nth_ext:\\\\n  forall [A : Type] (l l' : list A) (d d' : A),\\\\n  length l = length l' ->\\\\n  (forall n : nat, n < length l -> ListDef.nth n l d = ListDef.nth n l' d') ->\\\\n  l = l'\\\")]\", \"start\": 0, \"total_goals\": 2, \"goals\": [\"f  : nat -> nat\\nh\u2080  : forall n0 : nat, 0 < f n0\\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\\nn  : nat\\nHn  : 0 < n\\nv  : nat\\nIH  : forall y : nat,\\ny < v ->\\nforall v0 a0 : nat, f a0 = v0 -> 1 < a0 -> exists t : nat, 0 < t /\\\\ f t = 1\\na, Hva  : nat\\nHa  : f Hva = a\\nHeq  : f (a - 1) = 1\\nH  : 1 < Hva\\n|-0 < a - 1\", \"f  : nat -> nat\\nh\u2080  : forall n0 : nat, 0 < f n0\\nh\u2081  : forall n0 : nat, 0 < n0 -> f (f n0) < f (S n0)\\nn  : nat\\nHn  : 0 < n\\nv  : nat\\nIH  : forall y : nat,\\ny < v ->\\nforall v0 a0 : nat, f a0 = v0 -> 1 < a0 -> exists t : nat, 0 < t /\\\\ f t = 1\\na, Hva  : nat\\nHa  : f Hva = a\\nHeq  : f (a - 1) = 1\\nH  : 1 < Hva\\n|-f (a - 1) = 1\"], \"next\": null}\n\n[ASSISTANT]\n```rocq\nintros n Hn.\ninduction n using lt_wf_ind.\ndestruct n as [|n].\n- lia.\n- destruct n as [|n].\n  + assert (H1 : f 1 = 1).\n    {\n      apply Nat.le_antisymm.\n      - specialize (h\u2080 1).\n        lia.\n      - by_contra Hneq.\n        assert (Hgt : 1 < f 1) by lia.\n        assert (Hstep : f (f 1) < f 2) by\n          (apply h\u2081; lia).\n        specialize (h\u2080 (f 1)).\n        lia.\n    }\n    exact H1.\n  + assert (Hp : 0 < S n) by lia.\n    specialize (h\u2081 (S n) Hp).\n    specialize (H (S n) ltac:(lia) ltac:(lia)).\n    nia.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"lia.\", \"error\": \"(-32003, 'Coq: Tactic failure:  Cannot find witness.')\", \"verified_prefix\": [\"intros n Hn.\", \"induction n using lt_wf_ind.\", \"destruct n as [|n].\", \"- lia.\", \"- destruct n as [|n].\", \"+ assert (H1 : f 1 = 1).\", \"{ apply Nat.le_antisymm.\", \"- specialize (h\u2080 1).\"], \"total_goals\": 1, \"goals\": [\"f  : nat -> nat\\nh\u2080  : 0 < f 1\\nh\u2081  : forall n : nat, 0 < n -> f (f n) < f (S n)\\nHn  : 0 < 1\\nH  : forall m : nat, m < 1 -> 0 < m -> f m = m\\n|-f 1 <= 1\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros n Hn.\nassert (Hdesc :\n  forall v : nat, forall a : nat, f a = v -> 1 < a ->\n    exists t : nat, 0 < t /\\ f t = 1).\n{\n  apply (well_founded_induction lt_wf).\n  intros v IH a Hva Ha.\n  destruct (Nat.eq_dec (f (a - 1)) 1) as [Heq | Hneq].\n  - exists (a - 1).\n    split.\n    + lia.\n    + exact Heq.\n  - assert (Ha' : 0 < a - 1) by lia.\n    assert (Hy : 1 < f (a - 1)).\n    {\n      specialize (h\u2080 (a - 1)).\n      lia.\n    }\n    assert (Hlt : f (f (a - 1)) < v).\n    {\n      rewrite <- Hva.\n      replace a with (S (a - 1)) by lia.\n      apply h\u2081.\n      lia.\n    }\n    destruct (IH (f (f (a - 1))) Hlt (f (a - 1)) eq_refl Hy)\n      as [t [Ht Ht1]].\n    exists t.\n    split; assumption.\n}\nassert (Hone : f 1 = 1).\n{\n  destruct (Nat.eq_dec (f 1) 1) as [H | H].\n  - exact H.\n  - assert (Hgt : 1 < f 1) by lia.\n    destruct (Hdesc (f 1) 1 eq_refl Hgt) as [t [Ht Ht1]].\n    destruct t as [|t].\n    + lia.\n    + destruct t as [|t].\n      * exact Ht1.\n      * exfalso.\n        assert (Hs : f (f (S t)) < f (S (S t))) by\n          (apply h\u2081; lia).\n        specialize (h\u2080 (f (S t))).\n        lia.\n}\ninduction n using lt_wf_ind.\ndestruct n as [|n].\n- lia.\n- destruct n as [|n].\n  + exact Hone.\n  + assert (Hp : 0 < S n) by lia.\n    specialize (H (S n) ltac:(lia) ltac:(lia)).\n    specialize (h\u2081 (S n) Hp).\n    nia.\n```"
+}
