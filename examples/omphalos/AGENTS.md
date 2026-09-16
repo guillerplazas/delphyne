@@ -177,6 +177,18 @@ The user's subsequent request adds `ace_economy_session_20260916`: exactly
 paid ACE-reset controls. The same $50 ceiling covers all three campaigns;
 the first two settled at $12.30419518 and make no further paid calls.
 
+The subsequent refinement authorization adds at most **$20 new spend**
+within that same cumulative $50 ceiling. Guille then explicitly allowed
+**trainX for refinement pilots**; validationX remains the benchmark and
+testX remains completely closed. Polish reset and compact prompts/feedback
+independently, then test their combination in both ACE and non-ACE.
+**Latest correction:** reset means history dropping only. Add no handoff,
+summary, lookup memory, failure notes or new tool to non-ACE; the matched
+reset treatment adds none to either agent. Preserve existing baseline tool
+capabilities. Do not require resetting non-ACE when choosing fair cost/
+coverage comparators. Code quality and numeric cost/coverage trade-offs
+are separate. Topic commits remain authorized; no default promotion.
+
 - Every experiment script ends in `ol.OmphalosExperiment(...).run_cli()`
   (`experiments/common/omphalos_launch.py`): per-directory launch lock,
   machine-wide Rocq stream slots (`OMPHALOS_MAX_STREAMS`, default 4),
