@@ -42,8 +42,8 @@ def main() -> None:
     for arm, label in LABELS.items():
         value = totals[f"validation/{arm}"]
         cost = value["cost"] / value["cells"]
-        quality = 100 * value["qualified"] / value["cells"]
-        ax.scatter(cost, quality, color=COLORS[arm], s=55, zorder=3)
+        coverage = 100 * value["qualified"] / value["cells"]
+        ax.scatter(cost, coverage, color=COLORS[arm], s=55, zorder=3)
         offset = {
             "agentic": (-65, 4),
             "ace": (-55, -15),
@@ -53,7 +53,7 @@ def main() -> None:
         }[arm]
         ax.annotate(
             label,
-            (cost, quality),
+            (cost, coverage),
             xytext=offset,
             textcoords="offset points",
             fontsize=9,
@@ -79,7 +79,7 @@ def main() -> None:
     ax.margins(x=0.35, y=0.3)
     ax.grid(alpha=0.2)
     fig.suptitle(
-        "Observed cost and proof quality; lower cost and higher coverage are preferable",
+        "Observed cost and proof coverage; lower cost and higher coverage are preferable",
         fontsize=11,
     )
     for suffix in ("png", "pdf"):

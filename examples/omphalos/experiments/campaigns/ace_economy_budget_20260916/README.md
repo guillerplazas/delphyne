@@ -1,19 +1,28 @@
 # Matched ACE attribution with a larger allowance
 
+**Current interpretation:** the user's quality requirement concerns code
+and implementation quality; the per-replicate coverage veto is withdrawn.
+See [the reassessment](../ace_economy_20260916/reassessment/README.md).
+Both harnesses generate current decisions with
+`python -m tools.reports.ace_economy_reassessment`. The sealed protocol and
+original report command below reproduce historical gate outputs.
+
 **validationX only; never access testX.** The latest scope correction
 revokes the unrun draft's optional held-out phase. This protocol was frozen
 before any new follow-up cell was dispatched.
 
 The original advisor budget arm produced 53/80 proofs versus 46/80 at
-2.144 times cost. Its original efficiency gate remains failed. The new
+2.144 times cost, a useful coverage-cost trade-off. Its original efficiency
+gate is historical, not a rejection of the observed coverage gain. The new
 question is whether ACE saves money when **both** agents receive $0.20.
 No output cap, prompt, learned book or additional controller changes.
 
 Reuse the 80 ACE validation cells already paid for. Run exactly 80 new
 non-ACE validation cells: 40 theorems, two replicates. No extra seed,
-contender, held-out phase or automatic paid retry. The primary target is
-at least 10% savings with no pooled or per-replicate coverage loss. Report
-cost/solve and uncertainty even when that gate fails. This is exploratory
+contender, held-out phase or automatic paid retry. The original target added
+no pooled or per-replicate coverage loss to at least 10% savings; the
+clarification removes that automatic veto. Report coverage, cost/solve and
+uncertainty separately. This is exploratory
 attribution on reused validation data with controls from hours earlier.
 
 The same **combined $50 authorization** covers this and the main campaign.
@@ -40,6 +49,6 @@ main verifier is never called. No default changes are made.
 Report equal-cap inference cost, qualified coverage, cost/solve, paired
 family-clustered 90% intervals, two-sided p-values, uncached sensitivity,
 and historical book preparation separately. `results.json` contains the
-pooled observed target; the final combined report also enforces the
-preregistered per-replicate requirement. The protocol, dated receipts,
+original pooled observed target. The current report applies the user's
+clarification, without a per-replicate veto. The protocol, dated receipts,
 cell export and cache replay records retain the evidence.

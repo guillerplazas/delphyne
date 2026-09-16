@@ -44,6 +44,16 @@ control are the subject of study, not an afterthought.
   can answer the requested comparison. Disclose historical-control limits.
 - **Code quality:** production-grade thesis code. No shallow
   solutions, quick hacks or temporary shortcuts.
+- **Meaning of quality (Guille, 2026-09-16):** "quality" in the ACE
+  economics/advisor request means code and implementation quality. It does
+  not impose zero solve-count loss on each replicate. Report cost, coverage
+  and cost per solve separately; a replicate losing a proof does not veto
+  a promising aggregate result. Keep practical value separate from
+  statistical support. The retrospective clarification supersedes the
+  mistakenly inferred per-replicate veto in the three economics campaigns;
+  preserve their original measurements/gates as history and use
+  `tools/reports/ace_economy_reassessment.py` for current interpretations.
+  Sound proof checking, complete denominators and spending limits still apply.
 - **Reference publication:** the Delphyne paper,
   <https://arxiv.org/pdf/2502.05310> — the standing reference for
   architecture, theoretical foundations and design patterns. Consult

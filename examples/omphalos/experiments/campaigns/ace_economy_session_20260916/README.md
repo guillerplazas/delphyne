@@ -1,5 +1,13 @@
 # Non-ACE with the same session reset
 
+**Current interpretation:** the observed 10.55% saving achieves the budget
+target. The user's quality requirement concerns code and implementation
+quality; replicate coverage fluctuations are not a veto. Statistical
+support remains inconclusive. See [the reassessment](../ace_economy_20260916/reassessment/README.md)
+and generate its current decisions, from either harness, with
+`python -m tools.reports.ace_economy_reassessment`. The sealed protocol and
+original report command below reproduce historical gate outputs.
+
 This user-requested follow-up completes the missing matched control for the
 promising ACE reset result: 50/80 proofs at $1.50046594. Use **validationX
 only**; never access testX or its metadata, hashes, caches or mixed reports.
@@ -18,12 +26,14 @@ this ledger reserves a maximum of $8 (80 x $0.10), fitting the remainder.
 The spending ceiling is not a target; earlier campaigns make no paid calls.
 
 Primary question: does ACE with reset beat non-ACE with the same reset?
-The savings target remains at least 10% with no pooled or per-replicate
-coverage loss. Secondary question: does the reset improve non-ACE itself?
-Report quality, all-attempt cost, cost/solve, paired family-clustered 90%
-intervals and two-sided p-values. The practical reset gate requires no
-per-replicate quality loss and either 10% savings or two more proofs with
-cost/solve at most 1.25x reference. Original campaign gates remain intact.
+The original preregistration added no pooled or per-replicate coverage loss
+to at least 10% savings. Its practical gate also required no per-replicate
+loss and either 10% savings or two more proofs with cost/solve at most
+1.25x reference. Those original outputs are historical; the user's
+clarification removes the coverage veto from current judgments. Secondary
+question: does the reset improve non-ACE itself? Report coverage,
+all-attempt cost, cost/solve, paired family-clustered 90% intervals and
+two-sided p-values separately.
 Reused validation and historical controls limit inference. No default is
 promoted, and no held-out confirmation is performed.
 

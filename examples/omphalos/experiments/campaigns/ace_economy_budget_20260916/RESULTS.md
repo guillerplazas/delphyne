@@ -8,7 +8,10 @@ interval [-3.75, +3.75] percentage points. These are 40 theorem families,
 with two replicates each, not 80 independent theorems.
 
 ACE's replicate coverage is 25/40 and 28/40; non-ACE's is 26/40 and 27/40.
-The registered per-replicate quality-preservation condition also fails.
+These fluctuations do not disqualify the result: Guille clarified that
+quality refers to code and implementation quality. The conclusion remains
+below target because the observed saving is only 0.34%, independently of
+replicate coverage. See the [reassessment](../ace_economy_20260916/reassessment/README.md).
 Cost/solve: ACE $0.05964760, non-ACE $0.05985237. No default is promoted.
 
 The 80 ACE references were already paid in the main budget arm. Exactly
@@ -20,7 +23,9 @@ The initial draft's test phase was revoked before this protocol ran.
 The equal-allowance follow-up attributes the original budget result:
 more headroom improves both agents to the same pooled coverage, while ACE
 has no demonstrated 10% cost advantage. Main ACE budget versus its $0.10
-reference still fails the original efficiency gate. Reused validation and
+reference gains seven proofs at 114.44% more total cost: a useful coverage-
+cost trade-off, with 86.11% higher cost per solve. Its old efficiency gate
+is historical, rather than a blanket rejection of the budget idea. Reused validation and
 historical controls by hours limit generalization.
 
 See [the combined report](../ace_economy_20260916/RESULTS.md),

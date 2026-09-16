@@ -1,5 +1,13 @@
 # ACE inference economics and advisor controls
 
+**Current interpretation:** Guille's quality requirement concerns code and
+implementation quality. The inferred per-replicate coverage veto is
+withdrawn. [The reassessment](reassessment/README.md) supersedes the old
+practical labels, while keeping measurements and uncertainty unchanged.
+Both harnesses generate the current decision records offline with
+`python -m tools.reports.ace_economy_reassessment`. Original report commands
+below reproduce historical gate outputs, not the clarified interpretation.
+
 **Current scope: validationX only. Guille's latest instruction is "Never
 touch testX".** All test plans in the original sealed protocol are revoked.
 No test experiment was launched. Before the correction, setup read the test
@@ -41,11 +49,12 @@ Proof checking, output allowance and demonstrations are held fixed. All
 controls remain opt-in. The known v2 closed-cast advice defect is documented;
 this comparison does not repair a historical book in place.
 
-The target is at least 10% inference saving with preserved observed proof
-coverage on each replicate. Report all-attempt cost, cost per qualified
-solve, paired family-clustered 90% intervals and two-sided p-values. The
-practical treatment gate allows a bounded quality/cost trade-off; it is not
-a significance test or permission to promote a default. All evidence is
+The original preregistration mistakenly added preserved proof coverage on
+each replicate to the 10% inference-saving target. That extra condition no
+longer determines the current interpretation. Report all-attempt cost,
+coverage, cost per qualified solve, paired family-clustered 90% intervals
+and two-sided p-values separately. Practical promise is not a significance
+test or permission to promote a default. All evidence is
 from repeatedly reused development data. Advisor p-values are exploratory
 and unadjusted across three interventions.
 

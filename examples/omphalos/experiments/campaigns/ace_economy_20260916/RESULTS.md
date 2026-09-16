@@ -1,15 +1,23 @@
 # ACE economics and advisor experiments — 16 September 2026
 
-**The 10% ACE cost-reduction target was not demonstrated at either matched
-allowance.** Session boundaries are the most promising advisor intervention:
-more proofs at almost unchanged total cost, with uncertainty still too large
-for a reliable improvement claim. Larger allowances improve coverage for
-both agents, at substantially higher cost. No default has changed.
+**ACE with session reset achieves the observed 10% cost-reduction target:**
+both matched reset arms solve 50/80, and ACE costs 10.55% less. The
+statistical evidence remains inconclusive. The original comparisons without
+reset save only 1.47% at $0.10 and 0.34% at $0.20. Session boundaries and
+smaller tool displays are promising advisor interventions; larger allowances
+buy additional coverage at substantially higher cost. No default has changed.
 
-**New API spend: $12.30419518 of the $50 ceiling; $37.69580482 unspent.**
-All 480 paid runs use validationX: 40 problems, two replicates, six measured
-configurations. The larger-budget comparison reuses 80 ACE runs, so it does
-not add a second charge for them. There are no missing cells, platform
+Guille clarified that **quality means code and implementation quality**.
+The inferred requirement to preserve proof counts in every replicate is
+withdrawn from the current assessment. See the [seven-comparison reassessment](reassessment/README.md)
+and its [current decision records](reassessment/results.json). Original
+measurements, protocols and gate outputs remain historical evidence.
+
+**New API spend across all three campaigns: $13.98159180 of the $50 ceiling;
+$36.01840820 unspent.** All 560 paid runs use validationX: 40 problems,
+two replicates, seven measured configurations. The first two campaigns
+account for 480 runs and $12.30419518; the later non-ACE reset adds 80 runs
+and $1.67739662. Reused controls are not charged twice. There are no missing cells, platform
 failures, monetary cap crossings or unresolved charges. Costs include all
 unsuccessful attempts and use provider token receipts with dated prices.
 
@@ -43,10 +51,11 @@ the budget trial's validation evidence before paying for its missing
 non-ACE control; its ACE controls were run hours earlier. All comparisons
 cluster both replicates by theorem family: 80 cells, 40 families.
 
-Per-replicate coverage also matters. At $0.10, non-ACE has 24/40 and 23/40,
+Per-replicate coverage describes run variation. At $0.10, non-ACE has 24/40 and 23/40,
 versus ACE's 24/40 and 22/40. At $0.20, non-ACE has 26/40 and 27/40, versus
-ACE's 25/40 and 28/40. Thus neither allowance meets the registered savings
-and per-replicate quality target. These samples do not establish equivalence
+ACE's 25/40 and 28/40. Neither no-reset allowance reaches the observed 10%
+saving target; these coverage fluctuations are not an additional veto.
+These samples do not establish equivalence
 or prove that a 10% effect is impossible on a different panel.
 
 ACE made 968 requests versus 1082 at $0.10: **10.54% fewer requests**, but
@@ -66,16 +75,16 @@ accuracy improvement; its adaptation-cost reductions compare other
 context-learning methods. Our 10% inference-cost target is the user's
 practical objective, rather than a literal replication of that headline.
 
-**Objective 2 — advisor interventions, quality first.** Each intervention
+**Objective 2 — advisor interventions, with implementation quality first.** Each intervention
 changes one factor from the $0.10 ACE reference and uses a complete
 80-cell panel. Nothing is combined or promoted after inspecting outcomes.
 
-| ACE configuration | Proofs | Total cost | Cost / solve | Coverage by replicate | Original practical gate |
+| ACE configuration | Proofs | Total cost | Cost / solve | Coverage by replicate | Current interpretation |
 | --- | ---: | ---: | ---: | --- | --- |
 | Reference | 46/80 | $1.474255 | $0.032049 | 24, 22 | Reference |
-| $0.20 allowance | 53/80 | $3.161323 | $0.059648 | 25, 28 | Fails cost/solve bound |
-| One context reset | 50/80 | $1.500466 | $0.030009 | 25, 25 | Passes, exploratory |
-| 4096-byte displays | 49/80 | $1.499764 | $0.030607 | 23, 26 | Fails per-replicate quality |
+| $0.20 allowance | 53/80 | $3.161323 | $0.059648 | 25, 28 | More coverage at higher cost |
+| One context reset | 50/80 | $1.500466 | $0.030009 | 25, 25 | Promising efficiency improvement |
+| 4096-byte displays | 49/80 | $1.499764 | $0.030607 | 23, 26 | Promising efficiency improvement |
 
 1. **Session boundaries are the best next development reference.** One
    reset after at least eight interaction groups and 24,000 visible history
@@ -85,22 +94,26 @@ changes one factor from the $0.10 ACE reference and uses a complete
    budget. It triggered in 32/80 runs, removing a median 20,668.5 characters
    per reset. Coverage rises by four proofs for 1.78% more cost, lowering
    cost/solve 6.36%. Coverage p=0.3594; cost-ratio 90% CI [0.9379, 1.0991].
-   The practical gate passes, but the improvement remains uncertain.
+   This is a practical development candidate; generalization remains uncertain.
 
-2. **Enough budget helps quality; current savings do not come from ACE.**
+2. **Enough budget improves observed coverage for both agents.**
    Raising ACE's allowance yields seven more proofs but 114.44% more cost
-   and 86.12% higher cost/solve. Its exploratory coverage p=0.0391 is
+   and 86.11% higher cost/solve. Its exploratory coverage p=0.0391 is
    unadjusted; a three-comparison Bonferroni adjustment gives 0.1172.
-   The original efficiency gate remains failed. Non-ACE likewise improves
+   This is useful coverage headroom, with a substantial cost premium.
+   The old efficiency gate is retained as history, not as a rejection of
+   the coverage gain. Non-ACE likewise improves
    from 47 to 53 proofs at $0.20. Notably, 52 of the 53 successful larger-
    allowance ACE runs actually spend at most $0.10. Conservative reservation
    of a full possible response can prevent a useful next request before
    actual spending reaches the nominal allowance. Hint #131 remains open
-   for a quality-preserving study of reservation and output headroom.
+   for a study of reservation and output headroom that measures coverage
+   and cost together.
 
-3. **Smaller tool/feedback displays are not selected.** Halving the display
+3. **Smaller tool/feedback displays are a promising additional candidate.** Halving the display
    limit from 8192 to 4096 bytes produces three more pooled proofs for 1.73%
-   more cost, but loses one proof on replicate 0. Coverage p=0.25; cost-ratio
+   more cost, lowering cost per solve by 4.50%. Losing one proof on replicate
+   0 does not negate that aggregate improvement. Coverage p=0.25; cost-ratio
    90% CI [0.9511, 1.0881]. Only three families are discordant, so the positive
    descriptive bootstrap coverage interval does not supply confirmatory
    evidence. Full proof outputs were not truncated by this intervention.
@@ -108,8 +121,8 @@ changes one factor from the $0.10 ACE reference and uses a complete
 4. **Verbosity, caching and output filters were audited offline.** The ACE
    system prompt is 17,275 characters versus 8,577 without the book. The
    skills index contributes about 785 characters and tool schemas about
-   2,202; removing skill guidance is a small, potentially costly quality
-   trade-off. The two main measured controls deserve priority over blanket
+   2,202; removing skill guidance saves relatively little prompt text and
+   may affect solve coverage. The measured interventions deserve priority over blanket
    text shortening. Cached input still costs money: the $0.10 ACE panel
    bills $0.198042 for cached input, $0.640009 for fresh input and $0.636204
    for output. With a fixed prompt P and h new history tokens per turn,
@@ -118,13 +131,13 @@ changes one factor from the $0.10 ACE reference and uses a complete
    reduce median last/first request input growth from 2.26x to 1.95x here.
    One reference output hit 32,768 tokens and returned 1.43 million
    characters. The recorded tails motivate careful output/reservation work;
-   this study provides no quality evidence for a blanket generated-proof cap.
+   the effect of a blanket generated-proof cap on solve coverage was not tested.
 
 See open hints **#109** (rendered context) and **#131** (conservative
 admission) in the local backlog. We stop at the registered panels instead
 of adding seeds or spending the remaining authorization to chase significance.
 
-![Cost and quality for the five main configurations](figures/cost_quality.png)
+![Cost and proof coverage for the five main configurations](figures/cost_quality.png)
 
 The dotted lines mark non-ACE coverage and 10% lower cost than its $0.10
 reference. Points are descriptive; each configuration has 80 attempts.
@@ -144,8 +157,9 @@ monetary comparisons use token receipts throughout.
 
 All 21 focused tests pass, including scope rejection before file reads,
 conservative joint accounting, three paid-reference parity checks and a live
-Rocq/mocked-provider session reset with exact replay. All 480 paid cells pass exact cache replay with HTTP blocked; the main
-and follow-up certificates retain their complete cell lists. Replay compares outcome, proof values
+Rocq/mocked-provider session reset with exact replay. All 560 paid cells across
+the three campaigns pass exact cache replay with HTTP blocked; their
+certificates retain complete cell lists. Replay compares outcome, proof values
 and spent-budget state, and creates no paid receipts. All 14 changed Python
 files pass pinned Pyright 1.1.406 and Ruff; dual-harness invariants pass.
 Root `make pyright` encounters 17 preexisting `why3py.simple` errors outside
@@ -162,7 +176,7 @@ inside `examples/omphalos/`.
 **Subsequent matched session-reset follow-up (2026-09-16).**
 The [new comparison](../ace_economy_session_20260916/RESULTS.md) adds
 80 non-ACE reset runs. Both reset arms solve 50/80; ACE is 10.55% cheaper
-($1.50046594 versus $1.67739662). The per-replicate quality gate fails
-and cost p=.136499 remains inconclusive. Combined new spending across
+($1.50046594 versus $1.67739662), meeting the observed budget target under
+the user's clarified objective. Cost p=.136499 remains inconclusive. Combined new spending across
 all three campaigns is now $13.98159180/$50. The earlier results and
-registered verdicts above remain as measured.
+gate outputs remain historical; current interpretations above are corrected.

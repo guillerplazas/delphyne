@@ -2,10 +2,13 @@
 
 **With the same session reset, ACE solves 50/80 for $1.50046594; non-ACE
 solves 50/80 for $1.67739662. ACE is 10.55% cheaper on this pooled panel.**
-This is the first matched comparison in this study whose pooled inference
-cost reaches the intended 10% reduction while matching the total proof
-count. The complete preregistered gate still fails: ACE loses one proof on
-one replicate. The cost difference is also statistically inconclusive.
+This achieves the intended 10% inference-cost reduction on the observed
+panel, while matching the total proof count. It is a promising result.
+Guille clarified that quality means code and implementation quality; the
+previously inferred requirement to preserve coverage in every replicate
+is withdrawn from the current assessment. Statistical support remains inconclusive.
+The [clarification and reassessment](../ace_economy_20260916/reassessment/README.md)
+separate the corrected interpretation from the frozen original gate.
 
 The requested 80 new non-ACE runs completed in approximately **12m 50s**.
 New API cost is **$1.67739662**; all three economics campaigns together have
@@ -42,16 +45,21 @@ establish statistical equivalence.
 | 0 | 24/40 | 25/40 | $0.826125 | $0.796955 |
 | 1 | 26/40 | 25/40 | $0.851272 | $0.703511 |
 
-ACE costs less on both replicates, but the coverage changes are +1 and -1.
-Thus the **pooled cost/coverage criterion passes descriptively**, while the
-**original no-per-replicate-loss gate fails**. Neither its gate nor the
-older no-reset verdicts are relabeled. This remains promising exploratory
-validation evidence; no default is promoted.
+ACE costs less on both replicates; coverage changes by +1 and -1. That
+variation does not disqualify the observed saving. The **current assessment
+is that the observed budget target is achieved**, with equal pooled proof
+counts. The original gate returned false because of the per-replicate
+condition; that result is retained solely as historical provenance in
+`results.json`. [Current machine-readable conclusions](../ace_economy_20260916/reassessment/results.json)
+apply the user's clarification. This remains exploratory validation
+evidence, and the cost interval does not establish a general 10% effect.
+No default is promoted.
 
 **Secondary comparison: does resetting help non-ACE?**
 The reset raises observed coverage from 47/80 to 50/80, while cost rises
 **12.11%** and cost/proof rises **5.38%**. Per-replicate coverage goes from
-24/23 to 24/26, meeting the practical quality/cost gate. Coverage p=0.5;
+24/23 to 24/26. This is a positive observed coverage-cost trade-off.
+Coverage p=0.5;
 cost p=0.130499, cost-ratio 90% CI [0.989106, 1.255222]. The reset's benefit
 in this empty-book run is more observed proofs at greater expense.
 For comparison, the earlier ACE reset improved 46 to 50 proofs for 1.78%
@@ -82,11 +90,11 @@ old controls or historical preparation.
 ValidationX was reused for development and for selecting the ACE reset
 among earlier interventions; the fresh non-ACE control was run later. Those
 selection, timing and caching limitations prevent a confirmatory claim.
-The result supports studying this configuration further, while preserving
-both the original quality gate and the uncertainty estimates. No additional
-arms, seeds or data partitions were added to pursue significance.
+The result supports studying this configuration further. Original gate
+outputs remain historical; uncertainty estimates remain applicable. No
+additional arms, seeds or data partitions were added to pursue significance.
 
-[Full statistics](results.json), [all 320 matched/reused cells](cells.csv),
+[Original statistics and historical gate](results.json), [all 320 matched/reused cells](cells.csv),
 [diagnostics](analysis/diagnostics.json), [dated new receipts](analysis/receipts.csv),
 [new outcomes and full proof values](analysis/outcomes.json), and
 [archive hashes](analysis/archives.json) preserve the evidence. The original
