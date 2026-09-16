@@ -70,8 +70,16 @@ def export(module: Any, batches: tuple[str, ...]) -> None:
         writer.writeheader()
         writer.writerows(receipts)
     archives: dict[str, Any] = {}
+    outcomes: dict[str, Any] = {}
     for ident, job in cells.items():
-        module.cell_result(job)
+        result = module.cell_result(job)
+        outcomes[ident] = dict(
+            success=bool(result and result["success"]),
+            platform_failed=result is None,
+            cost=account["costs"].get(ident, 0),
+            values=result["values"] if result else [],
+            spent_budget=result["spent_budget"] if result else None,
+        )
         folder = module.directory(job)
         files = [
             folder / filename
@@ -94,6 +102,7 @@ def export(module: Any, batches: tuple[str, ...]) -> None:
             receipts_sha256=original.sha(destination / "receipts.csv"),
         ),
     )
+    module.save("analysis/outcomes.json", outcomes)
     print(
         json.dumps(
             dict(
