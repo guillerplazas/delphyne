@@ -15,6 +15,7 @@ import gzip
 import io
 import json
 from pathlib import Path
+import time
 from typing import Any, cast
 from unittest.mock import patch
 
@@ -310,9 +311,54 @@ def old_audit() -> None:
     print(json.dumps(totals, indent=2))
 
 
+def follow() -> None:
+    """Replay completed blocks alongside the supervised paid launcher.
+
+    This observer never launches or restarts experiments. On completion it
+    binds all certificates, exports receipts and produces the numeric report.
+    A failed launcher leaves its existing archives intact for inspection.
+    """
+    completed: set[str] = set()
+    while True:
+        for batch in c.BATCHES:
+            if batch in completed:
+                continue
+            if (c.CAMPAIGN / f"batches/{batch}.json").exists():
+                replay(batch)
+                completed.add(batch)
+        if (c.CAMPAIGN / "benchmark_finished.json").exists():
+            expected = {
+                b
+                for b in c.BATCHES
+                if (c.CAMPAIGN / f"batches/{b}.json").exists()
+            }
+            if completed == expected:
+                break
+        time.sleep(10)
+    checks: list[dict[str, Any]] = []
+    for batch in c.BATCHES:
+        if batch in completed:
+            checks.extend(c.read(f"replays/{batch}.json")["cells"])
+    c.save(
+        "replay.json",
+        dict(
+            passed=True,
+            paid_calls=0,
+            cells=checks,
+            complete_registered_panel=len(completed) == len(c.BATCHES),
+        ),
+    )
+    export()
+    from .report import report
+
+    report(False)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("replay", "export", "audit-old"))
+    parser.add_argument(
+        "action", choices=("replay", "export", "audit-old", "follow")
+    )
     parser.add_argument("batches", nargs="*")
     args = parser.parse_args()
     if args.action == "replay":
@@ -320,6 +366,8 @@ def main() -> None:
             replay(batch)
     elif args.action == "export":
         export()
+    elif args.action == "follow":
+        follow()
     else:
         old_audit()
 
