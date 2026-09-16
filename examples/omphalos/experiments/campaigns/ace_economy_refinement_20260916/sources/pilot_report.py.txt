@@ -28,8 +28,6 @@ from tools.analysis.paired_evaluation import (
     exact_cluster_p,
 )
 
-from . import state
-
 
 def arm(ace: bool, reset: bool, compact: bool) -> str:
     return (
@@ -140,14 +138,17 @@ def collect(batches: list[str]) -> list[dict[str, Any]]:
             and event.get("decision") == "reset"
         ):
             counts[event["cell"]]["resets"] += 1
-        if event.get("kind") == "model" and event.get("decision") == "invoked":
+        if (
+            event.get("kind") == "transport"
+            and event.get("decision") == "saved"
+        ):
             counts[event["cell"]]["requests"] += 1
     rows: list[dict[str, Any]] = []
     for batch in batches:
         if not (c.CAMPAIGN / f"batches/{batch}.json").exists():
             raise ValueError("Incomplete batch: " + batch)
         for job in c.configs(batch):
-            result = state.cell_result(job)
+            result = c.cell_result(job)
             ident = c.name(job, None)
             cost = account["costs"].get(ident, 0)
             tokens = account["tokens"].get(
@@ -169,7 +170,6 @@ def collect(batches: list[str]) -> list[dict[str, Any]]:
                     **tokens,
                     requests=counts[ident]["requests"],
                     resets=counts[ident]["resets"],
-                    continued=state.directory(job) != c.directory(job),
                     uncached_cost=price_tokens(
                         "gpt-5.6-luna",
                         tokens["input"],
@@ -455,21 +455,6 @@ def report(pilot: bool) -> dict[str, Any]:
         ):
             raise ValueError("Cell costs do not reconcile")
         result["interactions"] = interactions(rows)
-        incident = c.CAMPAIGN / "operations/incident01.json"
-        if incident.exists():
-            families = reference.original.families("validation")
-            affected = families["algebra_others_exirrpowirrrat"]
-            unaffected = [
-                r for r in rows if families[r["theorem"]] != affected
-            ]
-            result["operational_sensitivity"] = dict(
-                reason="One provider rejection and two administrative continuations in the same theorem family. This sensitivity was specified before resumption or later validation results.",
-                primary="All registered cells, including the provider failure and all continuation charges",
-                excluded_family=affected,
-                cells=len(unaffected),
-                totals=totals(unaffected),
-                comparisons=pairs(unaffected, False),
-            )
     filename = "pilot_numbers" if pilot else "results"
     c.save(f"{filename}.json", result)
     with (c.CAMPAIGN / f"{filename}_cells.csv").open("w") as f:

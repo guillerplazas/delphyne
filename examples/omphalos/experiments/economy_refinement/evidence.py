@@ -29,6 +29,8 @@ from runtime.campaign_budget import CampaignResponsesModel, Ledger
 from runtime.model_registry import price_tokens
 from tools.analysis.replay_economy import own_receipts
 
+from . import state
+
 
 def replay(batch: str) -> None:
     jobs = c.configs(batch)
@@ -43,7 +45,7 @@ def replay(batch: str) -> None:
         if set(saved["result_hashes"]) != {c.name(j, None) for j in jobs}:
             raise ValueError("Replay cells changed")
         for job in jobs:
-            path = c.directory(job) / "result.yaml"
+            path = state.terminal_file(job)
             if c.sha(path) != saved["result_hashes"][c.name(job, None)]:
                 raise ValueError("Measured result changed after replay")
         return
@@ -51,16 +53,16 @@ def replay(batch: str) -> None:
     checks: list[dict[str, Any]] = []
     hashes: dict[str, str] = {}
     for job in jobs:
-        original = c.cell_result(job)
+        original = state.cell_result(job)
         ident = c.name(job, None)
-        hashes[ident] = c.sha(c.directory(job) / "result.yaml")
+        hashes[ident] = c.sha(state.terminal_file(job))
         if original is None:
             checks.append(dict(cell=ident, platform_failed=True))
             continue
         c.activate(events=False)
         args = job.instantiate(None)
         args.cache_mode = "replay"
-        args.cache_file = str(c.directory(job) / "cache.yaml")
+        args.cache_file = str(state.directory(job) / "cache.yaml")
         args.export_raw_trace = args.export_browsable_trace = (
             args.export_log
         ) = False
@@ -142,6 +144,7 @@ def export() -> None:
                 ),
                 charged=charged,
                 repriced=repriced,
+                usage_origin=usage.get("usage_origin", "provider usage"),
             )
         )
     if abs(sum(r["repriced"] for r in receipts) - account["total"]) > 1e-8:
@@ -157,19 +160,17 @@ def export() -> None:
     archives: dict[str, Any] = {}
     outcomes: dict[str, Any] = {}
     for ident, job in cells.items():
-        result = c.cell_result(job)
+        result = state.cell_result(job)
         outcomes[ident] = dict(
             success=bool(result and result["success"]),
             platform_failed=result is None,
             cost=account["costs"].get(ident, 0),
             values=result["values"] if result else [],
             spent_budget=result["spent_budget"] if result else None,
+            administrative_continuation=state.directory(job)
+            != c.directory(job),
         )
-        files = [
-            c.directory(job) / filename
-            for filename in ("result.yaml", "cache.yaml")
-            if (c.directory(job) / filename).exists()
-        ]
+        files = state.archive_files(job)
         files.extend((c.CAMPAIGN / "transport" / ident).glob("*.json.gz"))
         archives[ident] = {
             str(p.relative_to(c.ROOT)): c.sha(p) for p in sorted(files)
