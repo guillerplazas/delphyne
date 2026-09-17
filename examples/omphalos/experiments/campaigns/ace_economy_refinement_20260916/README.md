@@ -6,6 +6,16 @@ retrieval/failure memory. Existing baseline tools and verified proof state
 are unchanged. Neither agent is required to use reset in the final cost/
 coverage comparison. The frozen v2 playbook is unchanged.
 
+**Complete:** 24 pilot + 640 validation runs, $13.53635304 new spend.
+Plain drop reaches 52/80 solves in both agents, costing $1.59909032 for
+non-ACE and $1.66676660 for ACE. The 10% ACE saving is not reproduced;
+compact variants do not improve the overall frontier. See
+[RESULTS.md](RESULTS.md) for the full comparison and implementation audit.
+
+The independent pilot is recorded in [PILOT.md](PILOT.md). One provider
+rejection and two exact administrative continuations are preserved in
+[OPERATIONS.md](OPERATIONS.md); no rejected prompt was retried.
+
 Authorization: $20 additional inference within the original cumulative $50.
 The three earlier campaigns settled at $13.98159180. trainX is authorized
 for refinement pilots; validationX is the final development benchmark.
@@ -56,7 +66,17 @@ python -m experiments.ace_economy_refinement_experiment benchmark
 python -m experiments.economy_refinement.evidence replay final00
 # Repeat replay for each completed final block, then export all receipts.
 python -m experiments.economy_refinement.evidence export
+python -m experiments.economy_refinement.report final
+python -m experiments.economy_refinement.audit
+python -m experiments.economy_refinement.plot
 ```
+
+`python -m experiments.economy_refinement.evidence follow` performs the
+offline replays as blocks finish, then exports receipts and produces the
+numeric report. It never launches paid work. The request audit checks
+identical initial drop requests, fixed tool schemas/model options, compact
+prompt boundaries and cleared reasoning state after each drop. The figure
+is available as standalone PNG and PDF files in `analysis/`.
 
 `protocol.json`, manifests and `seal.json` freeze the runtime before any
 paid call. `freeze.json` records the pilot decision before validation.
@@ -73,7 +93,7 @@ total billing or a judgment that every repeated lookup was unnecessary.
 
 ## Implementation validation
 
-30 scoped tests pass, including exact replay of both paid baseline agents
+40 scoped tests pass, including exact replay of both paid baseline agents
 with both new switches off. Changed code passes Ruff and pinned Pyright
 1.1.406; agent instruction symlinks pass `make agents-check`. Root
 `PYRIGHT_PYTHON_FORCE_VERSION=1.1.406 make pyright` retains 17 pre-existing
