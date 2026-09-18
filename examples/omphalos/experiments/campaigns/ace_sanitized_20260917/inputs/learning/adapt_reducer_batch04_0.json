@@ -1,0 +1,1358 @@
+{
+  "args": {
+    "book": {
+      "bullets": [
+        {
+          "content": "When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n",
+          "harmful": 0,
+          "helpful": 5,
+          "id": "rocq-00001",
+          "section": "pitfalls"
+        },
+        {
+          "content": "For an induction hypothesis relating recursive `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then apply `rewrite IH; lia`.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00002",
+          "section": "tactics"
+        },
+        {
+          "content": "For goals over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use `intros` followed by `nia`; it can handle the nonlinear products and truncated subtraction directly.\n",
+          "harmful": 3,
+          "helpful": 4,
+          "id": "rocq-00003",
+          "section": "tactics"
+        },
+        {
+          "content": "For closed `nat` equalities built from executable finite-list operations such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`; use `reflexivity` afterward if the resulting definitional equality is not closed automatically.\n",
+          "harmful": 1,
+          "helpful": 1,
+          "id": "rocq-00004",
+          "section": "tactics"
+        },
+        {
+          "content": "When applying a recurrence hypothesis whose predecessor uses truncated subtraction, first prove the exact natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality before applying the hypothesis so its indices unify.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00005",
+          "section": "pitfalls"
+        },
+        {
+          "content": "Under an active `R_scope`, annotate natural-number indices, arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion and comparison-type errors.\n",
+          "harmful": 0,
+          "helpful": 6,
+          "id": "rocq-00006",
+          "section": "pitfalls"
+        },
+        {
+          "content": "For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00007",
+          "section": "lemmas"
+        },
+        {
+          "content": "For finite nonnegative real sequences with a fixed-sum product goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00009",
+          "section": "strategy"
+        },
+        {
+          "content": "Do not obtain a successor product bound by multiplying an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`. An induction proof must retain a bound parameterized by the total sum or average.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00010",
+          "section": "pitfalls"
+        },
+        {
+          "content": "Before using `nra` in AM-GM base or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition; `nra` cannot reason through opaque recursive definitions or supply the global inequality.\n",
+          "harmful": 0,
+          "helpful": 1,
+          "id": "rocq-00011",
+          "section": "tactics"
+        },
+        {
+          "content": "For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately for completing-square identities before finishing the resulting linear inequality with `lra`.\n",
+          "harmful": 0,
+          "helpful": 2,
+          "id": "rocq-00012",
+          "section": "tactics"
+        },
+        {
+          "content": "For positivity of a recursive real product whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity through opaque recursive products.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00013",
+          "section": "lemmas"
+        },
+        {
+          "content": "For natural-number product bounds, use `Nat.mul_le_mono` to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply an established inequality by a nonnegative factor; provide the premises in the lemma's expected order instead of guessing a multiplication-monotonicity API.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00014",
+          "section": "lemmas"
+        },
+        {
+          "content": "To lift a natural bound into `R`, expose the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <= INR c; apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent `.mpr` projection.\n",
+          "harmful": 0,
+          "helpful": 1,
+          "id": "rocq-00015",
+          "section": "lemmas"
+        },
+        {
+          "content": "For real equations involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead of relying on `field_simplify` to normalize it.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00016",
+          "section": "pitfalls"
+        },
+        {
+          "content": "To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00017",
+          "section": "tactics"
+        },
+        {
+          "content": "For bounded natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce only explicitly closed numeral cases, using `change` to expose a known numeral equality when needed.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00018",
+          "section": "pitfalls"
+        },
+        {
+          "content": "When proving a least witness by finite exclusion, first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch immediately, handle the finitely many numeral cases explicitly under `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors.\n",
+          "harmful": 1,
+          "helpful": 1,
+          "id": "rocq-00019",
+          "section": "strategy"
+        },
+        {
+          "content": "For instantiated recurrence equations containing closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then normalize each index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation chain.\n",
+          "harmful": 1,
+          "helpful": 0,
+          "id": "rocq-00020",
+          "section": "tactics"
+        },
+        {
+          "content": "For an explicit `Ensemble` built from nested `Add`, first unfold `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions and `False` cases are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer by layer, prove each freshness premise by unfolding `In` and `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n",
+          "harmful": 0,
+          "helpful": 1,
+          "id": "rocq-00021",
+          "section": "tactics"
+        },
+        {
+          "content": "For trigonometric goals involving complementary or doubled angles, use the library lemma with the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00022",
+          "section": "lemmas"
+        },
+        {
+          "content": "For logarithmic inequalities and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use the resulting instantiated equality directly.\n",
+          "harmful": 0,
+          "helpful": 1,
+          "id": "rocq-00023",
+          "section": "lemmas"
+        },
+        {
+          "content": "For an unbounded quadratic equation over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction from the original equation.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00024",
+          "section": "tactics"
+        },
+        {
+          "content": "A closed cast such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality, for example with `cbv [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00025",
+          "section": "pitfalls"
+        },
+        {
+          "content": "For a target or hypothesis containing `ln (a * b)`, prove positivity of both factors explicitly; when a factor is an `Rpower`, unfold `Rpower` and apply `exp_pos`, rather than reusing positivity of the enclosing product. Then rewrite with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation does not expose this logarithmic product identity or supply its positivity premises.",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00026",
+          "section": "lemmas"
+        },
+        {
+          "content": "For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00027",
+          "section": "lemmas"
+        },
+        {
+          "content": "After rewriting a defining polynomial equation into multiple root hypotheses, prove a factor such as `b <> 0` by assuming it is zero, substituting with `subst`, applying the given disequality, and using `nra` on the exposed equations to derive the contradiction.",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00028",
+          "section": "pitfalls"
+        }
+      ],
+      "next_id": 29
+    },
+    "contexts": [
+      {
+        "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros k m n c Hpos Hc Hp Hbound.",
+          "unfold is_prime in Hp.",
+          "destruct n as [|n].",
+          "- lia.",
+          "- rewrite !Hc.",
+          "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+          "+ unfold prod_from_1_to.",
+          "simpl.",
+          "eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n)."
+        ],
+        "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+        "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+        "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+        "theorem_name": "imo_1967_p3",
+        "version": 1
+      },
+      {
+        "environment": "Require Import Coq.Arith.PeanoNat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [],
+        "problem_file": "miniF2F/valid/amc/amc12a_2016_p2.v",
+        "problem_sha256": "e0fbf7ccefc24a56f0bd7e68c0ae08d14557de2f9989be574b515b8769194c56",
+        "source": "53cf58a2799a52ee3d7af9a4426ef795c1f5d7e89806608e13001657ad7f1cc5",
+        "theorem_name": "amc12a_2016_p2",
+        "version": 1
+      },
+      {
+        "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "unfold Least.",
+          "split.",
+          "- split.",
+          "+ lia.",
+          "+ change (36 ^ 3 = 216 ^ 2).",
+          "reflexivity.",
+          "- intros m Hm.",
+          "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+          "+ exact Hge.",
+          "+ exfalso.",
+          "assert (Hm' : m <= 17) by lia.",
+          "destruct m as [|m].",
+          "{ lia. }",
+          "{ destruct m as [|m].",
+          "{ simpl in Hm. lia. }",
+          "{ destruct m as [|m].",
+          "{ simpl in Hm. lia. }",
+          "{ destruct m as [|m].",
+          "{ simpl in Hm. lia. }",
+          "{ destruct m as [|m].",
+          "{ simpl in Hm. lia. }",
+          "{ destruct m as [|m]."
+        ],
+        "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+        "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+        "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+        "theorem_name": "mathd_numbertheory_629",
+        "version": 1
+      }
+    ],
+    "drafts": [
+      {
+        "context_id": "ctx-3df4a41f09c1af2eb7aacfe5",
+        "draft_id": "repair-cd6ebdf5e7b3cbab2cc095f0",
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "proposed_code": "induction n as [| n IH]; simpl.",
+        "purpose": "Induct on n and simplify the successor products to expose their recursive factors.: The recursive product expressions are opaque to arithmetic automation; the successor case must be exposed by induction on the remaining product length before using the induction hypothesis.; At the displayed successor-product goal, preserve the current bullet focus; subsequent subgoals still require the product/division algebra.",
+        "remaining_goals": [
+          "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\nHkm  : k <= m\n|-(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  c n *\nc (S n) *\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) n /\n prod_from_1_to (fun i : nat => i * (i + 1)) n) =\n(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  (fun i : nat => c (m + i) - k * (k + 1)) n *\n(c (m + S n) - k * (k + 1))"
+        ],
+        "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1"
+      },
+      {
+        "context_id": "ctx-4731fcb5ff10134ad686eeb4",
+        "draft_id": "repair-41667cb6ae2f335979141cf8",
+        "error": "",
+        "proposed_code": "assert (Hexp : 5 * x = 15).\\n{ apply Nat.pow_inj_r with (a := 10).\\n- lia.\\n- exact H.\\n}\\n nia.",
+        "purpose": "Use Nat.pow_inj_r with the positive/non-unit base side condition to derive the exponent equation, then solve it arithmetically.: The current book has no guidance for reducing an equality of natural powers with common base to equality of exponents; after normalizing the original equation to 10 ^ (5 * x) = 10 ^ 15, direct arithmetic does not expose the exponent equality.; H : 10 ^ (5 * x) = 10 ^ 15 is available; the goal is x = 3.",
+        "remaining_goals": [],
+        "source": "53cf58a2799a52ee3d7af9a4426ef795c1f5d7e89806608e13001657ad7f1cc5"
+      },
+      {
+        "context_id": "ctx-4958008ed53794798afa77d2",
+        "draft_id": "repair-36856a9ce298e648792d2b7e",
+        "error": "(-32003, 'Coq: Stack overflow.')",
+        "proposed_code": "change (5 > 0 /\\ 60 ^ 3 = 60 ^ 2) in Hm; simpl in Hm; nia.",
+        "purpose": "Rewrite the closed lcm equation for m = 5 to its numeral value, then finish the contradiction arithmetically.: Broad simplification of a closed Nat.lcm expression overflows the evaluator; the current numeral branch should expose only the known closed lcm value before arithmetic contradiction.; Current branch has Hm : 5 > 0 /\\ Nat.lcm 12 5 ^ 3 = (12 * 5) ^ 2 and goal False; this is an explicitly closed numeral case.",
+        "remaining_goals": [
+          "Hm  : 5 > 0 /\\ Nat.lcm 12 5 ^ 3 = (12 * 5) ^ 2\nHlt  : 18 > 5\nHm'  : 5 <= 17\n|-False",
+          "m  : nat\nHm  : S (S (S (S (S (S m))))) > 0 /\\\nNat.lcm 12 (S (S (S (S (S (S m)))))) ^ 3 = (12 * S (S (S (S (S (S m)))))) ^ 2\nHlt  : 18 > S (S (S (S (S (S m)))))\nHm'  : S (S (S (S (S (S m))))) <= 17\n|-False"
+        ],
+        "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a"
+      }
+    ],
+    "evidence": "[{\"role\": \"curator\", \"status\": \"complete\", \"base_sha256\": \"af399ace24aab264c2305deab106774d7c93dab58b1a2b42e7e7b81db3817498\", \"plan\": {\"reasoning\": \"The draft fails locally with `Cannot find witness` and does not establish a useful product operation. Existing rules cover analogous sum induction, but not this quotient/product goal; repairing it would require reconstructing substantial surrounding algebra.\", \"decisions\": [{\"draft\": \"d1\", \"action\": \"drop\", \"closest_rule\": \"b2\", \"section\": \"\", \"content\": \"\", \"reason\": \"The proposed induction is unsupported by a successful check and does not address the displayed product/division goal.\", \"receipts\": [], \"failure_receipt\": \"\"}]}, \"diagnostics\": [\"drop requires empty evidence/content/section\"]}, {\"role\": \"curator\", \"status\": \"complete\", \"base_sha256\": \"af399ace24aab264c2305deab106774d7c93dab58b1a2b42e7e7b81db3817498\", \"plan\": {\"reasoning\": \"The draft assumes x and H are already introduced, but the supplied context is still the initial forall goal. Its only check is rejected before testing Nat.pow_inj_r, so no supported repair is established.\", \"decisions\": [{\"draft\": \"d1\", \"action\": \"drop\", \"closest_rule\": \"\", \"section\": \"\", \"content\": \"\", \"reason\": \"The checked script is not executable in the supplied context and provides no verified repair of the actual equation.\", \"receipts\": [], \"failure_receipt\": \"\"}]}, \"diagnostics\": [\"drop requires empty evidence/content/section\"]}, {\"role\": \"curator\", \"status\": \"complete\", \"base_sha256\": \"af399ace24aab264c2305deab106774d7c93dab58b1a2b42e7e7b81db3817498\", \"plan\": {\"reasoning\": \"The draft duplicates b17, and both proposed repairs remain resource-exhausted. No safe replacement was checked, so the material is unsupported and unaffordable.\", \"decisions\": [{\"draft\": \"d1\", \"action\": \"drop\", \"closest_rule\": \"b17\", \"section\": \"\", \"content\": \"\", \"reason\": \"Drop: both local repairs exhaust the evaluator's stack, so the claimed contradiction is not established.\", \"receipts\": [], \"failure_receipt\": \"\"}]}, \"diagnostics\": [\"drop requires empty evidence/content/section\", \"drop requires empty evidence/content/section\"]}]",
+    "evidence_review": true,
+    "receipts": [
+      {
+        "checked": {
+          "elapsed": 0.5378900673240423,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq: The variable x was not found in the current environment.')",
+            "failing_index": 0,
+            "failing_tactic": "assert (Hexp : 5 * x = 15).\n{ apply Nat.pow_inj_r with (a := 10).\n- lia.\n- exact H.\n}\nnia.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [],
+            "remaining_goals": [
+              "\n|-forall x : nat, 10 ^ x * 100 ^ (2 * x) = 1000 ^ 5 -> x = 3"
+            ],
+            "success": false
+          },
+          "outcome": "rejected",
+          "rpc_calls": 3,
+          "view": "{\"outcome\": \"rejected\", \"failing_tactic\": \"assert (Hexp : 5 * x = 15).\\n{ apply Nat.pow_inj_r with (a := 10).\\n- lia.\\n- exact H.\\n}\\nnia.\", \"error\": \"(-32003, 'Coq: The variable x was not found in the current environment.')\", \"verified_prefix\": [], \"total_goals\": 1, \"goals\": [\"\\n|-forall x : nat, 10 ^ x * 100 ^ (2 * x) = 1000 ^ 5 -> x = 3\"], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Coq.Arith.PeanoNat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [],
+          "problem_file": "miniF2F/valid/amc/amc12a_2016_p2.v",
+          "problem_sha256": "e0fbf7ccefc24a56f0bd7e68c0ae08d14557de2f9989be574b515b8769194c56",
+          "source": "53cf58a2799a52ee3d7af9a4426ef795c1f5d7e89806608e13001657ad7f1cc5",
+          "theorem_name": "amc12a_2016_p2",
+          "version": 1
+        },
+        "elapsed": 0.5378900673240423,
+        "rpc_calls": 3,
+        "snippet": "assert (Hexp : 5 * x = 15).\n{ apply Nat.pow_inj_r with (a := 10).\n- lia.\n- exact H.\n}\nnia.",
+        "status": "rejected"
+      },
+      {
+        "checked": {
+          "elapsed": 3.01144952327013,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq: Stack overflow.')",
+            "failing_index": 22,
+            "failing_tactic": "{ replace (Nat.lcm 12 5) with 60 in Hm by reflexivity.\n  simpl in Hm.\n  nia.\n}",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "unfold Least.",
+              "split.",
+              "- split.",
+              "+ lia.",
+              "+ change (36 ^ 3 = 216 ^ 2).",
+              "reflexivity.",
+              "- intros m Hm.",
+              "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+              "+ exact Hge.",
+              "+ exfalso.",
+              "assert (Hm' : m <= 17) by lia.",
+              "destruct m as [|m].",
+              "{ lia. }",
+              "{ destruct m as [|m].",
+              "{ simpl in Hm. lia. }",
+              "{ destruct m as [|m].",
+              "{ simpl in Hm. lia. }",
+              "{ destruct m as [|m].",
+              "{ simpl in Hm. lia. }",
+              "{ destruct m as [|m].",
+              "{ simpl in Hm. lia. }",
+              "{ destruct m as [|m]."
+            ],
+            "remaining_goals": [
+              "Hm  : 5 > 0 /\\ Nat.lcm 12 5 ^ 3 = (12 * 5) ^ 2\nHlt  : 18 > 5\nHm'  : 5 <= 17\n|-False",
+              "m  : nat\nHm  : S (S (S (S (S (S m))))) > 0 /\\\nNat.lcm 12 (S (S (S (S (S (S m)))))) ^ 3 = (12 * S (S (S (S (S (S m)))))) ^ 2\nHlt  : 18 > S (S (S (S (S (S m)))))\nHm'  : S (S (S (S (S (S m))))) <= 17\n|-False"
+            ],
+            "success": false
+          },
+          "outcome": "resource_exhausted",
+          "rpc_calls": 42,
+          "view": "{\"outcome\": \"resource_exhausted\", \"failing_tactic\": \"{ replace (Nat.lcm 12 5) with 60 in Hm by reflexivity.\\n  simpl in Hm.\\n  nia.\\n}\", \"error\": \"(-32003, 'Coq: Stack overflow.')\", \"verified_prefix\": [\"unfold Least.\", \"split.\", \"- split.\", \"+ lia.\", \"+ change (36 ^ 3 = 216 ^ 2).\", \"reflexivity.\", \"- intros m Hm.\", \"destruct (le_gt_dec 18 m) as [Hge | Hlt].\", \"+ exact Hge.\", \"+ exfalso.\", \"assert (Hm' : m <= 17) by lia.\", \"destruct m as [|m].\", \"{ lia. }\", \"{ destruct m as [|m].\", \"{ simpl in Hm. lia. }\", \"{ destruct m as [|m].\", \"{ simpl in Hm. lia. }\", \"{ destruct m as [|m].\", \"{ simpl in Hm. lia. }\", \"{ destruct m as [|m].\", \"{ simpl in Hm. lia. }\", \"{ destruct m as [|m].\"], \"total_goals\": 2, \"goals\": [\"Hm  : 5 > 0 /\\\\ Nat.lcm 12 5 ^ 3 = (12 * 5) ^ 2\\nHlt  : 18 > 5\\nHm'  : 5 <= 17\\n|-False\", \"m  : nat\\nHm  : S (S (S (S (S (S m))))) > 0 /\\\\\\nNat.lcm 12 (S (S (S (S (S (S m)))))) ^ 3 = (12 * S (S (S (S (S (S m)))))) ^ 2\\nHlt  : 18 > S (S (S (S (S (S m)))))\\nHm'  : S (S (S (S (S (S m))))) <= 17\\n|-False\"], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia.",
+            "+ change (36 ^ 3 = 216 ^ 2).",
+            "reflexivity.",
+            "- intros m Hm.",
+            "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+            "+ exact Hge.",
+            "+ exfalso.",
+            "assert (Hm' : m <= 17) by lia.",
+            "destruct m as [|m].",
+            "{ lia. }",
+            "{ destruct m as [|m].",
+            "{ simpl in Hm. lia. }",
+            "{ destruct m as [|m].",
+            "{ simpl in Hm. lia. }",
+            "{ destruct m as [|m].",
+            "{ simpl in Hm. lia. }",
+            "{ destruct m as [|m].",
+            "{ simpl in Hm. lia. }",
+            "{ destruct m as [|m]."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "elapsed": 3.01144952327013,
+        "rpc_calls": 42,
+        "snippet": "{ replace (Nat.lcm 12 5) with 60 in Hm by reflexivity.\n  simpl in Hm.\n  nia.\n}",
+        "status": "resource_exhausted"
+      },
+      {
+        "checked": {
+          "elapsed": 1.1336405389010906,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq: Stack overflow.')",
+            "failing_index": 22,
+            "failing_tactic": "{ change (5 > 0 /\\ 60 ^ 3 = 60 ^ 2) in Hm.\n  simpl in Hm.\n  nia.\n}",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "unfold Least.",
+              "split.",
+              "- split.",
+              "+ lia.",
+              "+ change (36 ^ 3 = 216 ^ 2).",
+              "reflexivity.",
+              "- intros m Hm.",
+              "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+              "+ exact Hge.",
+              "+ exfalso.",
+              "assert (Hm' : m <= 17) by lia.",
+              "destruct m as [|m].",
+              "{ lia. }",
+              "{ destruct m as [|m].",
+              "{ simpl in Hm. lia. }",
+              "{ destruct m as [|m].",
+              "{ simpl in Hm. lia. }",
+              "{ destruct m as [|m].",
+              "{ simpl in Hm. lia. }",
+              "{ destruct m as [|m].",
+              "{ simpl in Hm. lia. }",
+              "{ destruct m as [|m]."
+            ],
+            "remaining_goals": [
+              "Hm  : 5 > 0 /\\ Nat.lcm 12 5 ^ 3 = (12 * 5) ^ 2\nHlt  : 18 > 5\nHm'  : 5 <= 17\n|-False",
+              "m  : nat\nHm  : S (S (S (S (S (S m))))) > 0 /\\\nNat.lcm 12 (S (S (S (S (S (S m)))))) ^ 3 = (12 * S (S (S (S (S (S m)))))) ^ 2\nHlt  : 18 > S (S (S (S (S (S m)))))\nHm'  : S (S (S (S (S (S m))))) <= 17\n|-False"
+            ],
+            "success": false
+          },
+          "outcome": "resource_exhausted",
+          "rpc_calls": 3,
+          "view": "{\"outcome\": \"resource_exhausted\", \"failing_tactic\": \"{ change (5 > 0 /\\\\ 60 ^ 3 = 60 ^ 2) in Hm.\\n  simpl in Hm.\\n  nia.\\n}\", \"error\": \"(-32003, 'Coq: Stack overflow.')\", \"verified_prefix\": [\"unfold Least.\", \"split.\", \"- split.\", \"+ lia.\", \"+ change (36 ^ 3 = 216 ^ 2).\", \"reflexivity.\", \"- intros m Hm.\", \"destruct (le_gt_dec 18 m) as [Hge | Hlt].\", \"+ exact Hge.\", \"+ exfalso.\", \"assert (Hm' : m <= 17) by lia.\", \"destruct m as [|m].\", \"{ lia. }\", \"{ destruct m as [|m].\", \"{ simpl in Hm. lia. }\", \"{ destruct m as [|m].\", \"{ simpl in Hm. lia. }\", \"{ destruct m as [|m].\", \"{ simpl in Hm. lia. }\", \"{ destruct m as [|m].\", \"{ simpl in Hm. lia. }\", \"{ destruct m as [|m].\"], \"total_goals\": 2, \"goals\": [\"Hm  : 5 > 0 /\\\\ Nat.lcm 12 5 ^ 3 = (12 * 5) ^ 2\\nHlt  : 18 > 5\\nHm'  : 5 <= 17\\n|-False\", \"m  : nat\\nHm  : S (S (S (S (S (S m))))) > 0 /\\\\\\nNat.lcm 12 (S (S (S (S (S (S m)))))) ^ 3 = (12 * S (S (S (S (S (S m)))))) ^ 2\\nHlt  : 18 > S (S (S (S (S (S m)))))\\nHm'  : S (S (S (S (S (S m))))) <= 17\\n|-False\"], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia.",
+            "+ change (36 ^ 3 = 216 ^ 2).",
+            "reflexivity.",
+            "- intros m Hm.",
+            "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+            "+ exact Hge.",
+            "+ exfalso.",
+            "assert (Hm' : m <= 17) by lia.",
+            "destruct m as [|m].",
+            "{ lia. }",
+            "{ destruct m as [|m].",
+            "{ simpl in Hm. lia. }",
+            "{ destruct m as [|m].",
+            "{ simpl in Hm. lia. }",
+            "{ destruct m as [|m].",
+            "{ simpl in Hm. lia. }",
+            "{ destruct m as [|m].",
+            "{ simpl in Hm. lia. }",
+            "{ destruct m as [|m]."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "elapsed": 1.1336405389010906,
+        "rpc_calls": 3,
+        "snippet": "{ change (5 > 0 /\\ 60 ^ 3 = 60 ^ 2) in Hm.\n  simpl in Hm.\n  nia.\n}",
+        "status": "resource_exhausted"
+      }
+    ],
+    "role": "reducer",
+    "source_events": [
+      {
+        "context": {
+          "environment": "Require Import Coq.Arith.PeanoNat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [],
+          "problem_file": "miniF2F/valid/amc/amc12a_2016_p2.v",
+          "problem_sha256": "e0fbf7ccefc24a56f0bd7e68c0ae08d14557de2f9989be574b515b8769194c56",
+          "source": "53cf58a2799a52ee3d7af9a4426ef795c1f5d7e89806608e13001657ad7f1cc5",
+          "theorem_name": "amc12a_2016_p2",
+          "version": 1
+        },
+        "error": "",
+        "goals": [],
+        "identifier": "e1",
+        "status": "accepted",
+        "submitted": "intros x H.\nassert (Hleft : 10 ^ x * 100 ^ (2 * x) = 10 ^ (5 * x)).\n{ replace 100 with (10 ^ 2) by reflexivity.\nrewrite <- Nat.pow_mul_r.\nrewrite <- Nat.pow_add_r.\nreplace (x + 2 * (2 * x)) with (5 * x) by nia.\nreflexivity.\n}\nassert (Hright : 1000 ^ 5 = 10 ^ 15).\n{ replace 1000 with (10 ^ 3) by reflexivity.\nrewrite <- Nat.pow_mul_r.\nreplace (3 * 5) with 15 by reflexivity.\nreflexivity.\n}\nrewrite Hleft, Hright in H.\nassert (Hexp : 5 * x = 15).\n{ apply Nat.pow_inj_r with (a := 10).\n- lia.\n- exact H.\n}\nnia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros k m n c Hpos Hc Hp Hbound.",
+            "unfold is_prime in Hp.",
+            "destruct n as [|n].",
+            "- lia.",
+            "- rewrite !Hc.",
+            "eexists."
+          ],
+          "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+          "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+          "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+          "theorem_name": "imo_1967_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "goals": [
+          "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\n|-prod_from_1_to c (S n) * ?d =\nprod_from_1_to (fun i : nat => c (m + i) - k * (k + 1)) (S n)"
+        ],
+        "identifier": "e1",
+        "status": "rejected",
+        "submitted": "nia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros k m n c Hpos Hc Hp Hbound.",
+            "unfold is_prime in Hp.",
+            "destruct n as [|n].",
+            "- lia.",
+            "- rewrite !Hc.",
+            "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+            "+ eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) (S n) / prod_from_1_to (fun i => i * (i + 1)) (S n))."
+          ],
+          "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+          "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+          "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+          "theorem_name": "imo_1967_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: The reference Nat.mul_div_cancel was not found in the current environment.')",
+        "goals": [
+          "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\nHkm  : k <= m\n|-prod_from_1_to c (S n) *\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) (S n) /\n prod_from_1_to (fun i : nat => i * (i + 1)) (S n)) =\nprod_from_1_to (fun i : nat => c (m + i) - k * (k + 1)) (S n)"
+        ],
+        "identifier": "e2",
+        "status": "rejected",
+        "submitted": "apply Nat.mul_div_cancel."
+      },
+      {
+        "context": {
+          "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros k m n c Hpos Hc Hp Hbound.",
+            "unfold is_prime in Hp.",
+            "destruct n as [|n].",
+            "- lia.",
+            "- rewrite !Hc.",
+            "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+            "+ eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) (S n) / prod_from_1_to (fun i => i * (i + 1)) (S n))."
+          ],
+          "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+          "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+          "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+          "theorem_name": "imo_1967_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "goals": [
+          "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\nHkm  : k <= m\n|-prod_from_1_to c (S n) *\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) (S n) /\n prod_from_1_to (fun i : nat => i * (i + 1)) (S n)) =\nprod_from_1_to (fun i : nat => c (m + i) - k * (k + 1)) (S n)"
+        ],
+        "identifier": "e3",
+        "status": "rejected",
+        "submitted": "nia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros k m n c Hpos Hc Hp Hbound.",
+            "unfold is_prime in Hp.",
+            "destruct n as [|n].",
+            "- lia.",
+            "- rewrite !Hc.",
+            "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+            "+ unfold prod_from_1_to.",
+            "simpl.",
+            "eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n)."
+          ],
+          "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+          "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+          "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+          "theorem_name": "imo_1967_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "goals": [
+          "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\nHkm  : k <= m\n|-(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  c n *\nc (S n) *\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) n /\n prod_from_1_to (fun i : nat => i * (i + 1)) n) =\n(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  (fun i : nat => c (m + i) - k * (k + 1)) n *\n(c (m + S n) - k * (k + 1))"
+        ],
+        "identifier": "e4",
+        "status": "rejected",
+        "submitted": "nia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros k m n c Hpos Hc Hp Hbound.",
+            "unfold is_prime in Hp.",
+            "destruct n as [|n].",
+            "- lia.",
+            "- rewrite !Hc.",
+            "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+            "+ unfold prod_from_1_to.",
+            "simpl.",
+            "eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n)."
+          ],
+          "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+          "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+          "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+          "theorem_name": "imo_1967_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "goals": [
+          "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\nHkm  : k <= m\n|-(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  c n *\nc (S n) *\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) n /\n prod_from_1_to (fun i : nat => i * (i + 1)) n) =\n(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  (fun i : nat => c (m + i) - k * (k + 1)) n *\n(c (m + S n) - k * (k + 1))"
+        ],
+        "identifier": "e5",
+        "status": "rejected",
+        "submitted": "nia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros k m n c Hpos Hc Hp Hbound.",
+            "unfold is_prime in Hp.",
+            "destruct n as [|n].",
+            "- lia.",
+            "- rewrite !Hc.",
+            "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+            "+ unfold prod_from_1_to.",
+            "simpl.",
+            "eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n)."
+          ],
+          "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+          "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+          "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+          "theorem_name": "imo_1967_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "goals": [
+          "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\nHkm  : k <= m\n|-(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  c n *\nc (S n) *\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) n /\n prod_from_1_to (fun i : nat => i * (i + 1)) n) =\n(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  (fun i : nat => c (m + i) - k * (k + 1)) n *\n(c (m + S n) - k * (k + 1))"
+        ],
+        "identifier": "e6",
+        "status": "rejected",
+        "submitted": "nia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros k m n c Hpos Hc Hp Hbound.",
+            "unfold is_prime in Hp.",
+            "destruct n as [|n].",
+            "- lia.",
+            "- rewrite !Hc.",
+            "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+            "+ unfold prod_from_1_to.",
+            "simpl.",
+            "eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n)."
+          ],
+          "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+          "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+          "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+          "theorem_name": "imo_1967_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "goals": [
+          "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\nHkm  : k <= m\n|-(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  c n *\nc (S n) *\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) n /\n prod_from_1_to (fun i : nat => i * (i + 1)) n) =\n(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  (fun i : nat => c (m + i) - k * (k + 1)) n *\n(c (m + S n) - k * (k + 1))"
+        ],
+        "identifier": "e7",
+        "status": "rejected",
+        "submitted": "nia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros k m n c Hpos Hc Hp Hbound.",
+            "unfold is_prime in Hp.",
+            "destruct n as [|n].",
+            "- lia.",
+            "- rewrite !Hc.",
+            "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+            "+ unfold prod_from_1_to.",
+            "simpl.",
+            "eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n)."
+          ],
+          "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+          "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+          "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+          "theorem_name": "imo_1967_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "goals": [
+          "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\nHkm  : k <= m\n|-(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  c n *\nc (S n) *\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) n /\n prod_from_1_to (fun i : nat => i * (i + 1)) n) =\n(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  (fun i : nat => c (m + i) - k * (k + 1)) n *\n(c (m + S n) - k * (k + 1))"
+        ],
+        "identifier": "e8",
+        "status": "rejected",
+        "submitted": "nia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros k m n c Hpos Hc Hp Hbound.",
+            "unfold is_prime in Hp.",
+            "destruct n as [|n].",
+            "- lia.",
+            "- rewrite !Hc.",
+            "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+            "+ unfold prod_from_1_to.",
+            "simpl.",
+            "eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n)."
+          ],
+          "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+          "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+          "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+          "theorem_name": "imo_1967_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "goals": [
+          "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\nHkm  : k <= m\n|-(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  c n *\nc (S n) *\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) n /\n prod_from_1_to (fun i : nat => i * (i + 1)) n) =\n(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  (fun i : nat => c (m + i) - k * (k + 1)) n *\n(c (m + S n) - k * (k + 1))"
+        ],
+        "identifier": "e9",
+        "status": "rejected",
+        "submitted": "nia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros k m n c Hpos Hc Hp Hbound.",
+            "unfold is_prime in Hp.",
+            "destruct n as [|n].",
+            "- lia.",
+            "- rewrite !Hc.",
+            "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+            "+ unfold prod_from_1_to.",
+            "simpl.",
+            "eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n)."
+          ],
+          "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+          "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+          "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+          "theorem_name": "imo_1967_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "goals": [
+          "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\nHkm  : k <= m\n|-(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  c n *\nc (S n) *\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) n /\n prod_from_1_to (fun i : nat => i * (i + 1)) n) =\n(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  (fun i : nat => c (m + i) - k * (k + 1)) n *\n(c (m + S n) - k * (k + 1))"
+        ],
+        "identifier": "e10",
+        "status": "rejected",
+        "submitted": "nia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros k m n c Hpos Hc Hp Hbound.",
+            "unfold is_prime in Hp.",
+            "destruct n as [|n].",
+            "- lia.",
+            "- rewrite !Hc.",
+            "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+            "+ unfold prod_from_1_to.",
+            "simpl.",
+            "eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n)."
+          ],
+          "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+          "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+          "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+          "theorem_name": "imo_1967_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "goals": [
+          "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\nHkm  : k <= m\n|-(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  c n *\nc (S n) *\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) n /\n prod_from_1_to (fun i : nat => i * (i + 1)) n) =\n(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  (fun i : nat => c (m + i) - k * (k + 1)) n *\n(c (m + S n) - k * (k + 1))"
+        ],
+        "identifier": "e11",
+        "status": "rejected",
+        "submitted": "nia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Nat.\nRequire Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros k m n c Hpos Hc Hp Hbound.",
+            "unfold is_prime in Hp.",
+            "destruct n as [|n].",
+            "- lia.",
+            "- rewrite !Hc.",
+            "destruct (le_gt_dec k m) as [Hkm | Hmk].",
+            "+ unfold prod_from_1_to.",
+            "simpl.",
+            "eexists (prod_from_1_to (fun i => (m + i) * (m + i + 1) - k * (k + 1)) n / prod_from_1_to (fun i => i * (i + 1)) n)."
+          ],
+          "problem_file": "miniF2F/valid/imo/imo_1967_p3.v",
+          "problem_sha256": "db4aba745b9935fc8a54b7c239097451e62df5552758ca2c1f17dcb5d5c1e16c",
+          "source": "01cfc2ceec50551f6cf9929e2a4ef36f4d40e9670e9e97457b7db1bc6de175d1",
+          "theorem_name": "imo_1967_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "goals": [
+          "k, m, n  : nat\nc  : nat -> nat\nHpos  : 0 < k /\\ 0 < m /\\ 0 < S n\nHc  : forall s : nat, c s = s * (s + 1)\nHp  : k + m + 1 > 1 /\\\n(forall n0 : nat,\n 1 < n0 < k + m + 1 -> ~ (exists k0 : nat, n0 * k0 = k + m + 1))\nHbound  : S n + 1 < k + m + 1\nHkm  : k <= m\n|-(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  c n *\nc (S n) *\n(prod_from_1_to (fun i : nat => (m + i) * (m + i + 1) - k * (k + 1)) n /\n prod_from_1_to (fun i : nat => i * (i + 1)) n) =\n(fix prod_from_1_to (f : nat -> nat) (n0 : nat) {struct n0} : nat :=\n   match n0 with\n   | 0 => 1\n   | S m0 => prod_from_1_to f m0 * f (S m0)\n   end)\n  (fun i : nat => c (m + i) - k * (k + 1)) n *\n(c (m + S n) - k * (k + 1))"
+        ],
+        "identifier": "e12",
+        "status": "rejected",
+        "submitted": "nia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Stack overflow.')",
+        "goals": [
+          "\n|-18 > 0 /\\ Nat.lcm 12 18 ^ 3 = (12 * 18) ^ 2",
+          "\n|-forall m : nat, m > 0 /\\ Nat.lcm 12 m ^ 3 = (12 * m) ^ 2 -> 18 <= m"
+        ],
+        "identifier": "e1",
+        "status": "resource_exhausted",
+        "submitted": "- vm_compute."
+      },
+      {
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Syntax error: [ltac_use_default] expected after [tactic] (in [tactic_command]).')",
+        "goals": [],
+        "identifier": "e2",
+        "status": "rejected",
+        "submitted": "+ change 36 ^ 3 = 216 ^ 2."
+      },
+      {
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia.",
+            "+ change (36 ^ 3 = 216 ^ 2).",
+            "reflexivity.",
+            "- intros m Hm.",
+            "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+            "+ exact Hge.",
+            "+ exfalso.",
+            "assert (Hm' : m <= 17) by lia.",
+            "destruct m as [|m]."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: [Focus] Wrong bullet -: Current bullet + is not finished.')",
+        "goals": [
+          "Hm  : 0 > 0 /\\ Nat.lcm 12 0 ^ 3 = (12 * 0) ^ 2\nHlt  : 18 > 0\nHm'  : 0 <= 17\n|-False",
+          "m  : nat\nHm  : S m > 0 /\\ Nat.lcm 12 (S m) ^ 3 = (12 * S m) ^ 2\nHlt  : 18 > S m\nHm'  : S m <= 17\n|-False"
+        ],
+        "identifier": "e3",
+        "status": "rejected",
+        "submitted": "- lia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia.",
+            "+ change (36 ^ 3 = 216 ^ 2).",
+            "reflexivity.",
+            "- intros m Hm.",
+            "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+            "+ exact Hge.",
+            "+ exfalso.",
+            "assert (Hm' : m <= 17) by lia.",
+            "destruct m as [|m]."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: [Focus] Wrong bullet +: Current bullet + is not finished.')",
+        "goals": [
+          "Hm  : 0 > 0 /\\ Nat.lcm 12 0 ^ 3 = (12 * 0) ^ 2\nHlt  : 18 > 0\nHm'  : 0 <= 17\n|-False",
+          "m  : nat\nHm  : S m > 0 /\\ Nat.lcm 12 (S m) ^ 3 = (12 * S m) ^ 2\nHlt  : 18 > S m\nHm'  : S m <= 17\n|-False"
+        ],
+        "identifier": "e4",
+        "status": "rejected",
+        "submitted": "+ lia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia.",
+            "+ change (36 ^ 3 = 216 ^ 2).",
+            "reflexivity.",
+            "- intros m Hm.",
+            "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+            "+ exact Hge.",
+            "+ exfalso.",
+            "assert (Hm' : m <= 17) by lia.",
+            "destruct m as [|m].",
+            "{ lia. }",
+            "{ destruct m as [|m].",
+            "{ simpl in Hm. lia. }",
+            "{ destruct m as [|m].",
+            "{ simpl in Hm. lia. }",
+            "{ destruct m as [|m].",
+            "{ simpl in Hm. lia. }",
+            "{ destruct m as [|m].",
+            "{ simpl in Hm. lia. }",
+            "{ destruct m as [|m]."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Stack overflow.')",
+        "goals": [
+          "Hm  : 5 > 0 /\\ Nat.lcm 12 5 ^ 3 = (12 * 5) ^ 2\nHlt  : 18 > 5\nHm'  : 5 <= 17\n|-False",
+          "m  : nat\nHm  : S (S (S (S (S (S m))))) > 0 /\\\nNat.lcm 12 (S (S (S (S (S (S m)))))) ^ 3 = (12 * S (S (S (S (S (S m)))))) ^ 2\nHlt  : 18 > S (S (S (S (S (S m)))))\nHm'  : S (S (S (S (S (S m))))) <= 17\n|-False"
+        ],
+        "identifier": "e5",
+        "status": "resource_exhausted",
+        "submitted": "{ simpl in Hm. lia. }"
+      },
+      {
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia.",
+            "+ change (36 ^ 3 = 216 ^ 2).",
+            "reflexivity.",
+            "- intros m Hm.",
+            "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+            "+ exact Hge.",
+            "+ exfalso.",
+            "assert (D : m = 0 \\/ m = 1 \\/ m = 2 \\/ m = 3 \\/ m = 4 \\/ m = 5 \\/ m = 6 \\/ m = 7 \\/ m = 8 \\/ m = 9 \\/ m = 10 \\/ m = 11 \\/ m = 12 \\/ m = 13 \\/ m = 14 \\/ m = 15 \\/ m = 16 \\/ m = 17) by lia."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Unexpected introduction pattern (none were expected in the branch).')",
+        "goals": [
+          "m  : nat\nHm  : m > 0 /\\ Nat.lcm 12 m ^ 3 = (12 * m) ^ 2\nHlt  : 18 > m\nD  : m = 0 \\/\nm = 1 \\/\nm = 2 \\/\nm = 3 \\/\nm = 4 \\/\nm = 5 \\/\nm = 6 \\/\nm = 7 \\/\nm = 8 \\/\nm = 9 \\/\nm = 10 \\/ m = 11 \\/ m = 12 \\/ m = 13 \\/ m = 14 \\/ m = 15 \\/ m = 16 \\/ m = 17\n|-False"
+        ],
+        "identifier": "e6",
+        "status": "rejected",
+        "submitted": "destruct D as [-> | [-> | [-> | [-> | [-> | [-> | [-> | [-> | [-> | [-> | [-> | [-> | [-> | [-> | [-> | [-> | [-> | [->]]]]]]]]]]]]]]]]]]."
+      },
+      {
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia.",
+            "+ change (36 ^ 3 = 216 ^ 2).",
+            "reflexivity.",
+            "- intros m Hm.",
+            "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+            "+ exact Hge.",
+            "+ exfalso.",
+            "assert (D : m = 0 \\/ m = 1 \\/ m = 2 \\/ m = 3 \\/ m = 4 \\/ m = 5 \\/ m = 6 \\/ m = 7 \\/ m = 8 \\/ m = 9 \\/ m = 10 \\/ m = 11 \\/ m = 12 \\/ m = 13 \\/ m = 14 \\/ m = 15 \\/ m = 16 \\/ m = 17) by lia.",
+            "repeat match goal with | H : _ \\/ _ |- _ => destruct H end.",
+            "all: subst m.",
+            "all: destruct Hm as [Hp Heq].",
+            "all: try lia."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Stack overflow.')",
+        "goals": [
+          "Hlt  : 18 > 1\nHp  : 1 > 0\nHeq  : Nat.lcm 12 1 ^ 3 = (12 * 1) ^ 2\n|-False",
+          "Hlt  : 18 > 2\nHp  : 2 > 0\nHeq  : Nat.lcm 12 2 ^ 3 = (12 * 2) ^ 2\n|-False",
+          "Hlt  : 18 > 3\nHp  : 3 > 0\nHeq  : Nat.lcm 12 3 ^ 3 = (12 * 3) ^ 2\n|-False",
+          "Hlt  : 18 > 4\nHp  : 4 > 0\nHeq  : Nat.lcm 12 4 ^ 3 = (12 * 4) ^ 2\n|-False",
+          "Hlt  : 18 > 5\nHp  : 5 > 0\nHeq  : Nat.lcm 12 5 ^ 3 = (12 * 5) ^ 2\n|-False",
+          "Hlt  : 18 > 6\nHp  : 6 > 0\nHeq  : Nat.lcm 12 6 ^ 3 = (12 * 6) ^ 2\n|-False",
+          "Hlt  : 18 > 7\nHp  : 7 > 0\nHeq  : Nat.lcm 12 7 ^ 3 = (12 * 7) ^ 2\n|-False",
+          "Hlt  : 18 > 8\nHp  : 8 > 0\nHeq  : Nat.lcm 12 8 ^ 3 = (12 * 8) ^ 2\n|-False",
+          "Hlt  : 18 > 9\nHp  : 9 > 0\nHeq  : Nat.lcm 12 9 ^ 3 = (12 * 9) ^ 2\n|-False",
+          "Hlt  : 18 > 10\nHp  : 10 > 0\nHeq  : Nat.lcm 12 10 ^ 3 = (12 * 10) ^ 2\n|-False",
+          "Hlt  : 18 > 11\nHp  : 11 > 0\nHeq  : Nat.lcm 12 11 ^ 3 = (12 * 11) ^ 2\n|-False",
+          "Hlt  : 18 > 12\nHp  : 12 > 0\nHeq  : Nat.lcm 12 12 ^ 3 = (12 * 12) ^ 2\n|-False",
+          "Hlt  : 18 > 13\nHp  : 13 > 0\nHeq  : Nat.lcm 12 13 ^ 3 = (12 * 13) ^ 2\n|-False",
+          "Hlt  : 18 > 14\nHp  : 14 > 0\nHeq  : Nat.lcm 12 14 ^ 3 = (12 * 14) ^ 2\n|-False",
+          "Hlt  : 18 > 15\nHp  : 15 > 0\nHeq  : Nat.lcm 12 15 ^ 3 = (12 * 15) ^ 2\n|-False",
+          "Hlt  : 18 > 16\nHp  : 16 > 0\nHeq  : Nat.lcm 12 16 ^ 3 = (12 * 16) ^ 2\n|-False",
+          "Hlt  : 18 > 17\nHp  : 17 > 0\nHeq  : Nat.lcm 12 17 ^ 3 = (12 * 17) ^ 2\n|-False"
+        ],
+        "identifier": "e7",
+        "status": "resource_exhausted",
+        "submitted": "all: vm_compute in Heq."
+      },
+      {
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia.",
+            "+ change (36 ^ 3 = 216 ^ 2).",
+            "reflexivity.",
+            "- intros m Hm.",
+            "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+            "+ exact Hge.",
+            "+ exfalso.",
+            "assert (D : m = 0 \\/ m = 1 \\/ m = 2 \\/ m = 3 \\/ m = 4 \\/ m = 5 \\/ m = 6 \\/ m = 7 \\/ m = 8 \\/ m = 9 \\/ m = 10 \\/ m = 11 \\/ m = 12 \\/ m = 13 \\/ m = 14 \\/ m = 15 \\/ m = 16 \\/ m = 17) by lia.",
+            "repeat match goal with | H : _ \\/ _ |- _ => destruct H end.",
+            "all: subst m.",
+            "all: destruct Hm as [Hp Heq].",
+            "all: try lia."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: [Focus] Wrong bullet -: Current bullet + is not finished.')",
+        "goals": [
+          "Hlt  : 18 > 1\nHp  : 1 > 0\nHeq  : Nat.lcm 12 1 ^ 3 = (12 * 1) ^ 2\n|-False",
+          "Hlt  : 18 > 2\nHp  : 2 > 0\nHeq  : Nat.lcm 12 2 ^ 3 = (12 * 2) ^ 2\n|-False",
+          "Hlt  : 18 > 3\nHp  : 3 > 0\nHeq  : Nat.lcm 12 3 ^ 3 = (12 * 3) ^ 2\n|-False",
+          "Hlt  : 18 > 4\nHp  : 4 > 0\nHeq  : Nat.lcm 12 4 ^ 3 = (12 * 4) ^ 2\n|-False",
+          "Hlt  : 18 > 5\nHp  : 5 > 0\nHeq  : Nat.lcm 12 5 ^ 3 = (12 * 5) ^ 2\n|-False",
+          "Hlt  : 18 > 6\nHp  : 6 > 0\nHeq  : Nat.lcm 12 6 ^ 3 = (12 * 6) ^ 2\n|-False",
+          "Hlt  : 18 > 7\nHp  : 7 > 0\nHeq  : Nat.lcm 12 7 ^ 3 = (12 * 7) ^ 2\n|-False",
+          "Hlt  : 18 > 8\nHp  : 8 > 0\nHeq  : Nat.lcm 12 8 ^ 3 = (12 * 8) ^ 2\n|-False",
+          "Hlt  : 18 > 9\nHp  : 9 > 0\nHeq  : Nat.lcm 12 9 ^ 3 = (12 * 9) ^ 2\n|-False",
+          "Hlt  : 18 > 10\nHp  : 10 > 0\nHeq  : Nat.lcm 12 10 ^ 3 = (12 * 10) ^ 2\n|-False",
+          "Hlt  : 18 > 11\nHp  : 11 > 0\nHeq  : Nat.lcm 12 11 ^ 3 = (12 * 11) ^ 2\n|-False",
+          "Hlt  : 18 > 12\nHp  : 12 > 0\nHeq  : Nat.lcm 12 12 ^ 3 = (12 * 12) ^ 2\n|-False",
+          "Hlt  : 18 > 13\nHp  : 13 > 0\nHeq  : Nat.lcm 12 13 ^ 3 = (12 * 13) ^ 2\n|-False",
+          "Hlt  : 18 > 14\nHp  : 14 > 0\nHeq  : Nat.lcm 12 14 ^ 3 = (12 * 14) ^ 2\n|-False",
+          "Hlt  : 18 > 15\nHp  : 15 > 0\nHeq  : Nat.lcm 12 15 ^ 3 = (12 * 15) ^ 2\n|-False",
+          "Hlt  : 18 > 16\nHp  : 16 > 0\nHeq  : Nat.lcm 12 16 ^ 3 = (12 * 16) ^ 2\n|-False",
+          "Hlt  : 18 > 17\nHp  : 17 > 0\nHeq  : Nat.lcm 12 17 ^ 3 = (12 * 17) ^ 2\n|-False"
+        ],
+        "identifier": "e8",
+        "status": "rejected",
+        "submitted": "- change (1728 = 144) in Heq."
+      },
+      {
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia.",
+            "+ change (36 ^ 3 = 216 ^ 2).",
+            "reflexivity.",
+            "- intros m Hm.",
+            "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+            "+ exact Hge.",
+            "+ exfalso.",
+            "assert (D : m = 0 \\/ m = 1 \\/ m = 2 \\/ m = 3 \\/ m = 4 \\/ m = 5 \\/ m = 6 \\/ m = 7 \\/ m = 8 \\/ m = 9 \\/ m = 10 \\/ m = 11 \\/ m = 12 \\/ m = 13 \\/ m = 14 \\/ m = 15 \\/ m = 16 \\/ m = 17) by lia.",
+            "repeat match goal with | H : _ \\/ _ |- _ => destruct H end.",
+            "all: subst m.",
+            "all: destruct Hm as [Hp Heq].",
+            "all: try lia."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "error": "(-32003, \"Coq: Syntax error: [smart_global] or ']' expected (in [delta_flag]).\")",
+        "goals": [
+          "Hlt  : 18 > 1\nHp  : 1 > 0\nHeq  : Nat.lcm 12 1 ^ 3 = (12 * 1) ^ 2\n|-False",
+          "Hlt  : 18 > 2\nHp  : 2 > 0\nHeq  : Nat.lcm 12 2 ^ 3 = (12 * 2) ^ 2\n|-False",
+          "Hlt  : 18 > 3\nHp  : 3 > 0\nHeq  : Nat.lcm 12 3 ^ 3 = (12 * 3) ^ 2\n|-False",
+          "Hlt  : 18 > 4\nHp  : 4 > 0\nHeq  : Nat.lcm 12 4 ^ 3 = (12 * 4) ^ 2\n|-False",
+          "Hlt  : 18 > 5\nHp  : 5 > 0\nHeq  : Nat.lcm 12 5 ^ 3 = (12 * 5) ^ 2\n|-False",
+          "Hlt  : 18 > 6\nHp  : 6 > 0\nHeq  : Nat.lcm 12 6 ^ 3 = (12 * 6) ^ 2\n|-False",
+          "Hlt  : 18 > 7\nHp  : 7 > 0\nHeq  : Nat.lcm 12 7 ^ 3 = (12 * 7) ^ 2\n|-False",
+          "Hlt  : 18 > 8\nHp  : 8 > 0\nHeq  : Nat.lcm 12 8 ^ 3 = (12 * 8) ^ 2\n|-False",
+          "Hlt  : 18 > 9\nHp  : 9 > 0\nHeq  : Nat.lcm 12 9 ^ 3 = (12 * 9) ^ 2\n|-False",
+          "Hlt  : 18 > 10\nHp  : 10 > 0\nHeq  : Nat.lcm 12 10 ^ 3 = (12 * 10) ^ 2\n|-False",
+          "Hlt  : 18 > 11\nHp  : 11 > 0\nHeq  : Nat.lcm 12 11 ^ 3 = (12 * 11) ^ 2\n|-False",
+          "Hlt  : 18 > 12\nHp  : 12 > 0\nHeq  : Nat.lcm 12 12 ^ 3 = (12 * 12) ^ 2\n|-False",
+          "Hlt  : 18 > 13\nHp  : 13 > 0\nHeq  : Nat.lcm 12 13 ^ 3 = (12 * 13) ^ 2\n|-False",
+          "Hlt  : 18 > 14\nHp  : 14 > 0\nHeq  : Nat.lcm 12 14 ^ 3 = (12 * 14) ^ 2\n|-False",
+          "Hlt  : 18 > 15\nHp  : 15 > 0\nHeq  : Nat.lcm 12 15 ^ 3 = (12 * 15) ^ 2\n|-False",
+          "Hlt  : 18 > 16\nHp  : 16 > 0\nHeq  : Nat.lcm 12 16 ^ 3 = (12 * 16) ^ 2\n|-False",
+          "Hlt  : 18 > 17\nHp  : 17 > 0\nHeq  : Nat.lcm 12 17 ^ 3 = (12 * 17) ^ 2\n|-False"
+        ],
+        "identifier": "e9",
+        "status": "rejected",
+        "submitted": "all: cbv [Nat.lcm, Nat.gcd] in Heq."
+      },
+      {
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia.",
+            "+ change (36 ^ 3 = 216 ^ 2).",
+            "reflexivity.",
+            "- intros m Hm.",
+            "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+            "+ exact Hge.",
+            "+ exfalso.",
+            "assert (D : m = 0 \\/ m = 1 \\/ m = 2 \\/ m = 3 \\/ m = 4 \\/ m = 5 \\/ m = 6 \\/ m = 7 \\/ m = 8 \\/ m = 9 \\/ m = 10 \\/ m = 11 \\/ m = 12 \\/ m = 13 \\/ m = 14 \\/ m = 15 \\/ m = 16 \\/ m = 17) by lia.",
+            "repeat match goal with | H : _ \\/ _ |- _ => destruct H end.",
+            "all: subst m.",
+            "all: destruct Hm as [Hp Heq].",
+            "all: try lia."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Stack overflow.')",
+        "goals": [
+          "Hlt  : 18 > 1\nHp  : 1 > 0\nHeq  : Nat.lcm 12 1 ^ 3 = (12 * 1) ^ 2\n|-False",
+          "Hlt  : 18 > 2\nHp  : 2 > 0\nHeq  : Nat.lcm 12 2 ^ 3 = (12 * 2) ^ 2\n|-False",
+          "Hlt  : 18 > 3\nHp  : 3 > 0\nHeq  : Nat.lcm 12 3 ^ 3 = (12 * 3) ^ 2\n|-False",
+          "Hlt  : 18 > 4\nHp  : 4 > 0\nHeq  : Nat.lcm 12 4 ^ 3 = (12 * 4) ^ 2\n|-False",
+          "Hlt  : 18 > 5\nHp  : 5 > 0\nHeq  : Nat.lcm 12 5 ^ 3 = (12 * 5) ^ 2\n|-False",
+          "Hlt  : 18 > 6\nHp  : 6 > 0\nHeq  : Nat.lcm 12 6 ^ 3 = (12 * 6) ^ 2\n|-False",
+          "Hlt  : 18 > 7\nHp  : 7 > 0\nHeq  : Nat.lcm 12 7 ^ 3 = (12 * 7) ^ 2\n|-False",
+          "Hlt  : 18 > 8\nHp  : 8 > 0\nHeq  : Nat.lcm 12 8 ^ 3 = (12 * 8) ^ 2\n|-False",
+          "Hlt  : 18 > 9\nHp  : 9 > 0\nHeq  : Nat.lcm 12 9 ^ 3 = (12 * 9) ^ 2\n|-False",
+          "Hlt  : 18 > 10\nHp  : 10 > 0\nHeq  : Nat.lcm 12 10 ^ 3 = (12 * 10) ^ 2\n|-False",
+          "Hlt  : 18 > 11\nHp  : 11 > 0\nHeq  : Nat.lcm 12 11 ^ 3 = (12 * 11) ^ 2\n|-False",
+          "Hlt  : 18 > 12\nHp  : 12 > 0\nHeq  : Nat.lcm 12 12 ^ 3 = (12 * 12) ^ 2\n|-False",
+          "Hlt  : 18 > 13\nHp  : 13 > 0\nHeq  : Nat.lcm 12 13 ^ 3 = (12 * 13) ^ 2\n|-False",
+          "Hlt  : 18 > 14\nHp  : 14 > 0\nHeq  : Nat.lcm 12 14 ^ 3 = (12 * 14) ^ 2\n|-False",
+          "Hlt  : 18 > 15\nHp  : 15 > 0\nHeq  : Nat.lcm 12 15 ^ 3 = (12 * 15) ^ 2\n|-False",
+          "Hlt  : 18 > 16\nHp  : 16 > 0\nHeq  : Nat.lcm 12 16 ^ 3 = (12 * 16) ^ 2\n|-False",
+          "Hlt  : 18 > 17\nHp  : 17 > 0\nHeq  : Nat.lcm 12 17 ^ 3 = (12 * 17) ^ 2\n|-False"
+        ],
+        "identifier": "e10",
+        "status": "resource_exhausted",
+        "submitted": "all: simpl [Nat.lcm] in Heq."
+      },
+      {
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia.",
+            "+ change (36 ^ 3 = 216 ^ 2).",
+            "reflexivity.",
+            "- intros m Hm.",
+            "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+            "+ exact Hge.",
+            "+ destruct Hm as [Hp Heq].",
+            "destruct (Nat.divide_lcm_l 12 m) as [k Hk].",
+            "rewrite Hk in Heq.",
+            "assert (Hm17 : m <= 17) by lia."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "goals": [
+          "m  : nat\nHp  : m > 0\nk  : nat\nHeq  : (k * 12) ^ 3 = (12 * m) ^ 2\nHlt  : 18 > m\nHk  : Nat.lcm 12 m = k * 12\nHm17  : m <= 17\n|-18 <= m"
+        ],
+        "identifier": "e11",
+        "status": "rejected",
+        "submitted": "assert (Hk2 : k <= 2) by nia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia.",
+            "+ change (36 ^ 3 = 216 ^ 2).",
+            "reflexivity.",
+            "- intros m Hm.",
+            "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+            "+ exact Hge.",
+            "+ destruct Hm as [Hp Heq].",
+            "destruct (Nat.divide_lcm_l 12 m) as [k Hk].",
+            "rewrite Hk in Heq.",
+            "assert (Hm17 : m <= 17) by lia.",
+            "destruct (le_gt_dec 3 k) as [Hk3 | Hklt]."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: [Focus] Wrong bullet +: Current bullet + is not finished.')",
+        "goals": [
+          "m  : nat\nHp  : m > 0\nk  : nat\nHeq  : (k * 12) ^ 3 = (12 * m) ^ 2\nHlt  : 18 > m\nHk  : Nat.lcm 12 m = k * 12\nHm17  : m <= 17\nHk3  : 3 <= k\n|-18 <= m",
+          "m  : nat\nHp  : m > 0\nk  : nat\nHeq  : (k * 12) ^ 3 = (12 * m) ^ 2\nHlt  : 18 > m\nHk  : Nat.lcm 12 m = k * 12\nHm17  : m <= 17\nHklt  : 3 > k\n|-18 <= m"
+        ],
+        "identifier": "e12",
+        "status": "rejected",
+        "submitted": "+ assert (Hpow : 27 <= k ^ 3) by nia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia.",
+            "+ change (36 ^ 3 = 216 ^ 2).",
+            "reflexivity.",
+            "- intros m Hm.",
+            "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+            "+ exact Hge.",
+            "+ destruct Hm as [Hp Heq].",
+            "destruct (Nat.divide_lcm_l 12 m) as [k Hk].",
+            "rewrite Hk in Heq.",
+            "assert (Hm17 : m <= 17) by lia.",
+            "destruct (le_gt_dec 3 k) as [Hk3 | Hklt]."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "goals": [
+          "m  : nat\nHp  : m > 0\nk  : nat\nHeq  : (k * 12) ^ 3 = (12 * m) ^ 2\nHlt  : 18 > m\nHk  : Nat.lcm 12 m = k * 12\nHm17  : m <= 17\nHk3  : 3 <= k\n|-18 <= m",
+          "m  : nat\nHp  : m > 0\nk  : nat\nHeq  : (k * 12) ^ 3 = (12 * m) ^ 2\nHlt  : 18 > m\nHk  : Nat.lcm 12 m = k * 12\nHm17  : m <= 17\nHklt  : 3 > k\n|-18 <= m"
+        ],
+        "identifier": "e13",
+        "status": "rejected",
+        "submitted": "{ assert (Hpow : 27 <= k ^ 3) by nia."
+      },
+      {
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import Nat.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "unfold Least.",
+            "split.",
+            "- split.",
+            "+ lia.",
+            "+ change (36 ^ 3 = 216 ^ 2).",
+            "reflexivity.",
+            "- intros m Hm.",
+            "destruct (le_gt_dec 18 m) as [Hge | Hlt].",
+            "+ exact Hge.",
+            "+ destruct Hm as [Hp Heq].",
+            "destruct (Nat.divide_lcm_l 12 m) as [k Hk].",
+            "rewrite Hk in Heq.",
+            "assert (Hm17 : m <= 17) by lia.",
+            "destruct (le_gt_dec 3 k) as [Hk3 | Hklt].",
+            "{ assert (Hpow : 27 <= k * k * k) by nia."
+          ],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_629.v",
+          "problem_sha256": "e80cb170b87530da3db524abe9b6262ae006e1cd7459f37bbec6740c1d62f14c",
+          "source": "6bc68c807e6ca30b6e5f84353e9161a0afd09f0ed2aac2068577626d47c7359a",
+          "theorem_name": "mathd_numbertheory_629",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure:  Cannot find witness.')",
+        "goals": [
+          "m  : nat\nHp  : m > 0\nk  : nat\nHeq  : (k * 12) ^ 3 = (12 * m) ^ 2\nHlt  : 18 > m\nHk  : Nat.lcm 12 m = k * 12\nHm17  : m <= 17\nHk3  : 3 <= k\nHpow  : 27 <= k * k * k\n|-18 <= m"
+        ],
+        "identifier": "e14",
+        "status": "rejected",
+        "submitted": "nia. }"
+      }
+    ],
+    "strict_actions": false,
+    "targeted_demos": true
+  },
+  "guidance": false
+}

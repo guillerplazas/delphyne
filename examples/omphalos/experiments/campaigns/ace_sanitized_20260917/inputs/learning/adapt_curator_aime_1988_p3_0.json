@@ -1,0 +1,800 @@
+{
+  "args": {
+    "book": {
+      "bullets": [
+        {
+          "content": "When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n",
+          "harmful": 0,
+          "helpful": 5,
+          "id": "rocq-00001",
+          "section": "pitfalls"
+        },
+        {
+          "content": "For an induction hypothesis relating recursive `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then apply `rewrite IH; lia`.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00002",
+          "section": "tactics"
+        },
+        {
+          "content": "For goals over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use `intros` followed by `nia`; it can handle the nonlinear products and truncated subtraction directly.\n",
+          "harmful": 3,
+          "helpful": 4,
+          "id": "rocq-00003",
+          "section": "tactics"
+        },
+        {
+          "content": "For closed `nat` equalities built from executable finite-list operations such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`; use `reflexivity` afterward if the resulting definitional equality is not closed automatically.\n",
+          "harmful": 1,
+          "helpful": 1,
+          "id": "rocq-00004",
+          "section": "tactics"
+        },
+        {
+          "content": "When applying a recurrence hypothesis whose predecessor uses truncated subtraction, first prove the exact natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality before applying the hypothesis so its indices unify.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00005",
+          "section": "pitfalls"
+        },
+        {
+          "content": "Under an active `R_scope`, annotate natural-number indices, arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion and comparison-type errors.\n",
+          "harmful": 0,
+          "helpful": 6,
+          "id": "rocq-00006",
+          "section": "pitfalls"
+        },
+        {
+          "content": "For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00007",
+          "section": "lemmas"
+        },
+        {
+          "content": "For finite nonnegative real sequences with a fixed-sum product goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00009",
+          "section": "strategy"
+        },
+        {
+          "content": "Do not obtain a successor product bound by multiplying an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`. An induction proof must retain a bound parameterized by the total sum or average.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00010",
+          "section": "pitfalls"
+        },
+        {
+          "content": "Before using `nra` in AM-GM base or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition; `nra` cannot reason through opaque recursive definitions or supply the global inequality.\n",
+          "harmful": 0,
+          "helpful": 1,
+          "id": "rocq-00011",
+          "section": "tactics"
+        },
+        {
+          "content": "For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately for completing-square identities before finishing the resulting linear inequality with `lra`.\n",
+          "harmful": 0,
+          "helpful": 2,
+          "id": "rocq-00012",
+          "section": "tactics"
+        },
+        {
+          "content": "For positivity of a recursive real product whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity through opaque recursive products.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00013",
+          "section": "lemmas"
+        },
+        {
+          "content": "For natural-number product bounds, use `Nat.mul_le_mono` to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply an established inequality by a nonnegative factor; provide the premises in the lemma's expected order instead of guessing a multiplication-monotonicity API.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00014",
+          "section": "lemmas"
+        },
+        {
+          "content": "To lift a natural bound into `R`, expose the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <= INR c; apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent `.mpr` projection.\n",
+          "harmful": 0,
+          "helpful": 1,
+          "id": "rocq-00015",
+          "section": "lemmas"
+        },
+        {
+          "content": "For real equations involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead of relying on `field_simplify` to normalize it.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00016",
+          "section": "pitfalls"
+        },
+        {
+          "content": "To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00017",
+          "section": "tactics"
+        },
+        {
+          "content": "For bounded natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce only explicitly closed numeral cases, using `change` to expose a known numeral equality when needed.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00018",
+          "section": "pitfalls"
+        },
+        {
+          "content": "When proving a least witness by finite exclusion, first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch immediately, handle the finitely many numeral cases explicitly under `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors.\n",
+          "harmful": 1,
+          "helpful": 1,
+          "id": "rocq-00019",
+          "section": "strategy"
+        },
+        {
+          "content": "For instantiated recurrence equations containing closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then normalize each index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation chain.\n",
+          "harmful": 1,
+          "helpful": 0,
+          "id": "rocq-00020",
+          "section": "tactics"
+        },
+        {
+          "content": "For an explicit `Ensemble` built from nested `Add`, first unfold `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions and `False` cases are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer by layer, prove each freshness premise by unfolding `In` and `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n",
+          "harmful": 0,
+          "helpful": 1,
+          "id": "rocq-00021",
+          "section": "tactics"
+        },
+        {
+          "content": "For trigonometric goals involving complementary or doubled angles, use the library lemma with the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00022",
+          "section": "lemmas"
+        },
+        {
+          "content": "For logarithmic inequalities and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use the resulting instantiated equality directly.\n",
+          "harmful": 0,
+          "helpful": 1,
+          "id": "rocq-00023",
+          "section": "lemmas"
+        },
+        {
+          "content": "For an unbounded quadratic equation over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction from the original equation.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00024",
+          "section": "tactics"
+        },
+        {
+          "content": "A closed cast such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality, for example with `cbv [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00025",
+          "section": "pitfalls"
+        },
+        {
+          "content": "For a target or hypothesis containing `ln (a * b)`, prove positivity of both factors explicitly; when a factor is an `Rpower`, unfold `Rpower` and apply `exp_pos`, rather than reusing positivity of the enclosing product. Then rewrite with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation does not expose this logarithmic product identity or supply its positivity premises.",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00026",
+          "section": "lemmas"
+        },
+        {
+          "content": "For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00027",
+          "section": "lemmas"
+        },
+        {
+          "content": "After rewriting a defining polynomial equation into multiple root hypotheses, prove a factor such as `b <> 0` by assuming it is zero, substituting with `subst`, applying the given disequality, and using `nra` on the exposed equations to derive the contradiction.",
+          "harmful": 0,
+          "helpful": 0,
+          "id": "rocq-00028",
+          "section": "pitfalls"
+        }
+      ],
+      "next_id": 29
+    },
+    "contexts": [
+      {
+        "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros x Hx Heq.",
+          "unfold logb in *.",
+          "assert (Hln2 : 0 < ln 2).",
+          "{ rewrite <- ln_1.",
+          "apply ln_increasing.",
+          "- lra.",
+          "- lra.",
+          "}",
+          "assert (Hlnx : 0 < ln x).",
+          "{ rewrite <- ln_1.",
+          "apply ln_increasing.",
+          "- lra.",
+          "- lra.",
+          "}",
+          "assert (Hln8 : ln 8 = 3 * ln 2).",
+          "{ assert (Htwo : (0:R) < 2) by lra.",
+          "pose proof (ln_pow 2 Htwo 3) as H.",
+          "cbv [INR] in H."
+        ],
+        "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+        "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+        "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+        "theorem_name": "aime_1988_p3",
+        "version": 1
+      }
+    ],
+    "drafts": [
+      {
+        "context_id": "ctx-9df63578b3d69cf3d98ad0b3",
+        "draft_id": "repair-3cda7e555fd33970999af0fd",
+        "error": "(-32003, 'Coq: In environment\\nx : R\\nHx : 1 < x\\nHeq : ln (ln x / ln 8) / ln 2 = ln (ln x / ln 2) / ln 8\\nHln2 : 0 < ln 2\\nHlnx : 0 < ln x\\nHtwo : (0 : R) < 2\\nH : ln (2 ^ 3) = (1 + 1 + 1) * ln 2\\nThe term \"H\" has type \"ln (2 ^ 3) = (1 + 1 + 1) * ln 2\"\\nwhile it is expected to have type \"ln 8 = 3 * ln 2\".')",
+        "proposed_code": "assert (Hp : (2:R)^3 = 8) by ring. rewrite Hp in H. replace ((1 + 1 + 1 : R)) with 3 in H by ring. exact H.",
+        "purpose": "Normalize the closed power and coefficient explicitly with ring, rewrite the power equality, then finish with the normalized ln_pow hypothesis.: The existing ln_pow guidance is incomplete for closed numeral bases: after cbv [INR], the result still contains ln (2 ^ 3) and (1 + 1 + 1), so it cannot be used directly as ln 8 = 3 * ln 2.; Have Htwo : (0:R) < 2 and H : ln (2 ^ 3) = (1 + 1 + 1) * ln 2 from ln_pow followed by cbv [INR]; preserve the current focus.",
+        "remaining_goals": [
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 8) / ln 2 = ln (ln x / ln 2) / ln 8\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHtwo  : (0 : R) < 2\nH  : ln (2 ^ 3) = (1 + 1 + 1) * ln 2\n|-ln 8 = 3 * ln 2"
+        ],
+        "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347"
+      }
+    ],
+    "evidence": "[]",
+    "evidence_review": true,
+    "receipts": [],
+    "role": "curator",
+    "source_events": [
+      {
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros x Hx Heq.",
+            "unfold logb in *.",
+            "assert (Hln2 : 0 < ln 2)."
+          ],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: In environment\\nx : R\\nHx : 1 < x\\nHeq : ln (ln x / ln 8) / ln 2 = ln (ln x / ln 2) / ln 8\\nUnable to unify \"ln 1 < ln 2\" with \"0 < ln 2\".')",
+        "goals": [
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 8) / ln 2 = ln (ln x / ln 2) / ln 8\n|-0 < ln 2",
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 8) / ln 2 = ln (ln x / ln 2) / ln 8\nHln2  : 0 < ln 2\n|-(ln x / ln 2) ^ 2 = 27"
+        ],
+        "identifier": "e1",
+        "status": "rejected",
+        "submitted": "{ apply (ln_increasing 1 2)."
+      },
+      {
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros x Hx Heq.",
+            "unfold logb in *.",
+            "assert (Hln2 : 0 < ln 2).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hlnx : 0 < ln x).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hln8 : ln 8 = 3 * ln 2)."
+          ],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "error": "(-32003, \"Coq: Syntax error: [term level 200] expected after '(' (in [term]).\")",
+        "goals": [
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 8) / ln 2 = ln (ln x / ln 2) / ln 8\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\n|-ln 8 = 3 * ln 2",
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 8) / ln 2 = ln (ln x / ln 2) / ln 8\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHln8  : ln 8 = 3 * ln 2\n|-(ln x / ln 2) ^ 2 = 27"
+        ],
+        "identifier": "e2",
+        "status": "rejected",
+        "submitted": "{ pose proof (ln_pow 2 (by lra) 3) as H."
+      },
+      {
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros x Hx Heq.",
+            "unfold logb in *.",
+            "assert (Hln2 : 0 < ln 2).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hlnx : 0 < ln x).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hln8 : ln 8 = 3 * ln 2).",
+            "{ assert (Htwo : (0:R) < 2) by lra.",
+            "pose proof (ln_pow 2 Htwo 3) as H.",
+            "cbv [INR] in H."
+          ],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: In environment\\nx : R\\nHx : 1 < x\\nHeq : ln (ln x / ln 8) / ln 2 = ln (ln x / ln 2) / ln 8\\nHln2 : 0 < ln 2\\nHlnx : 0 < ln x\\nHtwo : (0 : R) < 2\\nH : ln (2 ^ 3) = (1 + 1 + 1) * ln 2\\nThe term \"H\" has type \"ln (2 ^ 3) = (1 + 1 + 1) * ln 2\"\\nwhile it is expected to have type \"ln 8 = 3 * ln 2\".')",
+        "goals": [
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 8) / ln 2 = ln (ln x / ln 2) / ln 8\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHtwo  : (0 : R) < 2\nH  : ln (2 ^ 3) = (1 + 1 + 1) * ln 2\n|-ln 8 = 3 * ln 2"
+        ],
+        "identifier": "e3",
+        "status": "rejected",
+        "submitted": "exact H."
+      },
+      {
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros x Hx Heq.",
+            "unfold logb in *.",
+            "assert (Hln2 : 0 < ln 2).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hlnx : 0 < ln x).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hln8 : ln 8 = 3 * ln 2).",
+            "{ assert (Htwo : (0:R) < 2) by lra.",
+            "pose proof (ln_pow 2 Htwo 3) as H.",
+            "cbv [INR] in H."
+          ],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: The reference norm_num was not found in the current environment.')",
+        "goals": [
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 8) / ln 2 = ln (ln x / ln 2) / ln 8\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHtwo  : (0 : R) < 2\nH  : ln (2 ^ 3) = (1 + 1 + 1) * ln 2\n|-ln 8 = 3 * ln 2"
+        ],
+        "identifier": "e4",
+        "status": "rejected",
+        "submitted": "replace (2 ^ 3) with 8 in H by norm_num."
+      },
+      {
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros x Hx Heq.",
+            "unfold logb in *.",
+            "assert (Hln2 : 0 < ln 2).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hlnx : 0 < ln x).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hln8 : ln 8 = 3 * ln 2).",
+            "{ assert (Htwo : (0:R) < 2) by lra.",
+            "pose proof (ln_pow 2 Htwo 3) as H.",
+            "cbv [INR] in H.",
+            "assert (Hp : (2:R)^3 = 8) by ring.",
+            "rewrite Hp in H.",
+            "replace ((1 + 1 + 1 : R)) with 3 in H by ring.",
+            "exact H.",
+            "}",
+            "rewrite Hln8 in Heq.",
+            "assert (Hy : 0 < ln x / ln 2).",
+            "{ apply Rdiv_pos_pos.",
+            "- exact Hlnx.",
+            "- exact Hln2.",
+            "}",
+            "assert (Hdiv : ln x / (3 * ln 2) = (ln x / ln 2) / 3).",
+            "{ field."
+          ],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: This proof is focused, but cannot be unfocused this way')",
+        "goals": [
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / (3 * ln 2)) / ln 2 = ln (ln x / ln 2) / (3 * ln 2)\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHln8  : ln 8 = 3 * ln 2\nHy  : 0 < ln x / ln 2\n|-ln 2 <> 0"
+        ],
+        "identifier": "e5",
+        "status": "rejected",
+        "submitted": "}"
+      },
+      {
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros x Hx Heq.",
+            "unfold logb in *.",
+            "assert (Hln2 : 0 < ln 2).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hlnx : 0 < ln x).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hln8 : ln 8 = 3 * ln 2).",
+            "{ assert (Htwo : (0:R) < 2) by lra.",
+            "pose proof (ln_pow 2 Htwo 3) as H.",
+            "cbv [INR] in H.",
+            "assert (Hp : (2:R)^3 = 8) by ring.",
+            "rewrite Hp in H.",
+            "replace ((1 + 1 + 1 : R)) with 3 in H by ring.",
+            "exact H.",
+            "}",
+            "rewrite Hln8 in Heq.",
+            "assert (Hy : 0 < ln x / ln 2).",
+            "{ apply Rdiv_pos_pos.",
+            "- exact Hlnx.",
+            "- exact Hln2.",
+            "}",
+            "assert (Hdiv : ln x / (3 * ln 2) = (ln x / ln 2) / 3).",
+            "{ field.",
+            "lra.",
+            "}",
+            "rewrite Hdiv in Heq.",
+            "assert (Hlog : ln ((ln x / ln 2) / 3) = ln (ln x / ln 2) - ln 3)."
+          ],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Proof is not complete.')",
+        "goals": [
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 2 / 3) / ln 2 = ln (ln x / ln 2) / (3 * ln 2)\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHln8  : ln 8 = 3 * ln 2\nHy  : 0 < ln x / ln 2\nHdiv  : ln x / (3 * ln 2) = ln x / ln 2 / 3\n|-ln (ln x / ln 2 / 3) = ln (ln x / ln 2) - ln 3",
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 2 / 3) / ln 2 = ln (ln x / ln 2) / (3 * ln 2)\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHln8  : ln 8 = 3 * ln 2\nHy  : 0 < ln x / ln 2\nHdiv  : ln x / (3 * ln 2) = ln x / ln 2 / 3\nHlog  : ln (ln x / ln 2 / 3) = ln (ln x / ln 2) - ln 3\n|-(ln x / ln 2) ^ 2 = 27"
+        ],
+        "identifier": "e6",
+        "status": "rejected",
+        "submitted": "{ assert (Hm : ((ln x / ln 2) / 3) * 3 = ln x / ln 2) by field."
+      },
+      {
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros x Hx Heq.",
+            "unfold logb in *.",
+            "assert (Hln2 : 0 < ln 2).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hlnx : 0 < ln x).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hln8 : ln 8 = 3 * ln 2).",
+            "{ assert (Htwo : (0:R) < 2) by lra.",
+            "pose proof (ln_pow 2 Htwo 3) as H.",
+            "cbv [INR] in H.",
+            "assert (Hp : (2:R)^3 = 8) by ring.",
+            "rewrite Hp in H.",
+            "replace ((1 + 1 + 1 : R)) with 3 in H by ring.",
+            "exact H.",
+            "}",
+            "rewrite Hln8 in Heq.",
+            "assert (Hy : 0 < ln x / ln 2).",
+            "{ apply Rdiv_pos_pos.",
+            "- exact Hlnx.",
+            "- exact Hln2.",
+            "}",
+            "assert (Hdiv : ln x / (3 * ln 2) = (ln x / ln 2) / 3).",
+            "{ field.",
+            "lra.",
+            "}",
+            "rewrite Hdiv in Heq.",
+            "assert (Hlog : ln ((ln x / ln 2) / 3) = ln (ln x / ln 2) - ln 3).",
+            "{ assert (Hm : ((ln x / ln 2) / 3) * 3 = ln x / ln 2).",
+            "{ field.",
+            "lra.",
+            "}",
+            "rewrite <- Hm.",
+            "rewrite (ln_mult ((ln x / ln 2) / 3) 3)."
+          ],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure: not a valid ring equation.')",
+        "goals": [
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 2 / 3) / ln 2 = ln (ln x / ln 2) / (3 * ln 2)\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHln8  : ln 8 = 3 * ln 2\nHy  : 0 < ln x / ln 2\nHdiv  : ln x / (3 * ln 2) = ln x / ln 2 / 3\nHm  : ln x / ln 2 / 3 * 3 = ln x / ln 2\n|-ln (ln x / ln 2 / 3 * 3 / 3) = ln (ln x / ln 2 / 3) + ln 3 - ln 3",
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 2 / 3) / ln 2 = ln (ln x / ln 2) / (3 * ln 2)\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHln8  : ln 8 = 3 * ln 2\nHy  : 0 < ln x / ln 2\nHdiv  : ln x / (3 * ln 2) = ln x / ln 2 / 3\nHm  : ln x / ln 2 / 3 * 3 = ln x / ln 2\n|-0 < ln x / ln 2 / 3",
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 2 / 3) / ln 2 = ln (ln x / ln 2) / (3 * ln 2)\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHln8  : ln 8 = 3 * ln 2\nHy  : 0 < ln x / ln 2\nHdiv  : ln x / (3 * ln 2) = ln x / ln 2 / 3\nHm  : ln x / ln 2 / 3 * 3 = ln x / ln 2\n|-0 < 3"
+        ],
+        "identifier": "e7",
+        "status": "rejected",
+        "submitted": "- ring."
+      },
+      {
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros x Hx Heq.",
+            "unfold logb in *.",
+            "assert (Hln2 : 0 < ln 2).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hlnx : 0 < ln x).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hln8 : ln 8 = 3 * ln 2).",
+            "{ assert (Htwo : (0:R) < 2) by lra.",
+            "pose proof (ln_pow 2 Htwo 3) as H.",
+            "cbv [INR] in H.",
+            "assert (Hp : (2:R)^3 = 8) by ring.",
+            "rewrite Hp in H.",
+            "replace ((1 + 1 + 1 : R)) with 3 in H by ring.",
+            "exact H.",
+            "}",
+            "rewrite Hln8 in Heq.",
+            "assert (Hy : 0 < ln x / ln 2).",
+            "{ apply Rdiv_pos_pos.",
+            "- exact Hlnx.",
+            "- exact Hln2.",
+            "}",
+            "assert (Hdiv : ln x / (3 * ln 2) = (ln x / ln 2) / 3).",
+            "{ field.",
+            "lra.",
+            "}",
+            "rewrite Hdiv in Heq.",
+            "assert (Hlog : ln ((ln x / ln 2) / 3) = ln (ln x / ln 2) - ln 3).",
+            "{ assert (Hprod : ln x / ln 2 = (ln x / ln 2) / 3 * 3).",
+            "{ field.",
+            "lra.",
+            "}",
+            "rewrite Hprod.",
+            "rewrite (ln_mult ((ln x / ln 2) / 3) 3)."
+          ],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: No applicable tactic.')",
+        "goals": [
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 2 / 3) / ln 2 = ln (ln x / ln 2) / (3 * ln 2)\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHln8  : ln 8 = 3 * ln 2\nHy  : 0 < ln x / ln 2\nHdiv  : ln x / (3 * ln 2) = ln x / ln 2 / 3\nHprod  : ln x / ln 2 = ln x / ln 2 / 3 * 3\n|-ln (ln x / ln 2 / 3 * 3 / 3) = ln (ln x / ln 2 / 3) + ln 3 - ln 3",
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 2 / 3) / ln 2 = ln (ln x / ln 2) / (3 * ln 2)\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHln8  : ln 8 = 3 * ln 2\nHy  : 0 < ln x / ln 2\nHdiv  : ln x / (3 * ln 2) = ln x / ln 2 / 3\nHprod  : ln x / ln 2 = ln x / ln 2 / 3 * 3\n|-0 < ln x / ln 2 / 3",
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 2 / 3) / ln 2 = ln (ln x / ln 2) / (3 * ln 2)\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHln8  : ln 8 = 3 * ln 2\nHy  : 0 < ln x / ln 2\nHdiv  : ln x / (3 * ln 2) = ln x / ln 2 / 3\nHprod  : ln x / ln 2 = ln x / ln 2 / 3 * 3\n|-0 < 3"
+        ],
+        "identifier": "e8",
+        "status": "rejected",
+        "submitted": "- lra."
+      },
+      {
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros x Hx Heq.",
+            "unfold logb in *.",
+            "assert (Hln2 : 0 < ln 2).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hlnx : 0 < ln x).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hln8 : ln 8 = 3 * ln 2).",
+            "{ assert (Htwo : (0:R) < 2) by lra.",
+            "pose proof (ln_pow 2 Htwo 3) as H.",
+            "cbv [INR] in H.",
+            "assert (Hp : (2:R)^3 = 8) by ring.",
+            "rewrite Hp in H.",
+            "replace ((1 + 1 + 1 : R)) with 3 in H by ring.",
+            "exact H.",
+            "}",
+            "rewrite Hln8 in Heq.",
+            "assert (Hy : 0 < ln x / ln 2).",
+            "{ apply Rdiv_pos_pos.",
+            "- exact Hlnx.",
+            "- exact Hln2.",
+            "}",
+            "assert (Hdiv : ln x / (3 * ln 2) = (ln x / ln 2) / 3).",
+            "{ field.",
+            "lra.",
+            "}",
+            "rewrite Hdiv in Heq.",
+            "assert (Hu : 0 < (ln x / ln 2) / 3).",
+            "{ apply Rdiv_pos_pos.",
+            "- exact Hy.",
+            "- assert (Hthree : (0:R) < 3) by lra.",
+            "exact Hthree.",
+            "}",
+            "assert (Hthree : (0:R) < 3) by lra.",
+            "assert (Harg : (ln x / ln 2) / 3 * 3 = ln x / ln 2).",
+            "{ field.",
+            "lra.",
+            "}",
+            "assert (Hlm : ln ((ln x / ln 2) / 3 * 3) = ln ((ln x / ln 2) / 3) + ln 3).",
+            "{ apply ln_mult.",
+            "- exact Hu.",
+            "- exact Hthree.",
+            "}",
+            "rewrite Harg in Hlm.",
+            "assert (Hlog : ln ((ln x / ln 2) / 3) = ln (ln x / ln 2) - ln 3) by nra.",
+            "rewrite Hlog in Heq."
+          ],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: No matching clauses for match.')",
+        "goals": [
+          "x  : R\nHx  : 1 < x\nHeq  : (ln (ln x / ln 2) - ln 3) / ln 2 = ln (ln x / ln 2) / (3 * ln 2)\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHln8  : ln 8 = 3 * ln 2\nHy  : 0 < ln x / ln 2\nHdiv  : ln x / (3 * ln 2) = ln x / ln 2 / 3\nHu  : 0 < ln x / ln 2 / 3\nHthree  : (0 : R) < 3\nHarg  : ln x / ln 2 / 3 * 3 = ln x / ln 2\nHlm  : ln (ln x / ln 2) = ln (ln x / ln 2 / 3) + ln 3\nHlog  : ln (ln x / ln 2 / 3) = ln (ln x / ln 2) - ln 3\n|-(ln x / ln 2) ^ 2 = 27"
+        ],
+        "identifier": "e9",
+        "status": "rejected",
+        "submitted": "field_simplify [Hln2] in Heq."
+      },
+      {
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros x Hx Heq.",
+            "unfold logb in *.",
+            "assert (Hln2 : 0 < ln 2).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hlnx : 0 < ln x).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hln8 : ln 8 = 3 * ln 2).",
+            "{ assert (Htwo : (0:R) < 2) by lra.",
+            "pose proof (ln_pow 2 Htwo 3) as H.",
+            "cbv [INR] in H.",
+            "assert (Hp : (2:R)^3 = 8) by ring.",
+            "rewrite Hp in H.",
+            "replace ((1 + 1 + 1 : R)) with 3 in H by ring.",
+            "exact H.",
+            "}",
+            "rewrite Hln8 in Heq.",
+            "assert (Hy : 0 < ln x / ln 2).",
+            "{ apply Rdiv_pos_pos.",
+            "- exact Hlnx.",
+            "- exact Hln2.",
+            "}",
+            "assert (Hdiv : ln x / (3 * ln 2) = (ln x / ln 2) / 3).",
+            "{ field.",
+            "lra.",
+            "}",
+            "rewrite Hdiv in Heq.",
+            "assert (Hu : 0 < (ln x / ln 2) / 3).",
+            "{ apply Rdiv_pos_pos.",
+            "- exact Hy.",
+            "- assert (Hthree : (0:R) < 3) by lra.",
+            "exact Hthree.",
+            "}",
+            "assert (Hthree : (0:R) < 3) by lra.",
+            "assert (Harg : (ln x / ln 2) / 3 * 3 = ln x / ln 2).",
+            "{ field.",
+            "lra.",
+            "}",
+            "assert (Hlm : ln ((ln x / ln 2) / 3 * 3) = ln ((ln x / ln 2) / 3) + ln 3).",
+            "{ apply ln_mult.",
+            "- exact Hu.",
+            "- exact Hthree.",
+            "}",
+            "rewrite Harg in Hlm.",
+            "assert (Hlog : ln ((ln x / ln 2) / 3) = ln (ln x / ln 2) - ln 3) by nra.",
+            "rewrite Hlog in Heq.",
+            "assert (Hr : ln (ln x / ln 2) / (3 * ln 2) = (ln (ln x / ln 2) / 3) / ln 2).",
+            "{ field.",
+            "lra.",
+            "}",
+            "rewrite Hr in Heq.",
+            "assert (Hcancel : ln (ln x / ln 2) - ln 3 = ln (ln x / ln 2) / 3).",
+            "{ apply (Rdiv_eq_reg_r (ln 2) (ln (ln x / ln 2) - ln 3) (ln (ln x / ln 2) / 3)).",
+            "- exact Heq.",
+            "- lra.",
+            "}",
+            "assert (Hrel : 2 * ln (ln x / ln 2) = 3 * ln 3) by nra.",
+            "assert (Hsq : ln ((ln x / ln 2)^2) = 2 * ln (ln x / ln 2)).",
+            "{ pose proof (ln_pow (ln x / ln 2) Hy 2) as H.",
+            "cbv [INR] in H.",
+            "exact H.",
+            "}",
+            "assert (H27 : ln 27 = 3 * ln 3).",
+            "{ pose proof (ln_pow 3 Hthree 3) as H.",
+            "cbv [INR] in H.",
+            "assert (Hp : (3:R)^3 = 27) by ring.",
+            "rewrite Hp in H.",
+            "replace ((1 + 1 + 1 : R)) with 3 in H by ring.",
+            "exact H.",
+            "}",
+            "assert (Hlogeq : ln ((ln x / ln 2)^2) = ln 27) by nra.",
+            "apply (ln_inv ((ln x / ln 2)^2) 27).",
+            "- apply pow_pos."
+          ],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: In environment\\nx : R\\nHx : 1 < x\\nHeq : (ln (ln x / ln 2) - ln 3) / ln 2 = ln (ln x / ln 2) / 3 / ln 2\\nHln2 : 0 < ln 2\\nHlnx : 0 < ln x\\nHln8 : ln 8 = 3 * ln 2\\nHy : 0 < ln x / ln 2\\nHdiv : ln x / (3 * ln 2) = ln x / ln 2 / 3\\nHu : 0 < ln x / ln 2 / 3\\nHthree : (0 : R) < 3\\nHarg : ln x / ln 2 / 3 * 3 = ln x / ln 2\\nHlm : ln (ln x / ln 2) = ln (ln x / ln 2 / 3) + ln 3\\nHlog : ln (ln x / ln 2 / 3) = ln (ln x / ln 2) - ln 3\\nHr : ln (ln x / ln 2) / (3 * ln 2) = ln (ln x / ln 2) / 3 / ln 2\\nHcancel : ln (ln x / ln 2) - ln 3 = ln (ln x / ln 2) / 3\\nHrel : 2 * ln (ln x / ln 2) = 3 * ln 3\\nHsq : ln ((ln x / ln 2) ^ 2) = 2 * ln (ln x / ln 2)\\nH27 : ln 27 = 3 * ln 3\\nHlogeq : ln ((ln x / ln 2) ^ 2) = ln 27\\nThe term \"Hy\" has type \"0 < ln x / ln 2\" while it is expected to have type\\n \"0 < (ln x / ln 2) ^ 2 -> 0 < (ln x / ln 2) ^ 2 -> 0 < (ln x / ln 2) ^ 2\".')",
+        "goals": [
+          "x  : R\nHx  : 1 < x\nHeq  : (ln (ln x / ln 2) - ln 3) / ln 2 = ln (ln x / ln 2) / 3 / ln 2\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHln8  : ln 8 = 3 * ln 2\nHy  : 0 < ln x / ln 2\nHdiv  : ln x / (3 * ln 2) = ln x / ln 2 / 3\nHu  : 0 < ln x / ln 2 / 3\nHthree  : (0 : R) < 3\nHarg  : ln x / ln 2 / 3 * 3 = ln x / ln 2\nHlm  : ln (ln x / ln 2) = ln (ln x / ln 2 / 3) + ln 3\nHlog  : ln (ln x / ln 2 / 3) = ln (ln x / ln 2) - ln 3\nHr  : ln (ln x / ln 2) / (3 * ln 2) = ln (ln x / ln 2) / 3 / ln 2\nHcancel  : ln (ln x / ln 2) - ln 3 = ln (ln x / ln 2) / 3\nHrel  : 2 * ln (ln x / ln 2) = 3 * ln 3\nHsq  : ln ((ln x / ln 2) ^ 2) = 2 * ln (ln x / ln 2)\nH27  : ln 27 = 3 * ln 3\nHlogeq  : ln ((ln x / ln 2) ^ 2) = ln 27\n|-0 < (ln x / ln 2) ^ 2 -> 0 < (ln x / ln 2) ^ 2 -> 0 < (ln x / ln 2) ^ 2",
+          "x  : R\nHx  : 1 < x\nHeq  : (ln (ln x / ln 2) - ln 3) / ln 2 = ln (ln x / ln 2) / 3 / ln 2\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHln8  : ln 8 = 3 * ln 2\nHy  : 0 < ln x / ln 2\nHdiv  : ln x / (3 * ln 2) = ln x / ln 2 / 3\nHu  : 0 < ln x / ln 2 / 3\nHthree  : (0 : R) < 3\nHarg  : ln x / ln 2 / 3 * 3 = ln x / ln 2\nHlm  : ln (ln x / ln 2) = ln (ln x / ln 2 / 3) + ln 3\nHlog  : ln (ln x / ln 2 / 3) = ln (ln x / ln 2) - ln 3\nHr  : ln (ln x / ln 2) / (3 * ln 2) = ln (ln x / ln 2) / 3 / ln 2\nHcancel  : ln (ln x / ln 2) - ln 3 = ln (ln x / ln 2) / 3\nHrel  : 2 * ln (ln x / ln 2) = 3 * ln 3\nHsq  : ln ((ln x / ln 2) ^ 2) = 2 * ln (ln x / ln 2)\nH27  : ln 27 = 3 * ln 3\nHlogeq  : ln ((ln x / ln 2) ^ 2) = ln 27\n|-0 < (ln x / ln 2) ^ 2",
+          "x  : R\nHx  : 1 < x\nHeq  : (ln (ln x / ln 2) - ln 3) / ln 2 = ln (ln x / ln 2) / 3 / ln 2\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHln8  : ln 8 = 3 * ln 2\nHy  : 0 < ln x / ln 2\nHdiv  : ln x / (3 * ln 2) = ln x / ln 2 / 3\nHu  : 0 < ln x / ln 2 / 3\nHthree  : (0 : R) < 3\nHarg  : ln x / ln 2 / 3 * 3 = ln x / ln 2\nHlm  : ln (ln x / ln 2) = ln (ln x / ln 2 / 3) + ln 3\nHlog  : ln (ln x / ln 2 / 3) = ln (ln x / ln 2) - ln 3\nHr  : ln (ln x / ln 2) / (3 * ln 2) = ln (ln x / ln 2) / 3 / ln 2\nHcancel  : ln (ln x / ln 2) - ln 3 = ln (ln x / ln 2) / 3\nHrel  : 2 * ln (ln x / ln 2) = 3 * ln 3\nHsq  : ln ((ln x / ln 2) ^ 2) = 2 * ln (ln x / ln 2)\nH27  : ln 27 = 3 * ln 3\nHlogeq  : ln ((ln x / ln 2) ^ 2) = ln 27\n|-positive"
+        ],
+        "identifier": "e10",
+        "status": "rejected",
+        "submitted": "exact Hy."
+      },
+      {
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "error": "",
+        "goals": [],
+        "identifier": "e11",
+        "status": "accepted",
+        "submitted": "intros x Hx Heq.\nunfold logb in *.\nassert (Hln2 : 0 < ln 2).\n{ rewrite <- ln_1.\napply ln_increasing.\n- lra.\n- lra.\n}\nassert (Hlnx : 0 < ln x).\n{ rewrite <- ln_1.\napply ln_increasing.\n- lra.\n- lra.\n}\nassert (Hln8 : ln 8 = 3 * ln 2).\n{ assert (Htwo : (0:R) < 2) by lra.\npose proof (ln_pow 2 Htwo 3) as H.\ncbv [INR] in H.\nassert (Hp : (2:R)^3 = 8) by ring.\nrewrite Hp in H.\nreplace ((1 + 1 + 1 : R)) with 3 in H by ring.\nexact H.\n}\nrewrite Hln8 in Heq.\nassert (Hy : 0 < ln x / ln 2).\n{ apply Rdiv_pos_pos.\n- exact Hlnx.\n- exact Hln2.\n}\nassert (Hdiv : ln x / (3 * ln 2) = (ln x / ln 2) / 3).\n{ field.\nlra.\n}\nrewrite Hdiv in Heq.\nassert (Hu : 0 < (ln x / ln 2) / 3).\n{ apply Rdiv_pos_pos.\n- exact Hy.\n- assert (Hthree : (0:R) < 3) by lra.\nexact Hthree.\n}\nassert (Hthree : (0:R) < 3) by lra.\nassert (Harg : (ln x / ln 2) / 3 * 3 = ln x / ln 2).\n{ field.\nlra.\n}\nassert (Hlm : ln ((ln x / ln 2) / 3 * 3) = ln ((ln x / ln 2) / 3) + ln 3).\n{ apply ln_mult.\n- exact Hu.\n- exact Hthree.\n}\nrewrite Harg in Hlm.\nassert (Hlog : ln ((ln x / ln 2) / 3) = ln (ln x / ln 2) - ln 3) by nra.\nrewrite Hlog in Heq.\nassert (Hr : ln (ln x / ln 2) / (3 * ln 2) = (ln (ln x / ln 2) / 3) / ln 2).\n{ field.\nlra.\n}\nrewrite Hr in Heq.\nassert (Hcancel : ln (ln x / ln 2) - ln 3 = ln (ln x / ln 2) / 3).\n{ apply (Rdiv_eq_reg_r (ln 2) (ln (ln x / ln 2) - ln 3) (ln (ln x / ln 2) / 3)).\n- exact Heq.\n- lra.\n}\nassert (Hrel : 2 * ln (ln x / ln 2) = 3 * ln 3) by nra.\nassert (Hsq : ln ((ln x / ln 2)^2) = 2 * ln (ln x / ln 2)).\n{ pose proof (ln_pow (ln x / ln 2) Hy 2) as H.\ncbv [INR] in H.\nexact H.\n}\nassert (H27 : ln 27 = 3 * ln 3).\n{ pose proof (ln_pow 3 Hthree 3) as H.\ncbv [INR] in H.\nassert (Hp : (3:R)^3 = 27) by ring.\nrewrite Hp in H.\nreplace ((1 + 1 + 1 : R)) with 3 in H by ring.\nexact H.\n}\nassert (Hlogeq : ln ((ln x / ln 2)^2) = ln 27) by nra.\napply (ln_inv ((ln x / ln 2)^2) 27).\n- assert (Hs : 0 < (ln x / ln 2)^2) by nra.\nexact Hs.\n- lra.\n- exact Hlogeq."
+      }
+    ],
+    "strict_actions": false,
+    "targeted_demos": true
+  },
+  "guidance": false
+}

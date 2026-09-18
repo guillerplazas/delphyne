@@ -1,0 +1,327 @@
+{
+  "args": {
+    "current_book": "### pitfalls\n- [rocq-00001] When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n\n- [rocq-00005] When applying a recurrence hypothesis whose predecessor uses truncated subtraction, first prove the exact natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality before applying the hypothesis so its indices unify.\n\n- [rocq-00006] Under an active `R_scope`, annotate natural-number indices, arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion and comparison-type errors.\n\n- [rocq-00010] Do not obtain a successor product bound by multiplying an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`. An induction proof must retain a bound parameterized by the total sum or average.\n\n- [rocq-00016] For real equations involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead of relying on `field_simplify` to normalize it.\n\n- [rocq-00018] For bounded natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce only explicitly closed numeral cases, using `change` to expose a known numeral equality when needed.\n\n- [rocq-00025] A closed cast such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality, for example with `cbv [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n\n- [rocq-00028] After rewriting a defining polynomial equation into multiple root hypotheses, prove a factor such as `b <> 0` by assuming it is zero, substituting with `subst`, applying the given disequality, and using `nra` on the exposed equations to derive the contradiction.\n\n### tactics\n- [rocq-00002] For an induction hypothesis relating recursive `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then apply `rewrite IH; lia`.\n\n- [rocq-00003] For goals over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use `intros` followed by `nia`; it can handle the nonlinear products and truncated subtraction directly.\n\n- [rocq-00004] For closed `nat` equalities built from executable finite-list operations such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`; use `reflexivity` afterward if the resulting definitional equality is not closed automatically.\n\n- [rocq-00011] Before using `nra` in AM-GM base or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition; `nra` cannot reason through opaque recursive definitions or supply the global inequality.\n\n- [rocq-00012] For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately for completing-square identities before finishing the resulting linear inequality with `lra`.\n\n- [rocq-00017] To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n\n- [rocq-00020] For instantiated recurrence equations containing closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then normalize each index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation chain.\n\n- [rocq-00021] For an explicit `Ensemble` built from nested `Add`, first unfold `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions and `False` cases are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer by layer, prove each freshness premise by unfolding `In` and `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n\n- [rocq-00024] For an unbounded quadratic equation over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction from the original equation.\n\n- [rocq-00029] When `prime_divisors` yields a nested binary disjunction in an integer-arithmetic proof, destruct it with a right-nested pattern matching the actual two-branch structure, for example `destruct (...) as [H | [H | [H | H]]].`; then use `nia` in each resulting branch, preserving the active bullet.\n\n### lemmas\n- [rocq-00007] For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n\n- [rocq-00013] For positivity of a recursive real product whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity through opaque recursive products.\n\n- [rocq-00014] For natural-number product bounds, use `Nat.mul_le_mono` to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply an established inequality by a nonnegative factor; provide the premises in the lemma's expected order instead of guessing a multiplication-monotonicity API.\n\n- [rocq-00015] To lift a natural bound into `R`, expose the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <= INR c; apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent `.mpr` projection.\n\n- [rocq-00022] For trigonometric goals involving complementary or doubled angles, use the library lemma with the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n\n- [rocq-00023] For logarithmic inequalities and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use the resulting instantiated equality directly.\n\n- [rocq-00026] For a target or hypothesis containing `ln (a * b)`, prove positivity of both factors explicitly; when a factor is an `Rpower`, unfold `Rpower` and apply `exp_pos`, rather than reusing positivity of the enclosing product. Then rewrite with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation does not expose this logarithmic product identity or supply its positivity premises.\n- [rocq-00027] For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n\n\n### strategy\n- [rocq-00009] For finite nonnegative real sequences with a fixed-sum product goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n\n- [rocq-00019] When proving a least witness by finite exclusion, first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch immediately, handle the finitely many numeral cases explicitly under `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors.",
+    "events": [
+      {
+        "context": {
+          "environment": "Require Import Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb."
+          ],
+          "problem_file": "miniF2F/test/imo/imo_1983_p6.v",
+          "problem_sha256": "c54ecac0fbea0f987508dc35fc8a1412d527cfdab091d300fc5874fd0704ee4d",
+          "source": "3d3693db74cc10ec6f13a9a4f7a835ba4530744f342fb3aa1b254c2dba6abb2a",
+          "theorem_name": "imo_1983_p6",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: No applicable tactic.')",
+        "goals": [
+          "a, b, c  : R\nHa  : 0 < a\nHb  : 0 < b\nHc  : 0 < c\nHcab  : c < a + b\nHbac  : b < a + c\nHacb  : a < b + c\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)"
+        ],
+        "identifier": "e1",
+        "status": "rejected",
+        "submitted": "nra."
+      },
+      {
+        "context": {
+          "environment": "Require Import Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb."
+          ],
+          "problem_file": "miniF2F/test/imo/imo_1983_p6.v",
+          "problem_sha256": "c54ecac0fbea0f987508dc35fc8a1412d527cfdab091d300fc5874fd0704ee4d",
+          "source": "3d3693db74cc10ec6f13a9a4f7a835ba4530744f342fb3aa1b254c2dba6abb2a",
+          "theorem_name": "imo_1983_p6",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Syntax error: [ltac_use_default] expected after [tactic] (in [tactic_command]).')",
+        "goals": [
+          "a, b, c  : R\nHa  : 0 < a\nHb  : 0 < b\nHc  : 0 < c\nHcab  : c < a + b\nHbac  : b < a + c\nHacb  : a < b + c\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)"
+        ],
+        "identifier": "e2",
+        "status": "rejected",
+        "submitted": "set x := (b + c - a) / 2."
+      },
+      {
+        "context": {
+          "environment": "Require Import Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.",
+            "set (x := (b + c - a) / 2).",
+            "set (y := (c + a - b) / 2).",
+            "set (z := (a + b - c) / 2).",
+            "assert (Hx : 0 < x) by (unfold x; lra).",
+            "assert (Hy : 0 < y) by (unfold y; lra).",
+            "assert (Hz : 0 < z) by (unfold z; lra).",
+            "assert (Hxy : 0 <= x * y) by nra.",
+            "assert (Hyz : 0 <= y * z) by nra.",
+            "assert (Hxz : 0 <= x * z) by nra."
+          ],
+          "problem_file": "miniF2F/test/imo/imo_1983_p6.v",
+          "problem_sha256": "c54ecac0fbea0f987508dc35fc8a1412d527cfdab091d300fc5874fd0704ee4d",
+          "source": "3d3693db74cc10ec6f13a9a4f7a835ba4530744f342fb3aa1b254c2dba6abb2a",
+          "theorem_name": "imo_1983_p6",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: In environment\\na, b, c : R\\nHa : 0 < a\\nHb : 0 < b\\nHc : 0 < c\\nHcab : c < a + b\\nHbac : b < a + c\\nHacb : a < b + c\\nx := (b + c - a) / 2 : R\\ny := (c + a - b) / 2 : R\\nz := (a + b - c) / 2 : R\\nHx : 0 < x\\nHy : 0 < y\\nHz : 0 < z\\nHxy : 0 <= x * y\\nHyz : 0 <= y * z\\nHxz : 0 <= x * z\\nUnable to unify\\n \"(fix pow (r : R) (n : nat) {struct n} : R :=\\n     match n with\\n     | 0%nat => 1\\n     | S n0 => r * pow r n0\\n     end)\\n    (y - z) 1%nat\"\\nwith \"y - z\".')",
+        "goals": [
+          "a, b, c  : R\nHa  : 0 < a\nHb  : 0 < b\nHc  : 0 < c\nHcab  : c < a + b\nHbac  : b < a + c\nHacb  : a < b + c\nx := (b + c - a) / 2 : R\ny := (c + a - b) / 2 : R\nz := (a + b - c) / 2 : R\nHx  : 0 < x\nHy  : 0 < y\nHz  : 0 < z\nHxy  : 0 <= x * y\nHyz  : 0 <= y * z\nHxz  : 0 <= x * z\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)"
+        ],
+        "identifier": "e3",
+        "status": "rejected",
+        "submitted": "assert (Hsq1 : 0 <= (y - z)^2) by apply Rle_0_sqr."
+      },
+      {
+        "context": {
+          "environment": "Require Import Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.",
+            "set (x := (b + c - a) / 2).",
+            "set (y := (c + a - b) / 2).",
+            "set (z := (a + b - c) / 2).",
+            "assert (Hx : 0 < x) by (unfold x; lra).",
+            "assert (Hy : 0 < y) by (unfold y; lra).",
+            "assert (Hz : 0 < z) by (unfold z; lra).",
+            "assert (Hxy : 0 <= x * y) by nra.",
+            "assert (Hyz : 0 <= y * z) by nra.",
+            "assert (Hxz : 0 <= x * z) by nra.",
+            "assert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.",
+            "assert (Hsq2 : 0 <= (z - x) * (z - x)) by apply Rle_0_sqr.",
+            "assert (Hsq3 : 0 <= (x - y) * (x - y)) by apply Rle_0_sqr."
+          ],
+          "problem_file": "miniF2F/test/imo/imo_1983_p6.v",
+          "problem_sha256": "c54ecac0fbea0f987508dc35fc8a1412d527cfdab091d300fc5874fd0704ee4d",
+          "source": "3d3693db74cc10ec6f13a9a4f7a835ba4530744f342fb3aa1b254c2dba6abb2a",
+          "theorem_name": "imo_1983_p6",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Proof is not complete.')",
+        "goals": [
+          "a, b, c  : R\nHa  : 0 < a\nHb  : 0 < b\nHc  : 0 < c\nHcab  : c < a + b\nHbac  : b < a + c\nHacb  : a < b + c\nx := (b + c - a) / 2 : R\ny := (c + a - b) / 2 : R\nz := (a + b - c) / 2 : R\nHx  : 0 < x\nHy  : 0 < y\nHz  : 0 < z\nHxy  : 0 <= x * y\nHyz  : 0 <= y * z\nHxz  : 0 <= x * z\nHsq1  : 0 <= (y - z) * (y - z)\nHsq2  : 0 <= (z - x) * (z - x)\nHsq3  : 0 <= (x - y) * (x - y)\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)"
+        ],
+        "identifier": "e4",
+        "status": "rejected",
+        "submitted": "assert (H1 : 0 <= x * y * ((y - z) * (y - z))) by apply Rmult_le_pos; assumption."
+      },
+      {
+        "context": {
+          "environment": "Require Import Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.",
+            "set (x := (b + c - a) / 2).",
+            "set (y := (c + a - b) / 2).",
+            "set (z := (a + b - c) / 2).",
+            "assert (Hx : 0 < x) by (unfold x; lra).",
+            "assert (Hy : 0 < y) by (unfold y; lra).",
+            "assert (Hz : 0 < z) by (unfold z; lra).",
+            "assert (Hxy : 0 <= x * y) by nra.",
+            "assert (Hyz : 0 <= y * z) by nra.",
+            "assert (Hxz : 0 <= x * z) by nra.",
+            "assert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.",
+            "assert (Hsq2 : 0 <= (z - x) * (z - x)) by apply Rle_0_sqr.",
+            "assert (Hsq3 : 0 <= (x - y) * (x - y)) by apply Rle_0_sqr.",
+            "assert (H1 : 0 <= x * y * ((y - z) * (y - z))) by exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).",
+            "assert (H2 : 0 <= y * z * ((z - x) * (z - x))) by exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).",
+            "assert (H3 : 0 <= x * z * ((x - y) * (x - y))) by exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3)."
+          ],
+          "problem_file": "miniF2F/test/imo/imo_1983_p6.v",
+          "problem_sha256": "c54ecac0fbea0f987508dc35fc8a1412d527cfdab091d300fc5874fd0704ee4d",
+          "source": "3d3693db74cc10ec6f13a9a4f7a835ba4530744f342fb3aa1b254c2dba6abb2a",
+          "theorem_name": "imo_1983_p6",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Proof is not complete.')",
+        "goals": [
+          "a, b, c  : R\nHa  : 0 < a\nHb  : 0 < b\nHc  : 0 < c\nHcab  : c < a + b\nHbac  : b < a + c\nHacb  : a < b + c\nx := (b + c - a) / 2 : R\ny := (c + a - b) / 2 : R\nz := (a + b - c) / 2 : R\nHx  : 0 < x\nHy  : 0 < y\nHz  : 0 < z\nHxy  : 0 <= x * y\nHyz  : 0 <= y * z\nHxz  : 0 <= x * z\nHsq1  : 0 <= (y - z) * (y - z)\nHsq2  : 0 <= (z - x) * (z - x)\nHsq3  : 0 <= (x - y) * (x - y)\nH1  : 0 <= x * y * ((y - z) * (y - z))\nH2  : 0 <= y * z * ((z - x) * (z - x))\nH3  : 0 <= x * z * ((x - y) * (x - y))\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)"
+        ],
+        "identifier": "e5",
+        "status": "rejected",
+        "submitted": "assert (Hid : a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) = 2 * (x * y * ((y - z) * (y - z)) + y * z * ((z - x) * (z - x)) + x * z * ((x - y) * (x - y)))) by unfold x, y, z; ring."
+      },
+      {
+        "context": {
+          "environment": "Require Import Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.",
+            "set (x := (b + c - a) / 2).",
+            "set (y := (c + a - b) / 2).",
+            "set (z := (a + b - c) / 2).",
+            "assert (Hx : 0 < x) by (unfold x; lra).",
+            "assert (Hy : 0 < y) by (unfold y; lra).",
+            "assert (Hz : 0 < z) by (unfold z; lra).",
+            "assert (Hxy : 0 <= x * y) by nra.",
+            "assert (Hyz : 0 <= y * z) by nra.",
+            "assert (Hxz : 0 <= x * z) by nra.",
+            "assert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.",
+            "assert (Hsq2 : 0 <= (z - x) * (z - x)) by apply Rle_0_sqr.",
+            "assert (Hsq3 : 0 <= (x - y) * (x - y)) by apply Rle_0_sqr.",
+            "assert (H1 : 0 <= x * y * ((y - z) * (y - z))) by exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).",
+            "assert (H2 : 0 <= y * z * ((z - x) * (z - x))) by exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).",
+            "assert (H3 : 0 <= x * z * ((x - y) * (x - y))) by exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3)."
+          ],
+          "problem_file": "miniF2F/test/imo/imo_1983_p6.v",
+          "problem_sha256": "c54ecac0fbea0f987508dc35fc8a1412d527cfdab091d300fc5874fd0704ee4d",
+          "source": "3d3693db74cc10ec6f13a9a4f7a835ba4530744f342fb3aa1b254c2dba6abb2a",
+          "theorem_name": "imo_1983_p6",
+          "version": 1
+        },
+        "error": "(-32003, \"Coq: Syntax error: ')' expected after [ltac_expr] (in [ltac_expr]).\")",
+        "goals": [
+          "a, b, c  : R\nHa  : 0 < a\nHb  : 0 < b\nHc  : 0 < c\nHcab  : c < a + b\nHbac  : b < a + c\nHacb  : a < b + c\nx := (b + c - a) / 2 : R\ny := (c + a - b) / 2 : R\nz := (a + b - c) / 2 : R\nHx  : 0 < x\nHy  : 0 < y\nHz  : 0 < z\nHxy  : 0 <= x * y\nHyz  : 0 <= y * z\nHxz  : 0 <= x * z\nHsq1  : 0 <= (y - z) * (y - z)\nHsq2  : 0 <= (z - x) * (z - x)\nHsq3  : 0 <= (x - y) * (x - y)\nH1  : 0 <= x * y * ((y - z) * (y - z))\nH2  : 0 <= y * z * ((z - x) * (z - x))\nH3  : 0 <= x * z * ((x - y) * (x - y))\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)"
+        ],
+        "identifier": "e6",
+        "status": "rejected",
+        "submitted": "assert (Hay : a = y + z) by (unfold y z; lra)."
+      },
+      {
+        "context": {
+          "environment": "Require Import Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.",
+            "set (x := (b + c - a) / 2).",
+            "set (y := (c + a - b) / 2).",
+            "set (z := (a + b - c) / 2).",
+            "assert (Hx : 0 < x) by (unfold x; lra).",
+            "assert (Hy : 0 < y) by (unfold y; lra).",
+            "assert (Hz : 0 < z) by (unfold z; lra).",
+            "assert (Hxy : 0 <= x * y) by nra.",
+            "assert (Hyz : 0 <= y * z) by nra.",
+            "assert (Hxz : 0 <= x * z) by nra.",
+            "assert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.",
+            "assert (Hsq2 : 0 <= (z - x) * (z - x)) by apply Rle_0_sqr.",
+            "assert (Hsq3 : 0 <= (x - y) * (x - y)) by apply Rle_0_sqr.",
+            "assert (H1 : 0 <= x * y * ((y - z) * (y - z))) by exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).",
+            "assert (H2 : 0 <= y * z * ((z - x) * (z - x))) by exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).",
+            "assert (H3 : 0 <= x * z * ((x - y) * (x - y))) by exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3).",
+            "assert (Hid : a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) = 2 * (x * y * ((y - z) * (y - z)) + y * z * ((z - x) * (z - x)) + x * z * ((x - y) * (x - y)))).",
+            "{ unfold x, y, z.",
+            "field_simplify."
+          ],
+          "problem_file": "miniF2F/test/imo/imo_1983_p6.v",
+          "problem_sha256": "c54ecac0fbea0f987508dc35fc8a1412d527cfdab091d300fc5874fd0704ee4d",
+          "source": "3d3693db74cc10ec6f13a9a4f7a835ba4530744f342fb3aa1b254c2dba6abb2a",
+          "theorem_name": "imo_1983_p6",
+          "version": 1
+        },
+        "error": "(-32003, 'Coq: Tactic failure: not a valid ring equation.')",
+        "goals": [
+          "a, b, c  : R\nHa  : 0 < a\nHb  : 0 < b\nHc  : 0 < c\nHcab  : c < a + b\nHbac  : b < a + c\nHacb  : a < b + c\nx := (b + c - a) / 2 : R\ny := (c + a - b) / 2 : R\nz := (a + b - c) / 2 : R\nHx  : 0 < x\nHy  : 0 < y\nHz  : 0 < z\nHxy  : 0 <= x * y\nHyz  : 0 <= y * z\nHxz  : 0 <= x * z\nHsq1  : 0 <= (y - z) * (y - z)\nHsq2  : 0 <= (z - x) * (z - x)\nHsq3  : 0 <= (x - y) * (x - y)\nH1  : 0 <= x * y * ((y - z) * (y - z))\nH2  : 0 <= y * z * ((z - x) * (z - x))\nH3  : 0 <= x * z * ((x - y) * (x - y))\n|-a ^ 3 * b - a ^ 2 * b ^ 2 - a ^ 2 * c ^ 2 + a * c ^ 3 + b ^ 3 * c -\nb ^ 2 * c ^ 2 =\n(16 * a ^ 3 * b - 16 * a ^ 2 * b ^ 2 - 16 * a ^ 2 * c ^ 2 + 16 * a * c ^ 3 +\n 16 * b ^ 3 * c - 16 * b ^ 2 * c ^ 2) /\n16"
+        ],
+        "identifier": "e7",
+        "status": "rejected",
+        "submitted": "ring."
+      },
+      {
+        "context": {
+          "environment": "Require Import Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [],
+          "problem_file": "miniF2F/test/imo/imo_1983_p6.v",
+          "problem_sha256": "c54ecac0fbea0f987508dc35fc8a1412d527cfdab091d300fc5874fd0704ee4d",
+          "source": "3d3693db74cc10ec6f13a9a4f7a835ba4530744f342fb3aa1b254c2dba6abb2a",
+          "theorem_name": "imo_1983_p6",
+          "version": 1
+        },
+        "error": "",
+        "goals": [],
+        "identifier": "e8",
+        "status": "accepted",
+        "submitted": "intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\nset (x := (b + c - a) / 2).\nset (y := (c + a - b) / 2).\nset (z := (a + b - c) / 2).\nassert (Hx : 0 < x) by (unfold x; lra).\nassert (Hy : 0 < y) by (unfold y; lra).\nassert (Hz : 0 < z) by (unfold z; lra).\nassert (Hxy : 0 <= x * y) by nra.\nassert (Hyz : 0 <= y * z) by nra.\nassert (Hxz : 0 <= x * z) by nra.\nassert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.\nassert (Hsq2 : 0 <= (z - x) * (z - x)) by apply Rle_0_sqr.\nassert (Hsq3 : 0 <= (x - y) * (x - y)) by apply Rle_0_sqr.\nassert (H1 : 0 <= x * y * ((y - z) * (y - z))) by exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).\nassert (H2 : 0 <= y * z * ((z - x) * (z - x))) by exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).\nassert (H3 : 0 <= x * z * ((x - y) * (x - y))) by exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3).\nassert (Hid : a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) = 2 * (x * y * ((y - z) * (y - z)) + y * z * ((z - x) * (z - x)) + x * z * ((x - y) * (x - y)))).\n{ unfold x, y, z.\nfield_simplify.\nlra.\n}\nrewrite Hid.\nnra."
+      }
+    ],
+    "playbook": "### pitfalls\n- [rocq-00001] When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n\n- [rocq-00005] When applying a recurrence hypothesis whose predecessor uses truncated subtraction, first prove the exact natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality before applying the hypothesis so its indices unify.\n\n- [rocq-00006] Under an active `R_scope`, annotate natural-number indices, arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion and comparison-type errors.\n\n- [rocq-00010] Do not obtain a successor product bound by multiplying an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`. An induction proof must retain a bound parameterized by the total sum or average.\n\n- [rocq-00016] For real equations involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead of relying on `field_simplify` to normalize it.\n\n- [rocq-00018] For bounded natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce only explicitly closed numeral cases, using `change` to expose a known numeral equality when needed.\n\n- [rocq-00025] A closed cast such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality, for example with `cbv [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n\n\n### tactics\n- [rocq-00002] For an induction hypothesis relating recursive `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then apply `rewrite IH; lia`.\n\n- [rocq-00003] For goals over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use `intros` followed by `nia`; it can handle the nonlinear products and truncated subtraction directly.\n\n- [rocq-00004] For closed `nat` equalities built from executable finite-list operations such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`; use `reflexivity` afterward if the resulting definitional equality is not closed automatically.\n\n- [rocq-00011] Before using `nra` in AM-GM base or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition; `nra` cannot reason through opaque recursive definitions or supply the global inequality.\n\n- [rocq-00012] For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately for completing-square identities before finishing the resulting linear inequality with `lra`.\n\n- [rocq-00017] To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n\n- [rocq-00020] For instantiated recurrence equations containing closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then normalize each index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation chain.\n\n- [rocq-00021] For an explicit `Ensemble` built from nested `Add`, first unfold `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions and `False` cases are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer by layer, prove each freshness premise by unfolding `In` and `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n\n- [rocq-00024] For an unbounded quadratic equation over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction from the original equation.\n\n\n### lemmas\n- [rocq-00007] For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n\n- [rocq-00013] For positivity of a recursive real product whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity through opaque recursive products.\n\n- [rocq-00014] For natural-number product bounds, use `Nat.mul_le_mono` to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply an established inequality by a nonnegative factor; provide the premises in the lemma's expected order instead of guessing a multiplication-monotonicity API.\n\n- [rocq-00015] To lift a natural bound into `R`, expose the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <= INR c; apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent `.mpr` projection.\n\n- [rocq-00022] For trigonometric goals involving complementary or doubled angles, use the library lemma with the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n\n- [rocq-00023] For logarithmic inequalities and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use the resulting instantiated equality directly.\n\n- [rocq-00026] For a target or hypothesis containing `ln (a * b)`, explicitly rewrite it with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation does not expose this logarithmic product identity on its own.\n\n- [rocq-00027] For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n\n\n### strategy\n- [rocq-00009] For finite nonnegative real sequences with a fixed-sum product goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n\n- [rocq-00019] When proving a least witness by finite exclusion, first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch immediately, handle the finitely many numeral cases explicitly under `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors.",
+    "problem_file": "miniF2F/test/imo/imo_1983_p6.v",
+    "terminal": {
+      "accepted_script": [
+        "intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.",
+        "set (x := (b + c - a) / 2).",
+        "set (y := (c + a - b) / 2).",
+        "set (z := (a + b - c) / 2).",
+        "assert (Hx : 0 < x) by (unfold x; lra).",
+        "assert (Hy : 0 < y) by (unfold y; lra).",
+        "assert (Hz : 0 < z) by (unfold z; lra).",
+        "assert (Hxy : 0 <= x * y) by nra.",
+        "assert (Hyz : 0 <= y * z) by nra.",
+        "assert (Hxz : 0 <= x * z) by nra.",
+        "assert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.",
+        "assert (Hsq2 : 0 <= (z - x) * (z - x)) by apply Rle_0_sqr.",
+        "assert (Hsq3 : 0 <= (x - y) * (x - y)) by apply Rle_0_sqr.",
+        "assert (H1 : 0 <= x * y * ((y - z) * (y - z))) by exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).",
+        "assert (H2 : 0 <= y * z * ((z - x) * (z - x))) by exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).",
+        "assert (H3 : 0 <= x * z * ((x - y) * (x - y))) by exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3).",
+        "assert (Hid : a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) = 2 * (x * y * ((y - z) * (y - z)) + y * z * ((z - x) * (z - x)) + x * z * ((x - y) * (x - y)))).",
+        "{ unfold x, y, z.",
+        "field_simplify.",
+        "lra.",
+        "}",
+        "rewrite Hid.",
+        "nra."
+      ],
+      "accepted_tail": [],
+      "auto_finished": false,
+      "cache_sha256": "3d3693db74cc10ec6f13a9a4f7a835ba4530744f342fb3aa1b254c2dba6abb2a",
+      "check_sha256": "aaef6a2b7b6404157e596c3beade112fcd7b81eeac35e3f3021c2003d178d666",
+      "checker": "checked_proof",
+      "common_prefix": [
+        "intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.",
+        "set (x := (b + c - a) / 2).",
+        "set (y := (c + a - b) / 2).",
+        "set (z := (a + b - c) / 2).",
+        "assert (Hx : 0 < x) by (unfold x; lra).",
+        "assert (Hy : 0 < y) by (unfold y; lra).",
+        "assert (Hz : 0 < z) by (unfold z; lra).",
+        "assert (Hxy : 0 <= x * y) by nra.",
+        "assert (Hyz : 0 <= y * z) by nra.",
+        "assert (Hxz : 0 <= x * z) by nra.",
+        "assert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.",
+        "assert (Hsq2 : 0 <= (z - x) * (z - x)) by apply Rle_0_sqr.",
+        "assert (Hsq3 : 0 <= (x - y) * (x - y)) by apply Rle_0_sqr.",
+        "assert (H1 : 0 <= x * y * ((y - z) * (y - z))) by exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).",
+        "assert (H2 : 0 <= y * z * ((z - x) * (z - x))) by exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).",
+        "assert (H3 : 0 <= x * z * ((x - y) * (x - y))) by exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3).",
+        "assert (Hid : a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) = 2 * (x * y * ((y - z) * (y - z)) + y * z * ((z - x) * (z - x)) + x * z * ((x - y) * (x - y)))).",
+        "{ unfold x, y, z.",
+        "field_simplify.",
+        "lra.",
+        "}",
+        "rewrite Hid.",
+        "nra."
+      ],
+      "detail": "Tails are a derived textual diff, not an execution trace. Only accepted_script is certified complete. auto_finished is the recorded assistance flag; absent pre-assistance details are unknown. returned_script matches via the existing tactic splitter; accepted_script preserves the exact checker sequence.",
+      "problem_file": "miniF2F/test/imo/imo_1983_p6.v",
+      "result_sha256": "1c2d03a7f00212e949994014356ef501f652f32b042a3cccea9d220338fdb50f",
+      "returned_script": "intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\nset (x := (b + c - a) / 2).\nset (y := (c + a - b) / 2).\nset (z := (a + b - c) / 2).\nassert (Hx : 0 < x) by (unfold x; lra).\nassert (Hy : 0 < y) by (unfold y; lra).\nassert (Hz : 0 < z) by (unfold z; lra).\nassert (Hxy : 0 <= x * y) by nra.\nassert (Hyz : 0 <= y * z) by nra.\nassert (Hxz : 0 <= x * z) by nra.\nassert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.\nassert (Hsq2 : 0 <= (z - x) * (z - x)) by apply Rle_0_sqr.\nassert (Hsq3 : 0 <= (x - y) * (x - y)) by apply Rle_0_sqr.\nassert (H1 : 0 <= x * y * ((y - z) * (y - z))) by exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).\nassert (H2 : 0 <= y * z * ((z - x) * (z - x))) by exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).\nassert (H3 : 0 <= x * z * ((x - y) * (x - y))) by exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3).\nassert (Hid : a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) = 2 * (x * y * ((y - z) * (y - z)) + y * z * ((z - x) * (z - x)) + x * z * ((x - y) * (x - y)))).\n{ unfold x, y, z.\nfield_simplify.\nlra.\n}\nrewrite Hid.\nnra.",
+      "source_cell": "experiments/output/ace_models_20260910/proof/configs/imo_1983_p6__prover-medium-1e4aec7dbbe80e7a__gpt-5.6-luna__seed0",
+      "status": "accepted",
+      "submitted_script": [
+        "intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.",
+        "set (x := (b + c - a) / 2).",
+        "set (y := (c + a - b) / 2).",
+        "set (z := (a + b - c) / 2).",
+        "assert (Hx : 0 < x) by (unfold x; lra).",
+        "assert (Hy : 0 < y) by (unfold y; lra).",
+        "assert (Hz : 0 < z) by (unfold z; lra).",
+        "assert (Hxy : 0 <= x * y) by nra.",
+        "assert (Hyz : 0 <= y * z) by nra.",
+        "assert (Hxz : 0 <= x * z) by nra.",
+        "assert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.",
+        "assert (Hsq2 : 0 <= (z - x) * (z - x)) by apply Rle_0_sqr.",
+        "assert (Hsq3 : 0 <= (x - y) * (x - y)) by apply Rle_0_sqr.",
+        "assert (H1 : 0 <= x * y * ((y - z) * (y - z))) by exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).",
+        "assert (H2 : 0 <= y * z * ((z - x) * (z - x))) by exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).",
+        "assert (H3 : 0 <= x * z * ((x - y) * (x - y))) by exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3).",
+        "assert (Hid : a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) = 2 * (x * y * ((y - z) * (y - z)) + y * z * ((z - x) * (z - x)) + x * z * ((x - y) * (x - y)))).",
+        "{ unfold x, y, z.",
+        "field_simplify.",
+        "lra.",
+        "}",
+        "rewrite Hid.",
+        "nra."
+      ],
+      "submitted_tail": [],
+      "theorem_name": "imo_1983_p6",
+      "version": 2
+    },
+    "trajectory": "[PROBLEM]\nProve the following theorem in Rocq.\n\n## Imports already in scope\n\n```rocq\nRequire Import Reals.\nOpen Scope R_scope.\n```\n\n## Theorem\n\n```rocq\nTheorem imo_1983_p6 : \n  forall (a b c : R),\n  (0 < a /\\ 0 < b /\\ 0 < c) ->\n  c < a + b ->\n  b < a + c ->\n  a < b + c ->\n  0 <= a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a).\n```\n\n## Informal statement\n\nLet $a$, $b$ and $c$ be the lengths of the sides of a triangle. Prove that\n\n   $a^2 b(a-b) + b^2 c(b-c) + c^2 a(c-a) \\geq 0$.\n\n   Determine when equality occurs.\n\n## Informal proof sketch\n\nBy Ravi substitution, let $a = y+z$, $b = z+x$, $c = x+y$. Then, the triangle\n   condition becomes $x, y, z > 0$. After some manipulation, the inequality becomes:\n\n   $xy^3 + yz^3 + zx^3 \\geq xyz(x+y+z)$.\n\n   By Cauchy, we have: \n\n   $(xy^3 + yz^3 + zx^3)(z+x+y) \\geq xyz(y+z+x)^2$ with equality if and only if\n   $\\frac{xy^3}{z} = \\frac{yz^3}{x} =\\frac{zx^3}{y}$. So the inequality holds with\n   equality if and only if x = y = z. Thus the original inequality has equality if and\n   only if the triangle is equilateral.\n\nReply with a fenced code block containing only the body of the proof\n(no `Proof.`, no `Qed.`).\nBefore your first tool call or proposal, name the playbook bullet ids\nyou intend to rely on for this theorem (or say \"none apply\").\nLast verified prefix (preserve it for local suffix repair):\n```rocq\nintros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\nset (x := (b + c - a) / 2).\nset (y := (c + a - b) / 2).\nset (z := (a + b - c) / 2).\nassert (Hx : 0 < x) by (unfold x; lra).\nassert (Hy : 0 < y) by (unfold y; lra).\nassert (Hz : 0 < z) by (unfold z; lra).\nassert (Hxy : 0 <= x * y) by nra.\nassert (Hyz : 0 <= y * z) by nra.\nassert (Hxz : 0 <= x * z) by nra.\nassert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.\nassert (Hsq2 : 0 <= (z - x) * (z - x)) by apply Rle_0_sqr.\nassert (Hsq3 : 0 <= (x - y) * (x - y)) by apply Rle_0_sqr.\nassert (H1 : 0 <= x * y * ((y - z) * (y - z))) by exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).\nassert (H2 : 0 <= y * z * ((z - x) * (z - x))) by exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).\nassert (H3 : 0 <= x * z * ((x - y) * (x - y))) by exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3).\nassert (Hid : a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) = 2 * (x * y * ((y - z) * (y - z)) + y * z * ((z - x) * (z - x)) + x * z * ((x - y) * (x - y)))).\n{ unfold x, y, z.\nfield_simplify.\n```\n\nFocus decision: identify the cast, normal form or side condition blocking\nthe last step. Choose one bridge justified by the current goal, preserve\nthe verified prefix, and return a complete script using that bridge.\n\n[ASSISTANT]\nPlaybook bullets [rocq-00002], [rocq-00009], [rocq-00010], [rocq-00011], [rocq-00013], [rocq-00014], [rocq-00015], [rocq-00024], [rocq-00026], and [rocq-00027] do not apply to this polynomial triangle inequality; none is needed. I will first try exposing the positivity hypotheses and letting nonlinear arithmetic normalize the polynomial.\n\n[TOOL CALL] ReadSkill(skill_name='tactic-patterns')\n[TOOL RESULT]\n# Tactic Patterns\n\nQuick reference for choosing tactics based on goal structure.\n\n## Goal Structure Patterns\n\n### Equality\n| Goal | Tactic |\n|------|--------|\n| `x = x` | `reflexivity` |\n| `f x = f y` | `f_equal` / `congr` |\n| `x = y` (nat arithmetic) | `lia` / `ring` |\n| `x = y` (real arithmetic) | `lra` / `ring` / `field` |\n| `x = y` (rewrite needed) | `rewrite H` |\n| `x = y` (unfold needed) | `unfold f; simpl` |\n\n### Universal Quantifier\n| Goal | Tactic |\n|------|--------|\n| `forall x, P x` | `intros x` |\n| `forall x y, P x y` | `intros x y` |\n\n### Existential Quantifier\n| Goal | Tactic |\n|------|--------|\n| `exists x, P x` | `exists witness` |\n| `{ x : A | P x }` | `exist witness` |\n\n### Implication\n| Goal | Tactic |\n|------|--------|\n| `P -> Q` | `intros H` |\n| `P -> Q` (with exact proof) | `exact (fun H => ...)` |\n\n### Conjunction\n| Goal | Tactic |\n|------|--------|\n| `P /\\ Q` | `split` |\n| `P /\\ Q /\\ R` | `repeat split` or `split; [|split]` |\n\n### Disjunction\n| Goal | Tactic |\n|------|--------|\n| `P \\/ Q` (P provable) | `left` |\n| `P \\/ Q` (Q provable) | `right` |\n\n### Negation\n| Goal | Tactic |\n|------|--------|\n| `~P` | `intros H` (then derive `False`) |\n| `P` (from `~~P`) | classical logic: `apply NNPP` |\n\n### Inequality\n| Goal | Tactic |\n|------|--------|\n| `n < m` (nat) | `lia` / `omega` |\n| `n <= m` (nat) | `lia` / `omega` |\n| `x < y` (R) | `lra` / `nra` |\n\n## Domain-Specific Patterns\n\n### Natural Numbers\n```coq\ninduction n as [|n' IH].\n- (* Base case: n = 0 *) simpl. reflexivity.\n- (* Inductive case: n = S n' *) simpl. rewrite IH. reflexivity.\n```\n\n### Lists\n```coq\ninduction l as [|x l' IH].\n- (* Base case: l = nil *) simpl. reflexivity.\n- (* Inductive case: l = x :: l' *) simpl. rewrite IH. reflexivity.\n```\n\n### Booleans\n```coq\ndestruct b.\n- (* b = true *) ...\n- (* b = false *) ...\n```\n\n### Option Types\n```coq\ndestruct o as [x|].\n- (* Some x *) ...\n- (* None *) ...\n```\n\n### Real Analysis (with Reals library)\n```coq\nRequire Import Reals.\nOpen Scope R_scope.\n(* Use lra for linear, nra for nonlinear *)\n```\n\n### Algebra (with MathComp)\n```coq\nFrom mathcomp Require Import all_ssreflect.\n(* Use ssreflect tactics: move=>, apply/, rewrite *)\n```\n\n## General Tactics (Always Worth Trying)\n\n**Automation:** `auto`, `eauto`, `trivial`, `tauto`, `intuition`, `firstorder`\n\n**Structuring:** `intros`, `destruct`, `induction`, `split`, `left`, `right`, `exists`\n\n**Hypothesis work:** `apply H`, `exact H`, `rewrite H`, `specialize`, `generalize`\n\n**Cleanup:** `simpl`, `unfold`, `clear`, `rename`\n\n## Workflow Tips\n\n1. Try automation first (`auto`, `lia`, `ring`)\n2. If automation fails, introduce/destruct to simplify\n3. Break down with `assert` for intermediate results\n4. Search the library for existing lemmas\n5. Check types with `Check` and `About`\n\n\n[ASSISTANT]\n```rocq\nintros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\nnra.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"nra.\", \"error\": \"(-32003, 'Coq: No applicable tactic.')\", \"verified_prefix\": [\"intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\"], \"total_goals\": 1, \"goals\": [\"a, b, c  : R\\nHa  : 0 < a\\nHb  : 0 < b\\nHc  : 0 < c\\nHcab  : c < a + b\\nHbac  : b < a + c\\nHacb  : a < b + c\\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\n(no content)\n\n[TOOL CALL] SearchRocq(command='Check Rle_div_r.')\n[TOOL RESULT]\nPetanqueError: (-32003, 'Coq: The reference Rle_div_r was not found in the current environment.')\n\n[TOOL CALL] SearchRocq(command='Check Rle_div_iff\u2080.')\n[TOOL RESULT]\nPetanqueError: (-32003, 'Coq: The reference Rle_div_iff\u2080 was not found in the current environment.')\n\n[TOOL CALL] SearchRocq(command='Search (0 <= _ / _).')\n[TOOL RESULT]\n{\"output\": \"[]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"a, b, c  : R\\nHa  : 0 < a\\nHb  : 0 < b\\nHc  : 0 < c\\nHcab  : c < a + b\\nHbac  : b < a + c\\nHacb  : a < b + c\\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)\"], \"next\": null}\n\n[ASSISTANT]\n```rocq\nintros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\nset x := (b + c - a) / 2.\nset y := (c + a - b) / 2.\nset z := (a + b - c) / 2.\nassert (Hx : 0 < x) by (unfold x; lra).\nassert (Hy : 0 < y) by (unfold y; lra).\nassert (Hz : 0 < z) by (unfold z; lra).\nassert (H1 : 0 <= x * y * (y - z)^2) by nra.\nassert (H2 : 0 <= y * z * (z - x)^2) by nra.\nassert (H3 : 0 <= x * z * (x - y)^2) by nra.\nassert (Hid :\n  a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) =\n  2 * (x * y * (y - z)^2 + y * z * (z - x)^2 +\n       x * z * (x - y)^2)) by\n  unfold x, y, z;\n  ring.\nrewrite Hid.\nnra.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"set x := (b + c - a) / 2.\", \"error\": \"(-32003, 'Coq: Syntax error: [ltac_use_default] expected after [tactic] (in [tactic_command]).')\", \"verified_prefix\": [\"intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\"], \"total_goals\": 1, \"goals\": [\"a, b, c  : R\\nHa  : 0 < a\\nHb  : 0 < b\\nHc  : 0 < c\\nHcab  : c < a + b\\nHbac  : b < a + c\\nHacb  : a < b + c\\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\nThe obstruction is syntactic: `set` requires a parenthesized binding, and the nonnegativity facts should be built compositionally rather than asking `nra` to prove quartic products. I will use the Ravi variables with explicit `set (x := ...)` and `Rmult_le_pos`, then discharge the polynomial identity by `ring`.\n\n[TOOL CALL] SearchRocq(command='Check Rmult_le_pos.')\n[TOOL RESULT]\n{\"output\": \"[(3, 'Rmult_le_pos\\\\n     : forall r1 r2 : R, 0 <= r1 -> 0 <= r2 -> 0 <= r1 * r2')]\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"a, b, c  : R\\nHa  : 0 < a\\nHb  : 0 < b\\nHc  : 0 < c\\nHcab  : c < a + b\\nHbac  : b < a + c\\nHacb  : a < b + c\\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)\"], \"next\": null}\n\n[ASSISTANT]\n```rocq\nintros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\nset (x := (b + c - a) / 2).\nset (y := (c + a - b) / 2).\nset (z := (a + b - c) / 2).\nassert (Hx : 0 < x) by (unfold x; lra).\nassert (Hy : 0 < y) by (unfold y; lra).\nassert (Hz : 0 < z) by (unfold z; lra).\nassert (Hxy : 0 <= x * y) by nra.\nassert (Hyz : 0 <= y * z) by nra.\nassert (Hxz : 0 <= x * z) by nra.\nassert (Hsq1 : 0 <= (y - z)^2) by apply Rle_0_sqr.\nassert (Hsq2 : 0 <= (z - x)^2) by apply Rle_0_sqr.\nassert (Hsq3 : 0 <= (x - y)^2) by apply Rle_0_sqr.\nassert (H1 : 0 <= x * y * (y - z)^2) by\n  apply Rmult_le_pos; assumption.\nassert (H2 : 0 <= y * z * (z - x)^2) by\n  apply Rmult_le_pos; assumption.\nassert (H3 : 0 <= x * z * (x - y)^2) by\n  apply Rmult_le_pos; assumption.\nassert (Hid :\n  a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) =\n  2 * (x * y * (y - z)^2 + y * z * (z - x)^2 +\n       x * z * (x - y)^2)) by\n  unfold x, y, z;\n  ring.\nrewrite Hid.\nnra.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"assert (Hsq1 : 0 <= (y - z)^2) by apply Rle_0_sqr.\", \"error\": \"(-32003, 'Coq: In environment\\\\na, b, c : R\\\\nHa : 0 < a\\\\nHb : 0 < b\\\\nHc : 0 < c\\\\nHcab : c < a + b\\\\nHbac : b < a + c\\\\nHacb : a < b + c\\\\nx := (b + c - a) / 2 : R\\\\ny := (c + a - b) / 2 : R\\\\nz := (a + b - c) / 2 : R\\\\nHx : 0 < x\\\\nHy : 0 < y\\\\nHz : 0 < z\\\\nHxy : 0 <= x * y\\\\nHyz : 0 <= y * z\\\\nHxz : 0 <= x * z\\\\nUnable to unify\\\\n \\\"(fix pow (r : R) (n : nat) {struct n} : R :=\\\\n     match n with\\\\n     | 0%nat => 1\\\\n     | S n0 => r * pow r n0\\\\n     end)\\\\n    (y - z) 1%nat\\\"\\\\nwith \\\"y - z\\\".')\", \"verified_prefix\": [\"intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\", \"set (x := (b + c - a) / 2).\", \"set (y := (c + a - b) / 2).\", \"set (z := (a + b - c) / 2).\", \"assert (Hx : 0 < x) by (unfold x; lra).\", \"assert (Hy : 0 < y) by (unfold y; lra).\", \"assert (Hz : 0 < z) by (unfold z; lra).\", \"assert (Hxy : 0 <= x * y) by nra.\", \"assert (Hyz : 0 <= y * z) by nra.\", \"assert (Hxz : 0 <= x * z) by nra.\"], \"total_goals\": 1, \"goals\": [\"a, b, c  : R\\nHa  : 0 < a\\nHb  : 0 < b\\nHc  : 0 < c\\nHcab  : c < a + b\\nHbac  : b < a + c\\nHacb  : a < b + c\\nx := (b + c - a) / 2 : R\\ny := (c + a - b) / 2 : R\\nz := (a + b - c) / 2 : R\\nHx  : 0 < x\\nHy  : 0 < y\\nHz  : 0 < z\\nHxy  : 0 <= x * y\\nHyz  : 0 <= y * z\\nHxz  : 0 <= x * z\\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\nset (x := (b + c - a) / 2).\nset (y := (c + a - b) / 2).\nset (z := (a + b - c) / 2).\nassert (Hx : 0 < x) by (unfold x; lra).\nassert (Hy : 0 < y) by (unfold y; lra).\nassert (Hz : 0 < z) by (unfold z; lra).\nassert (Hxy : 0 <= x * y) by nra.\nassert (Hyz : 0 <= y * z) by nra.\nassert (Hxz : 0 <= x * z) by nra.\nassert (Hsq1 : 0 <= (y - z) * (y - z)) by\n  apply Rle_0_sqr.\nassert (Hsq2 : 0 <= (z - x) * (z - x)) by\n  apply Rle_0_sqr.\nassert (Hsq3 : 0 <= (x - y) * (x - y)) by\n  apply Rle_0_sqr.\nassert (H1 : 0 <= x * y * ((y - z) * (y - z))) by\n  apply Rmult_le_pos; assumption.\nassert (H2 : 0 <= y * z * ((z - x) * (z - x))) by\n  apply Rmult_le_pos; assumption.\nassert (H3 : 0 <= x * z * ((x - y) * (x - y))) by\n  apply Rmult_le_pos; assumption.\nassert (Hid :\n  a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) =\n  2 * (x * y * ((y - z) * (y - z)) +\n       y * z * ((z - x) * (z - x)) +\n       x * z * ((x - y) * (x - y)))) by\n  unfold x, y, z;\n  ring.\nrewrite Hid.\nnra.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"assert (H1 : 0 <= x * y * ((y - z) * (y - z))) by apply Rmult_le_pos; assumption.\", \"error\": \"(-32003, 'Coq: Proof is not complete.')\", \"verified_prefix\": [\"intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\", \"set (x := (b + c - a) / 2).\", \"set (y := (c + a - b) / 2).\", \"set (z := (a + b - c) / 2).\", \"assert (Hx : 0 < x) by (unfold x; lra).\", \"assert (Hy : 0 < y) by (unfold y; lra).\", \"assert (Hz : 0 < z) by (unfold z; lra).\", \"assert (Hxy : 0 <= x * y) by nra.\", \"assert (Hyz : 0 <= y * z) by nra.\", \"assert (Hxz : 0 <= x * z) by nra.\", \"assert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.\", \"assert (Hsq2 : 0 <= (z - x) * (z - x)) by apply Rle_0_sqr.\", \"assert (Hsq3 : 0 <= (x - y) * (x - y)) by apply Rle_0_sqr.\"], \"total_goals\": 1, \"goals\": [\"a, b, c  : R\\nHa  : 0 < a\\nHb  : 0 < b\\nHc  : 0 < c\\nHcab  : c < a + b\\nHbac  : b < a + c\\nHacb  : a < b + c\\nx := (b + c - a) / 2 : R\\ny := (c + a - b) / 2 : R\\nz := (a + b - c) / 2 : R\\nHx  : 0 < x\\nHy  : 0 < y\\nHz  : 0 < z\\nHxy  : 0 <= x * y\\nHyz  : 0 <= y * z\\nHxz  : 0 <= x * z\\nHsq1  : 0 <= (y - z) * (y - z)\\nHsq2  : 0 <= (z - x) * (z - x)\\nHsq3  : 0 <= (x - y) * (x - y)\\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\nset (x := (b + c - a) / 2).\nset (y := (c + a - b) / 2).\nset (z := (a + b - c) / 2).\nassert (Hx : 0 < x) by (unfold x; lra).\nassert (Hy : 0 < y) by (unfold y; lra).\nassert (Hz : 0 < z) by (unfold z; lra).\nassert (Hxy : 0 <= x * y) by nra.\nassert (Hyz : 0 <= y * z) by nra.\nassert (Hxz : 0 <= x * z) by nra.\nassert (Hsq1 : 0 <= (y - z) * (y - z)) by\n  apply Rle_0_sqr.\nassert (Hsq2 : 0 <= (z - x) * (z - x)) by\n  apply Rle_0_sqr.\nassert (Hsq3 : 0 <= (x - y) * (x - y)) by\n  apply Rle_0_sqr.\nassert (H1 : 0 <= x * y * ((y - z) * (y - z))) by\n  exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).\nassert (H2 : 0 <= y * z * ((z - x) * (z - x))) by\n  exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).\nassert (H3 : 0 <= x * z * ((x - y) * (x - y))) by\n  exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3).\nassert (Hid :\n  a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) =\n  2 * (x * y * ((y - z) * (y - z)) +\n       y * z * ((z - x) * (z - x)) +\n       x * z * ((x - y) * (x - y)))) by\n  unfold x, y, z;\n  ring.\nrewrite Hid.\nnra.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"assert (Hid : a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) = 2 * (x * y * ((y - z) * (y - z)) + y * z * ((z - x) * (z - x)) + x * z * ((x - y) * (x - y)))) by unfold x, y, z; ring.\", \"error\": \"(-32003, 'Coq: Proof is not complete.')\", \"verified_prefix\": [\"intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\", \"set (x := (b + c - a) / 2).\", \"set (y := (c + a - b) / 2).\", \"set (z := (a + b - c) / 2).\", \"assert (Hx : 0 < x) by (unfold x; lra).\", \"assert (Hy : 0 < y) by (unfold y; lra).\", \"assert (Hz : 0 < z) by (unfold z; lra).\", \"assert (Hxy : 0 <= x * y) by nra.\", \"assert (Hyz : 0 <= y * z) by nra.\", \"assert (Hxz : 0 <= x * z) by nra.\", \"assert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.\", \"assert (Hsq2 : 0 <= (z - x) * (z - x)) by apply Rle_0_sqr.\", \"assert (Hsq3 : 0 <= (x - y) * (x - y)) by apply Rle_0_sqr.\", \"assert (H1 : 0 <= x * y * ((y - z) * (y - z))) by exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).\", \"assert (H2 : 0 <= y * z * ((z - x) * (z - x))) by exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).\", \"assert (H3 : 0 <= x * z * ((x - y) * (x - y))) by exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3).\"], \"total_goals\": 1, \"goals\": [\"a, b, c  : R\\nHa  : 0 < a\\nHb  : 0 < b\\nHc  : 0 < c\\nHcab  : c < a + b\\nHbac  : b < a + c\\nHacb  : a < b + c\\nx := (b + c - a) / 2 : R\\ny := (c + a - b) / 2 : R\\nz := (a + b - c) / 2 : R\\nHx  : 0 < x\\nHy  : 0 < y\\nHz  : 0 < z\\nHxy  : 0 <= x * y\\nHyz  : 0 <= y * z\\nHxz  : 0 <= x * z\\nHsq1  : 0 <= (y - z) * (y - z)\\nHsq2  : 0 <= (z - x) * (z - x)\\nHsq3  : 0 <= (x - y) * (x - y)\\nH1  : 0 <= x * y * ((y - z) * (y - z))\\nH2  : 0 <= y * z * ((z - x) * (z - x))\\nH3  : 0 <= x * z * ((x - y) * (x - y))\\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\nset (x := (b + c - a) / 2).\nset (y := (c + a - b) / 2).\nset (z := (a + b - c) / 2).\nassert (Hx : 0 < x) by (unfold x; lra).\nassert (Hy : 0 < y) by (unfold y; lra).\nassert (Hz : 0 < z) by (unfold z; lra).\nassert (Hxy : 0 <= x * y) by nra.\nassert (Hyz : 0 <= y * z) by nra.\nassert (Hxz : 0 <= x * z) by nra.\nassert (Hsq1 : 0 <= (y - z) * (y - z)) by\n  apply Rle_0_sqr.\nassert (Hsq2 : 0 <= (z - x) * (z - x)) by\n  apply Rle_0_sqr.\nassert (Hsq3 : 0 <= (x - y) * (x - y)) by\n  apply Rle_0_sqr.\nassert (H1 : 0 <= x * y * ((y - z) * (y - z))) by\n  exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).\nassert (H2 : 0 <= y * z * ((z - x) * (z - x))) by\n  exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).\nassert (H3 : 0 <= x * z * ((x - y) * (x - y))) by\n  exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3).\nassert (Hay : a = y + z) by (unfold y z; lra).\nassert (Hbx : b = z + x) by (unfold z x; lra).\nassert (Hcy : c = x + y) by (unfold x y; lra).\nrewrite Hay, Hbx, Hcy.\nchange (0 <=\n  (y + z)^2 * (z + x) * (y - x) +\n  (z + x)^2 * (x + y) * (z - y) +\n  (x + y)^2 * (y + z) * (x - z)).\nring_simplify.\nnra.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"assert (Hay : a = y + z) by (unfold y z; lra).\", \"error\": \"(-32003, \\\"Coq: Syntax error: ')' expected after [ltac_expr] (in [ltac_expr]).\\\")\", \"verified_prefix\": [\"intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\", \"set (x := (b + c - a) / 2).\", \"set (y := (c + a - b) / 2).\", \"set (z := (a + b - c) / 2).\", \"assert (Hx : 0 < x) by (unfold x; lra).\", \"assert (Hy : 0 < y) by (unfold y; lra).\", \"assert (Hz : 0 < z) by (unfold z; lra).\", \"assert (Hxy : 0 <= x * y) by nra.\", \"assert (Hyz : 0 <= y * z) by nra.\", \"assert (Hxz : 0 <= x * z) by nra.\", \"assert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.\", \"assert (Hsq2 : 0 <= (z - x) * (z - x)) by apply Rle_0_sqr.\", \"assert (Hsq3 : 0 <= (x - y) * (x - y)) by apply Rle_0_sqr.\", \"assert (H1 : 0 <= x * y * ((y - z) * (y - z))) by exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).\", \"assert (H2 : 0 <= y * z * ((z - x) * (z - x))) by exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).\", \"assert (H3 : 0 <= x * z * ((x - y) * (x - y))) by exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3).\"], \"total_goals\": 1, \"goals\": [\"a, b, c  : R\\nHa  : 0 < a\\nHb  : 0 < b\\nHc  : 0 < c\\nHcab  : c < a + b\\nHbac  : b < a + c\\nHacb  : a < b + c\\nx := (b + c - a) / 2 : R\\ny := (c + a - b) / 2 : R\\nz := (a + b - c) / 2 : R\\nHx  : 0 < x\\nHy  : 0 < y\\nHz  : 0 < z\\nHxy  : 0 <= x * y\\nHyz  : 0 <= y * z\\nHxz  : 0 <= x * z\\nHsq1  : 0 <= (y - z) * (y - z)\\nHsq2  : 0 <= (z - x) * (z - x)\\nHsq3  : 0 <= (x - y) * (x - y)\\nH1  : 0 <= x * y * ((y - z) * (y - z))\\nH2  : 0 <= y * z * ((z - x) * (z - x))\\nH3  : 0 <= x * z * ((x - y) * (x - y))\\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)\"], \"automation\": [null], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\nset (x := (b + c - a) / 2).\nset (y := (c + a - b) / 2).\nset (z := (a + b - c) / 2).\nassert (Hx : 0 < x) by (unfold x; lra).\nassert (Hy : 0 < y) by (unfold y; lra).\nassert (Hz : 0 < z) by (unfold z; lra).\nassert (Hxy : 0 <= x * y) by nra.\nassert (Hyz : 0 <= y * z) by nra.\nassert (Hxz : 0 <= x * z) by nra.\nassert (Hsq1 : 0 <= (y - z) * (y - z)) by\n  apply Rle_0_sqr.\nassert (Hsq2 : 0 <= (z - x) * (z - x)) by\n  apply Rle_0_sqr.\nassert (Hsq3 : 0 <= (x - y) * (x - y)) by\n  apply Rle_0_sqr.\nassert (H1 : 0 <= x * y * ((y - z) * (y - z))) by\n  exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).\nassert (H2 : 0 <= y * z * ((z - x) * (z - x))) by\n  exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).\nassert (H3 : 0 <= x * z * ((x - y) * (x - y))) by\n  exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3).\nassert (Hid :\n  a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) =\n  2 * (x * y * ((y - z) * (y - z)) +\n       y * z * ((z - x) * (z - x)) +\n       x * z * ((x - y) * (x - y)))).\n{\n  unfold x, y, z.\n  field_simplify.\n  ring.\n}\nrewrite Hid.\nnra.\n```\n\n[VERIFIER FEEDBACK]\n{\"outcome\": \"rejected\", \"failing_tactic\": \"ring.\", \"error\": \"(-32003, 'Coq: Tactic failure: not a valid ring equation.')\", \"verified_prefix\": [\"intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\", \"set (x := (b + c - a) / 2).\", \"set (y := (c + a - b) / 2).\", \"set (z := (a + b - c) / 2).\", \"assert (Hx : 0 < x) by (unfold x; lra).\", \"assert (Hy : 0 < y) by (unfold y; lra).\", \"assert (Hz : 0 < z) by (unfold z; lra).\", \"assert (Hxy : 0 <= x * y) by nra.\", \"assert (Hyz : 0 <= y * z) by nra.\", \"assert (Hxz : 0 <= x * z) by nra.\", \"assert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.\", \"assert (Hsq2 : 0 <= (z - x) * (z - x)) by apply Rle_0_sqr.\", \"assert (Hsq3 : 0 <= (x - y) * (x - y)) by apply Rle_0_sqr.\", \"assert (H1 : 0 <= x * y * ((y - z) * (y - z))) by exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).\", \"assert (H2 : 0 <= y * z * ((z - x) * (z - x))) by exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).\", \"assert (H3 : 0 <= x * z * ((x - y) * (x - y))) by exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3).\", \"assert (Hid : a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) = 2 * (x * y * ((y - z) * (y - z)) + y * z * ((z - x) * (z - x)) + x * z * ((x - y) * (x - y)))).\", \"{ unfold x, y, z.\", \"field_simplify.\"], \"total_goals\": 1, \"goals\": [\"a, b, c  : R\\nHa  : 0 < a\\nHb  : 0 < b\\nHc  : 0 < c\\nHcab  : c < a + b\\nHbac  : b < a + c\\nHacb  : a < b + c\\nx := (b + c - a) / 2 : R\\ny := (c + a - b) / 2 : R\\nz := (a + b - c) / 2 : R\\nHx  : 0 < x\\nHy  : 0 < y\\nHz  : 0 < z\\nHxy  : 0 <= x * y\\nHyz  : 0 <= y * z\\nHxz  : 0 <= x * z\\nHsq1  : 0 <= (y - z) * (y - z)\\nHsq2  : 0 <= (z - x) * (z - x)\\nHsq3  : 0 <= (x - y) * (x - y)\\nH1  : 0 <= x * y * ((y - z) * (y - z))\\nH2  : 0 <= y * z * ((z - x) * (z - x))\\nH3  : 0 <= x * z * ((x - y) * (x - y))\\n|-a ^ 3 * b - a ^ 2 * b ^ 2 - a ^ 2 * c ^ 2 + a * c ^ 3 + b ^ 3 * c -\\nb ^ 2 * c ^ 2 =\\n(16 * a ^ 3 * b - 16 * a ^ 2 * b ^ 2 - 16 * a ^ 2 * c ^ 2 + 16 * a * c ^ 3 +\\n 16 * b ^ 3 * c - 16 * b ^ 2 * c ^ 2) /\\n16\"], \"automation\": [\"lra.\"], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}\n\n\n[ASSISTANT]\n```rocq\nintros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\nset (x := (b + c - a) / 2).\nset (y := (c + a - b) / 2).\nset (z := (a + b - c) / 2).\nassert (Hx : 0 < x) by (unfold x; lra).\nassert (Hy : 0 < y) by (unfold y; lra).\nassert (Hz : 0 < z) by (unfold z; lra).\nassert (Hxy : 0 <= x * y) by nra.\nassert (Hyz : 0 <= y * z) by nra.\nassert (Hxz : 0 <= x * z) by nra.\nassert (Hsq1 : 0 <= (y - z) * (y - z)) by\n  apply Rle_0_sqr.\nassert (Hsq2 : 0 <= (z - x) * (z - x)) by\n  apply Rle_0_sqr.\nassert (Hsq3 : 0 <= (x - y) * (x - y)) by\n  apply Rle_0_sqr.\nassert (H1 : 0 <= x * y * ((y - z) * (y - z))) by\n  exact (Rmult_le_pos (x * y) ((y - z) * (y - z)) Hxy Hsq1).\nassert (H2 : 0 <= y * z * ((z - x) * (z - x))) by\n  exact (Rmult_le_pos (y * z) ((z - x) * (z - x)) Hyz Hsq2).\nassert (H3 : 0 <= x * z * ((x - y) * (x - y))) by\n  exact (Rmult_le_pos (x * z) ((x - y) * (x - y)) Hxz Hsq3).\nassert (Hid :\n  a^2 * b * (a - b) + b^2 * c * (b - c) + c^2 * a * (c - a) =\n  2 * (x * y * ((y - z) * (y - z)) +\n       y * z * ((z - x) * (z - x)) +\n       x * z * ((x - y) * (x - y)))).\n{\n  unfold x, y, z.\n  field_simplify.\n  lra.\n}\nrewrite Hid.\nnra.\n```"
+  },
+  "guidance": false
+}

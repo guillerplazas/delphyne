@@ -1,0 +1,1310 @@
+{
+  "after": {
+    "bullets": [
+      {
+        "content": "When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n",
+        "harmful": 0,
+        "helpful": 5,
+        "id": "rocq-00001",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For an induction hypothesis relating recursive `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then apply `rewrite IH; lia`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00002",
+        "section": "tactics"
+      },
+      {
+        "content": "For goals over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use `intros` followed by `nia`; it can handle the nonlinear products and truncated subtraction directly.\n",
+        "harmful": 3,
+        "helpful": 4,
+        "id": "rocq-00003",
+        "section": "tactics"
+      },
+      {
+        "content": "For closed `nat` equalities built from executable finite-list operations such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`; use `reflexivity` afterward if the resulting definitional equality is not closed automatically.\n",
+        "harmful": 1,
+        "helpful": 1,
+        "id": "rocq-00004",
+        "section": "tactics"
+      },
+      {
+        "content": "When applying a recurrence hypothesis whose predecessor uses truncated subtraction, first prove the exact natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality before applying the hypothesis so its indices unify.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00005",
+        "section": "pitfalls"
+      },
+      {
+        "content": "Under an active `R_scope`, annotate natural-number indices, arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion and comparison-type errors.\n",
+        "harmful": 0,
+        "helpful": 6,
+        "id": "rocq-00006",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00007",
+        "section": "lemmas"
+      },
+      {
+        "content": "For finite nonnegative real sequences with a fixed-sum product goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00009",
+        "section": "strategy"
+      },
+      {
+        "content": "Do not obtain a successor product bound by multiplying an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`. An induction proof must retain a bound parameterized by the total sum or average.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00010",
+        "section": "pitfalls"
+      },
+      {
+        "content": "Before using `nra` in AM-GM base or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition; `nra` cannot reason through opaque recursive definitions or supply the global inequality.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00011",
+        "section": "tactics"
+      },
+      {
+        "content": "For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately for completing-square identities before finishing the resulting linear inequality with `lra`.\n",
+        "harmful": 0,
+        "helpful": 2,
+        "id": "rocq-00012",
+        "section": "tactics"
+      },
+      {
+        "content": "For positivity of a recursive real product whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity through opaque recursive products.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00013",
+        "section": "lemmas"
+      },
+      {
+        "content": "For natural-number product bounds, use `Nat.mul_le_mono` to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply an established inequality by a nonnegative factor; provide the premises in the lemma's expected order instead of guessing a multiplication-monotonicity API.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00014",
+        "section": "lemmas"
+      },
+      {
+        "content": "To lift a natural bound into `R`, expose the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <= INR c; apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent `.mpr` projection.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00015",
+        "section": "lemmas"
+      },
+      {
+        "content": "For real equations involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead of relying on `field_simplify` to normalize it.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00016",
+        "section": "pitfalls"
+      },
+      {
+        "content": "To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00017",
+        "section": "tactics"
+      },
+      {
+        "content": "For bounded natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce only explicitly closed numeral cases, using `change` to expose a known numeral equality when needed.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00018",
+        "section": "pitfalls"
+      },
+      {
+        "content": "When proving a least witness by finite exclusion, first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch immediately, handle the finitely many numeral cases explicitly under `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors.\n",
+        "harmful": 1,
+        "helpful": 1,
+        "id": "rocq-00019",
+        "section": "strategy"
+      },
+      {
+        "content": "For instantiated recurrence equations containing closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then normalize each index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation chain.\n",
+        "harmful": 1,
+        "helpful": 0,
+        "id": "rocq-00020",
+        "section": "tactics"
+      },
+      {
+        "content": "For an explicit `Ensemble` built from nested `Add`, first unfold `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions and `False` cases are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer by layer, prove each freshness premise by unfolding `In` and `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00021",
+        "section": "tactics"
+      },
+      {
+        "content": "For trigonometric goals involving complementary or doubled angles, use the library lemma with the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00022",
+        "section": "lemmas"
+      },
+      {
+        "content": "For logarithmic inequalities and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use the resulting instantiated equality directly.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00023",
+        "section": "lemmas"
+      },
+      {
+        "content": "For an unbounded quadratic equation over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction from the original equation.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00024",
+        "section": "tactics"
+      },
+      {
+        "content": "A closed cast such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality, for example with `cbv [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00025",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For a target or hypothesis containing `ln (a * b)`, prove positivity of both factors explicitly; when a factor is an `Rpower`, unfold `Rpower` and apply `exp_pos`, rather than reusing positivity of the enclosing product. Then rewrite with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation does not expose this logarithmic product identity or supply its positivity premises.",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00026",
+        "section": "lemmas"
+      },
+      {
+        "content": "For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00027",
+        "section": "lemmas"
+      },
+      {
+        "content": "After rewriting a defining polynomial equation into multiple root hypotheses, prove a factor such as `b <> 0` by assuming it is zero, substituting with `subst`, applying the given disequality, and using `nra` on the exposed equations to derive the contradiction.",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00028",
+        "section": "pitfalls"
+      },
+      {
+        "content": "When `prime_divisors` yields a nested binary disjunction in an integer-arithmetic proof, destruct it with a right-nested pattern matching the actual two-branch structure, for example `destruct (...) as [H | [H | [H | H]]].`; then use `nia` in each resulting branch, preserving the active bullet.",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00029",
+        "section": "tactics"
+      }
+    ],
+    "next_id": 30
+  },
+  "before": {
+    "bullets": [
+      {
+        "content": "When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n",
+        "harmful": 0,
+        "helpful": 5,
+        "id": "rocq-00001",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For an induction hypothesis relating recursive `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then apply `rewrite IH; lia`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00002",
+        "section": "tactics"
+      },
+      {
+        "content": "For goals over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use `intros` followed by `nia`; it can handle the nonlinear products and truncated subtraction directly.\n",
+        "harmful": 3,
+        "helpful": 4,
+        "id": "rocq-00003",
+        "section": "tactics"
+      },
+      {
+        "content": "For closed `nat` equalities built from executable finite-list operations such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`; use `reflexivity` afterward if the resulting definitional equality is not closed automatically.\n",
+        "harmful": 1,
+        "helpful": 1,
+        "id": "rocq-00004",
+        "section": "tactics"
+      },
+      {
+        "content": "When applying a recurrence hypothesis whose predecessor uses truncated subtraction, first prove the exact natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality before applying the hypothesis so its indices unify.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00005",
+        "section": "pitfalls"
+      },
+      {
+        "content": "Under an active `R_scope`, annotate natural-number indices, arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion and comparison-type errors.\n",
+        "harmful": 0,
+        "helpful": 6,
+        "id": "rocq-00006",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00007",
+        "section": "lemmas"
+      },
+      {
+        "content": "For finite nonnegative real sequences with a fixed-sum product goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00009",
+        "section": "strategy"
+      },
+      {
+        "content": "Do not obtain a successor product bound by multiplying an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`. An induction proof must retain a bound parameterized by the total sum or average.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00010",
+        "section": "pitfalls"
+      },
+      {
+        "content": "Before using `nra` in AM-GM base or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition; `nra` cannot reason through opaque recursive definitions or supply the global inequality.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00011",
+        "section": "tactics"
+      },
+      {
+        "content": "For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately for completing-square identities before finishing the resulting linear inequality with `lra`.\n",
+        "harmful": 0,
+        "helpful": 2,
+        "id": "rocq-00012",
+        "section": "tactics"
+      },
+      {
+        "content": "For positivity of a recursive real product whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity through opaque recursive products.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00013",
+        "section": "lemmas"
+      },
+      {
+        "content": "For natural-number product bounds, use `Nat.mul_le_mono` to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply an established inequality by a nonnegative factor; provide the premises in the lemma's expected order instead of guessing a multiplication-monotonicity API.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00014",
+        "section": "lemmas"
+      },
+      {
+        "content": "To lift a natural bound into `R`, expose the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change INR 2 <= INR c; apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent `.mpr` projection.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00015",
+        "section": "lemmas"
+      },
+      {
+        "content": "For real equations involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead of relying on `field_simplify` to normalize it.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00016",
+        "section": "pitfalls"
+      },
+      {
+        "content": "To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00017",
+        "section": "tactics"
+      },
+      {
+        "content": "For bounded natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce only explicitly closed numeral cases, using `change` to expose a known numeral equality when needed.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00018",
+        "section": "pitfalls"
+      },
+      {
+        "content": "When proving a least witness by finite exclusion, first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch immediately, handle the finitely many numeral cases explicitly under `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors.\n",
+        "harmful": 1,
+        "helpful": 1,
+        "id": "rocq-00019",
+        "section": "strategy"
+      },
+      {
+        "content": "For instantiated recurrence equations containing closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then normalize each index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation chain.\n",
+        "harmful": 1,
+        "helpful": 0,
+        "id": "rocq-00020",
+        "section": "tactics"
+      },
+      {
+        "content": "For an explicit `Ensemble` built from nested `Add`, first unfold `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions and `False` cases are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer by layer, prove each freshness premise by unfolding `In` and `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00021",
+        "section": "tactics"
+      },
+      {
+        "content": "For trigonometric goals involving complementary or doubled angles, use the library lemma with the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00022",
+        "section": "lemmas"
+      },
+      {
+        "content": "For logarithmic inequalities and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use the resulting instantiated equality directly.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00023",
+        "section": "lemmas"
+      },
+      {
+        "content": "For an unbounded quadratic equation over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction from the original equation.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00024",
+        "section": "tactics"
+      },
+      {
+        "content": "A closed cast such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality, for example with `cbv [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00025",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For a target or hypothesis containing `ln (a * b)`, prove positivity of both factors explicitly; when a factor is an `Rpower`, unfold `Rpower` and apply `exp_pos`, rather than reusing positivity of the enclosing product. Then rewrite with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation does not expose this logarithmic product identity or supply its positivity premises.",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00026",
+        "section": "lemmas"
+      },
+      {
+        "content": "For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00027",
+        "section": "lemmas"
+      },
+      {
+        "content": "After rewriting a defining polynomial equation into multiple root hypotheses, prove a factor such as `b <> 0` by assuming it is zero, substituting with `subst`, applying the given disequality, and using `nra` on the exposed equations to derive the contradiction.",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00028",
+        "section": "pitfalls"
+      }
+    ],
+    "next_id": 29
+  },
+  "edits": [
+    {
+      "action": "add",
+      "before_sha256": "",
+      "content": "When `prime_divisors` yields a nested binary disjunction in an integer-arithmetic proof, destruct it with a right-nested pattern matching the actual two-branch structure, for example `destruct (...) as [H | [H | [H | H]]].`; then use `nia` in each resulting branch, preserving the active bullet.",
+      "reason": "Evidence support: supported. The executed snippet successfully destructed `prime_divisors p Hpp 2 Hdiv` using the right-nested four-branch pattern and discharged the resulting even-case goal with `nia`; only the enclosing theorem's separate odd-case obligation remained. This is a distinct disjunction-shape operation from b23's bounded quadratic strategy.",
+      "receipts": [
+        "snippet-aac67075793ee08e598ae798"
+      ],
+      "section": "tactics",
+      "target_id": "rocq-00029"
+    },
+    {
+      "action": "example",
+      "before_sha256": "a1263a17b8fcbafc7a2f6ebecee6c3a8697406f52a8584a48d295640bd1ab9f6",
+      "content": "",
+      "reason": "Evidence support: supported. The executed replacements normalize the instantiated ln_pow equality from ln (2 ^ 3) = (1 + 1 + 1) * ln 2 to ln 8 = 3 * ln 2, discharging the original local obligation. The enclosing theorem remains open, and the empty proposed text is an example of b22 rather than new advice.",
+      "receipts": [
+        "snippet-162a29bb737c8659e16917c7"
+      ],
+      "section": "",
+      "target_id": "rocq-00023"
+    }
+  ],
+  "writer": {
+    "base_sha256": "af399ace24aab264c2305deab106774d7c93dab58b1a2b42e7e7b81db3817498",
+    "contexts": [
+      {
+        "environment": "Require Import ZArith.\nRequire Import Nat.\nRequire Import PArith.\nRequire Import Arith.\nRequire Import Znumtheory.\nRequire Import Lia.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros Hp Hq Hpp Hpq Hpbound Hqbound Heq.",
+          "destruct (Zeven_odd_dec p) as [Hpe | Hpo].",
+          "- destruct (Zeven_ex p Hpe) as [k Hpk].",
+          "assert (Hdiv : (2 | p)%Z).",
+          "{ exists k.",
+          "nia.",
+          "}"
+        ],
+        "problem_file": "miniF2F/test/amc/amc12_2000_p6.v",
+        "problem_sha256": "683be44c862465779357878c4cbd30909ce1b6967cf03395ab0cf59f188e8e19",
+        "source": "166971fc823db5e7eb78efc0ed8ededbbdb463292cd8014979e0754f2e3177f2",
+        "theorem_name": "amc12_2000_p6",
+        "version": 1
+      },
+      {
+        "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros x Hx Heq.",
+          "unfold logb in *.",
+          "assert (Hln2 : 0 < ln 2).",
+          "{ rewrite <- ln_1.",
+          "apply ln_increasing.",
+          "- lra.",
+          "- lra.",
+          "}",
+          "assert (Hlnx : 0 < ln x).",
+          "{ rewrite <- ln_1.",
+          "apply ln_increasing.",
+          "- lra.",
+          "- lra.",
+          "}",
+          "assert (Hln8 : ln 8 = 3 * ln 2).",
+          "{ assert (Htwo : (0:R) < 2) by lra.",
+          "pose proof (ln_pow 2 Htwo 3) as H.",
+          "cbv [INR] in H."
+        ],
+        "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+        "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+        "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+        "theorem_name": "aime_1988_p3",
+        "version": 1
+      },
+      {
+        "environment": "Require Import Reals.\nRequire Import Psatz.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros a b Ha Hb Hab Haa Hbb.",
+          "assert (Ha0 : a <> 0) by nra.",
+          "assert (Hb0 : b <> 0) by nra.",
+          "destruct (Rle_or_lt 0 (a - 1 / a)) as [Hap | Han].",
+          "- rewrite (Rabs_pos_eq _ Hap) in Haa.",
+          "assert (Haa' : a * a - a - 1 = 0).",
+          "{ assert (Hm : a * (a - 1 / a) = a) by nra.",
+          "unfold Rdiv in Hm.",
+          "assert (Hi : a * / a = 1).",
+          "{ apply Rinv_r.",
+          "exact Ha0. }",
+          "nra. }",
+          "destruct (Rle_or_lt 0 (b - 1 / b)) as [Hbp | Hbn].",
+          "+ rewrite (Rabs_pos_eq _ Hbp) in Hbb.",
+          "assert (Hbb' : b * b - b - 1 = 0).",
+          "{ assert (Hm : b * (b - 1 / b) = b) by nra.",
+          "unfold Rdiv in Hm.",
+          "assert (Hi : b * / b = 1).",
+          "{ apply Rinv_r.",
+          "exact Hb0. }",
+          "nra. }",
+          "assert (Hap1 : 1 < a) by nra.",
+          "assert (Hbp1 : 1 < b) by nra.",
+          "exfalso.",
+          "apply Hab.",
+          "nra.",
+          "+ rewrite (Rabs_left _ Hbn) in Hbb.",
+          "assert (Hbb' : b * b + b - 1 = 0).",
+          "{ assert (Hm : b * (b - 1 / b) = - b) by nra.",
+          "unfold Rdiv in Hm.",
+          "assert (Hi : b * / b = 1).",
+          "{ apply Rinv_r.",
+          "exact Hb0. }",
+          "nra. }",
+          "assert (Hs : (a + b) * (a + b) = 5) by nra.",
+          "assert (Hr : (sqrt 5) * (sqrt 5) = 5).",
+          "{ pose proof (Rsqr_sqrt 5) as H."
+        ],
+        "problem_file": "miniF2F/test/amc/amc12a_2002_p13.v",
+        "problem_sha256": "c07fe677a8f5a3d154a19cb6276948ec9b07d641cb844848c1db20704c076f69",
+        "source": "ecc249164236aa334d3e8b9592c9034c2c5172e34b1db72a610f0660493fec5d",
+        "theorem_name": "amc12a_2002_p13",
+        "version": 1
+      },
+      {
+        "environment": "Require Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros i m o H.",
+          "destruct H as [Him [Hmo [Hoi Hprod]]].",
+          "assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <= 671).",
+          "{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.",
+          "destruct (eq_nat_dec x 1) as [Hx1 | Hx1].",
+          "- subst x.",
+          "assert (Hy3 : 3 <= y) by nia.",
+          "assert (Hyy : y * y <= y * z).",
+          "{ apply Nat.mul_le_mono_l. exact Hyz. }",
+          "simpl in Hp.",
+          "nia.",
+          "- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].",
+          "+ subst x.",
+          "nia.",
+          "+ assert (Hx3 : 3 <= x) by nia.",
+          "assert (Hy4 : 4 <= y) by nia.",
+          "assert (Hxy12 : 12 <= x * y)."
+        ],
+        "problem_file": "miniF2F/test/amc/amc12_2000_p1.v",
+        "problem_sha256": "bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a",
+        "source": "25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02",
+        "theorem_name": "amc12_2000_p1",
+        "version": 1
+      },
+      {
+        "environment": "Require Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros i m o H.",
+          "destruct H as [Him [Hmo [Hoi Hprod]]].",
+          "assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <= 671).",
+          "{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.",
+          "destruct (eq_nat_dec x 1) as [Hx1 | Hx1].",
+          "- subst x.",
+          "assert (Hy3 : 3 <= y) by nia.",
+          "assert (Hyzprod : 3 * z <= y * z).",
+          "{ apply Nat.mul_le_mono_r. exact Hy3. }",
+          "simpl in Hp."
+        ],
+        "problem_file": "miniF2F/test/amc/amc12_2000_p1.v",
+        "problem_sha256": "bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a",
+        "source": "25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02",
+        "theorem_name": "amc12_2000_p1",
+        "version": 1
+      },
+      {
+        "environment": "Require Import ZArith.\nRequire Import Nat.\nRequire Import PArith.\nRequire Import Arith.\nRequire Import Znumtheory.\nRequire Import Lia.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros Hp Hq Hpp Hpq Hpbound Hqbound Heq.",
+          "destruct (Zeven_odd_dec p) as [Hpe | Hpo].",
+          "- destruct (Zeven_ex p Hpe) as [k Hpk].",
+          "assert (Hdiv : (2 | p)%Z).",
+          "{ exists k.",
+          "nia.",
+          "}",
+          "destruct (prime_divisors p Hpp 2 Hdiv) as [H | [H | [H | H]]].\nall: nia."
+        ],
+        "problem_file": "miniF2F/test/amc/amc12_2000_p6.v",
+        "problem_sha256": "683be44c862465779357878c4cbd30909ce1b6967cf03395ab0cf59f188e8e19",
+        "source": "166971fc823db5e7eb78efc0ed8ededbbdb463292cd8014979e0754f2e3177f2",
+        "theorem_name": "amc12_2000_p6",
+        "version": 1
+      },
+      {
+        "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros x Hx Heq.",
+          "unfold logb in *.",
+          "assert (Hln2 : 0 < ln 2).",
+          "{ rewrite <- ln_1.",
+          "apply ln_increasing.",
+          "- lra.",
+          "- lra.",
+          "}",
+          "assert (Hlnx : 0 < ln x).",
+          "{ rewrite <- ln_1.",
+          "apply ln_increasing.",
+          "- lra.",
+          "- lra.",
+          "}",
+          "assert (Hln8 : ln 8 = 3 * ln 2).",
+          "{ assert (Htwo : (0:R) < 2) by lra.",
+          "pose proof (ln_pow 2 Htwo 3) as H.",
+          "cbv [INR] in H.",
+          "assert (Hp : (2:R)^3 = 8) by ring. rewrite Hp in H. replace ((1 + 1 + 1 : R)) with 3 in H by ring. exact H."
+        ],
+        "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+        "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+        "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+        "theorem_name": "aime_1988_p3",
+        "version": 1
+      },
+      {
+        "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros x Hx Heq.",
+          "unfold logb in *.",
+          "assert (Hln2 : 0 < ln 2).",
+          "{ rewrite <- ln_1.",
+          "apply ln_increasing.",
+          "- lra.",
+          "- lra.",
+          "}",
+          "assert (Hlnx : 0 < ln x).",
+          "{ rewrite <- ln_1.",
+          "apply ln_increasing.",
+          "- lra.",
+          "- lra.",
+          "}",
+          "assert (Hln8 : ln 8 = 3 * ln 2).",
+          "{ assert (Htwo : (0:R) < 2) by lra.",
+          "pose proof (ln_pow 2 Htwo 3) as H.",
+          "cbv [INR] in H.",
+          "replace (2 ^ 3) with (8 : R) in H by ring.\nreplace (1 + 1 + 1 : R) with 3 in H by ring.\nexact H."
+        ],
+        "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+        "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+        "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+        "theorem_name": "aime_1988_p3",
+        "version": 1
+      },
+      {
+        "environment": "Require Import Reals.\nRequire Import Psatz.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros a b Ha Hb Hab Haa Hbb.",
+          "assert (Ha0 : a <> 0) by nra.",
+          "assert (Hb0 : b <> 0) by nra.",
+          "destruct (Rle_or_lt 0 (a - 1 / a)) as [Hap | Han].",
+          "- rewrite (Rabs_pos_eq _ Hap) in Haa.",
+          "assert (Haa' : a * a - a - 1 = 0).",
+          "{ assert (Hm : a * (a - 1 / a) = a) by nra.",
+          "unfold Rdiv in Hm.",
+          "assert (Hi : a * / a = 1).",
+          "{ apply Rinv_r.",
+          "exact Ha0. }",
+          "nra. }",
+          "destruct (Rle_or_lt 0 (b - 1 / b)) as [Hbp | Hbn].",
+          "+ rewrite (Rabs_pos_eq _ Hbp) in Hbb.",
+          "assert (Hbb' : b * b - b - 1 = 0).",
+          "{ assert (Hm : b * (b - 1 / b) = b) by nra.",
+          "unfold Rdiv in Hm.",
+          "assert (Hi : b * / b = 1).",
+          "{ apply Rinv_r.",
+          "exact Hb0. }",
+          "nra. }",
+          "assert (Hap1 : 1 < a) by nra.",
+          "assert (Hbp1 : 1 < b) by nra.",
+          "exfalso.",
+          "apply Hab.",
+          "nra.",
+          "+ rewrite (Rabs_left _ Hbn) in Hbb.",
+          "assert (Hbb' : b * b + b - 1 = 0).",
+          "{ assert (Hm : b * (b - 1 / b) = - b) by nra.",
+          "unfold Rdiv in Hm.",
+          "assert (Hi : b * / b = 1).",
+          "{ apply Rinv_r.",
+          "exact Hb0. }",
+          "nra. }",
+          "assert (Hs : (a + b) * (a + b) = 5) by nra.",
+          "assert (Hr : (sqrt 5) * (sqrt 5) = 5).",
+          "{ pose proof (Rsqr_sqrt 5) as H.",
+          "assert (H5 : (0 : R) <= 5) by lra.\nspecialize (H H5).\nunfold Rsqr in H.\nexact H."
+        ],
+        "problem_file": "miniF2F/test/amc/amc12a_2002_p13.v",
+        "problem_sha256": "c07fe677a8f5a3d154a19cb6276948ec9b07d641cb844848c1db20704c076f69",
+        "source": "ecc249164236aa334d3e8b9592c9034c2c5172e34b1db72a610f0660493fec5d",
+        "theorem_name": "amc12a_2002_p13",
+        "version": 1
+      },
+      {
+        "environment": "Require Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+        "prefix": [
+          "intros i m o H.",
+          "destruct H as [Him [Hmo [Hoi Hprod]]].",
+          "assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <= 671).",
+          "{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.",
+          "destruct (eq_nat_dec x 1) as [Hx1 | Hx1].",
+          "- subst x.",
+          "assert (Hy3 : 3 <= y) by nia.",
+          "assert (Hyy : y * y <= y * z).",
+          "{ apply Nat.mul_le_mono_l. exact Hyz. }",
+          "simpl in Hp.",
+          "nia.",
+          "- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].",
+          "+ subst x.",
+          "nia.",
+          "+ assert (Hx3 : 3 <= x) by nia.",
+          "assert (Hy4 : 4 <= y) by nia.",
+          "assert (Hxy12 : 12 <= x * y).",
+          "assert (H1 : 3 * 4 <= 3 * y) by (apply Nat.mul_le_mono_l; exact Hy4).\nassert (H2 : 3 * y <= x * y) by (apply Nat.mul_le_mono_r; exact Hx3).\nlia."
+        ],
+        "problem_file": "miniF2F/test/amc/amc12_2000_p1.v",
+        "problem_sha256": "bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a",
+        "source": "25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02",
+        "theorem_name": "amc12_2000_p1",
+        "version": 1
+      }
+    ],
+    "diagnostics": [],
+    "drafts": [
+      {
+        "context_id": "ctx-dcf034bb6e2e1b90330d0642",
+        "draft_id": "repair-5298b67c4fdfc7eb5b086e76",
+        "error": "(-32003, 'Coq: Expects a disjunctive pattern with 2 branches.')",
+        "proposed_code": "destruct (prime_divisors p Hpp 2 Hdiv) as [H | [H | [H | H]]].\nall: nia.",
+        "purpose": "Destructure the nested disjunction with a right-nested pattern, then let nia close every prime-factor case.: The disjunction returned by prime_divisors is nested binary, so a flat four-branch pattern is rejected.; At the preserved prefix, Hpp : prime p and Hdiv : (2 | p)%Z are available; preserve the current bullet focus.",
+        "remaining_goals": [
+          "p, q  : Z\nHp  : 0 < p\nHq  : 0 < q\nHpp  : prime p\nHpq  : prime q\nHpbound  : 4 <= p <= 18\nHqbound  : 4 <= q <= 18\nHeq  : p * q - (p + q) = 194\nHpe  : Zeven p\nk  : Z\nHpk  : p = 2 * k\nHdiv  : (2 | p)\n|-False"
+        ],
+        "source": "166971fc823db5e7eb78efc0ed8ededbbdb463292cd8014979e0754f2e3177f2"
+      },
+      {
+        "context_id": "ctx-9df63578b3d69cf3d98ad0b3",
+        "draft_id": "repair-3cda7e555fd33970999af0fd",
+        "error": "(-32003, 'Coq: In environment\\nx : R\\nHx : 1 < x\\nHeq : ln (ln x / ln 8) / ln 2 = ln (ln x / ln 2) / ln 8\\nHln2 : 0 < ln 2\\nHlnx : 0 < ln x\\nHtwo : (0 : R) < 2\\nH : ln (2 ^ 3) = (1 + 1 + 1) * ln 2\\nThe term \"H\" has type \"ln (2 ^ 3) = (1 + 1 + 1) * ln 2\"\\nwhile it is expected to have type \"ln 8 = 3 * ln 2\".')",
+        "proposed_code": "assert (Hp : (2:R)^3 = 8) by ring. rewrite Hp in H. replace ((1 + 1 + 1 : R)) with 3 in H by ring. exact H.",
+        "purpose": "Normalize the closed power and coefficient explicitly with ring, rewrite the power equality, then finish with the normalized ln_pow hypothesis.: The existing ln_pow guidance is incomplete for closed numeral bases: after cbv [INR], the result still contains ln (2 ^ 3) and (1 + 1 + 1), so it cannot be used directly as ln 8 = 3 * ln 2.; Have Htwo : (0:R) < 2 and H : ln (2 ^ 3) = (1 + 1 + 1) * ln 2 from ln_pow followed by cbv [INR]; preserve the current focus.",
+        "remaining_goals": [
+          "x  : R\nHx  : 1 < x\nHeq  : ln (ln x / ln 8) / ln 2 = ln (ln x / ln 2) / ln 8\nHln2  : 0 < ln 2\nHlnx  : 0 < ln x\nHtwo  : (0 : R) < 2\nH  : ln (2 ^ 3) = (1 + 1 + 1) * ln 2\n|-ln 8 = 3 * ln 2"
+        ],
+        "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347"
+      },
+      {
+        "context_id": "ctx-7ab8d1fa361f4066aeb86da1",
+        "draft_id": "repair-c1e900dd49ae20424caec07a",
+        "error": "(-32003, \"Coq: Syntax error: [term level 200] expected after '(' (in [term]).\")",
+        "proposed_code": "assert (H5 : (0 : R) <= 5) by lra.\nspecialize (H H5).\nunfold Rsqr in H.\nexact H.",
+        "purpose": "Prove the numeral nonnegativity with lra, specialize Rsqr_sqrt, unfold Rsqr, and reuse the resulting equality.: The square-root lemma is instantiated with a premise and a squared notation that must be bridged explicitly; norm_num is unavailable, and the target uses multiplication rather than Rsqr notation.; At the current prefix, H : 0 <= 5 -> (sqrt 5)^2 = 5 and the goal is sqrt 5 * sqrt 5 = 5.",
+        "remaining_goals": [
+          "a, b  : R\nHa  : 0 < a\nHb  : 0 < b\nHab  : a <> b\nHaa  : a - 1 / a = 1\nHbb  : - (b - 1 / b) = 1\nHa0  : a <> 0\nHb0  : b <> 0\nHap  : 0 <= a - 1 / a\nHaa'  : a * a - a - 1 = 0\nHbn  : b - 1 / b < 0\nHbb'  : b * b + b - 1 = 0\nHs  : (a + b) * (a + b) = 5\nH  : 0 <= 5 -> (sqrt 5)\u00b2 = 5\n|-sqrt 5 * sqrt 5 = 5"
+        ],
+        "source": "ecc249164236aa334d3e8b9592c9034c2c5172e34b1db72a610f0660493fec5d"
+      },
+      {
+        "context_id": "ctx-719e1705dfca0cc061a10ae3",
+        "draft_id": "repair-8755fff3253c160120e2483b",
+        "error": "(-32003, 'Coq: In environment\\ni, m, o : nat\\nHim : i <> m\\nHmo : m <> o\\nHoi : o <> i\\nHprod : i * m * o = 2001\\nx, y, z : nat\\nHxy : x <= y\\nHyz : y <= z\\nHxyneq : x <> y\\nHyzneq : y <> z\\nHp : x * y * z = 2001\\nHx1 : x <> 1\\nHx2 : x <> 2\\nHx3 : 3 <= x\\nHy4 : 4 <= y\\nUnable to unify \"?M1849 * ?M1851 <= ?M1850 * ?M1852\" with \\n\"12 <= x * y\".')",
+        "proposed_code": "assert (H1 : 3 * 4 <= 3 * y) by (apply Nat.mul_le_mono_l; exact Hy4).\nassert (H2 : 3 * y <= x * y) by (apply Nat.mul_le_mono_r; exact Hx3).\n nia.",
+        "purpose": "Build `3*4 <= 3*y` from `4 <= y`, build `3*y <= x*y` from `3 <= x`, then let `nia` combine the chain and normalize `3*4` to 12.: The recorded `Nat.mul_le_mono` attempt is the wrong shape for a constant lower bound: it expects products with matching factors. The missing bridge is to chain the two factor inequalities with the directed monotonicity lemmas.; In the preserved prefix, `Hx3 : 3 <= x` and `Hy4 : 4 <= y` are available, and the goal is `12 <= x * y`.",
+        "remaining_goals": [
+          "i, m, o  : nat\nHim  : i <> m\nHmo  : m <> o\nHoi  : o <> i\nHprod  : i * m * o = 2001\nx, y, z  : nat\nHxy  : x <= y\nHyz  : y <= z\nHxyneq  : x <> y\nHyzneq  : y <> z\nHp  : x * y * z = 2001\nHx1  : x <> 1\nHx2  : x <> 2\nHx3  : 3 <= x\nHy4  : 4 <= y\n|-12 <= x * y",
+          "i, m, o  : nat\nHim  : i <> m\nHmo  : m <> o\nHoi  : o <> i\nHprod  : i * m * o = 2001\nx, y, z  : nat\nHxy  : x <= y\nHyz  : y <= z\nHxyneq  : x <> y\nHyzneq  : y <> z\nHp  : x * y * z = 2001\nHx1  : x <> 1\nHx2  : x <> 2\nHx3  : 3 <= x\nHy4  : 4 <= y\nHxy12  : 12 <= x * y\n|-x + y + z <= 671"
+        ],
+        "source": "25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02"
+      },
+      {
+        "context_id": "ctx-e5bdcf3f85e6842fcbcee5ad",
+        "draft_id": "repair-05be88b9cdf8acc9767473af",
+        "error": "(-32003, 'Coq: Found no subterm matching \"(y + 0) * z\" in Hyzprod.')",
+        "proposed_code": "replace (y * z) with ((y + 0) * z) in Hyzprod by lia.\nrewrite Hp in Hyzprod.\n nia.",
+        "purpose": "Replace `y * z` in the bound by `(y + 0) * z`, then rewrite with `Hp` and finish the resulting natural arithmetic.: The product equality in `Hp` is represented as `(y + 0) * z = 2001`, while the bound uses `y * z`; rewriting cannot match across this non-definitional presentation. The missing bridge is to normalize the product expression in the bound to the exact left-hand side of `Hp` before rewriting.; The preserved prefix has `Hp : (y + 0) * z = 2001` and `Hyzprod : 3 * z <= y * z`.",
+        "remaining_goals": [
+          "i, m, o  : nat\nHim  : i <> m\nHmo  : m <> o\nHoi  : o <> i\nHprod  : i * m * o = 2001\ny, z  : nat\nHxy  : 1 <= y\nHyz  : y <= z\nHxyneq  : 1 <> y\nHyzneq  : y <> z\nHp  : (y + 0) * z = 2001\nHy3  : 3 <= y\nHyzprod  : 3 * z <= y * z\n|-1 + y + z <= 671"
+        ],
+        "source": "25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02"
+      }
+    ],
+    "edits": [
+      {
+        "action": "add",
+        "before_sha256": "",
+        "content": "When `prime_divisors` yields a nested binary disjunction in an integer-arithmetic proof, destruct it with a right-nested pattern matching the actual two-branch structure, for example `destruct (...) as [H | [H | [H | H]]].`; then use `nia` in each resulting branch, preserving the active bullet.",
+        "reason": "Evidence support: supported. The executed snippet successfully destructed `prime_divisors p Hpp 2 Hdiv` using the right-nested four-branch pattern and discharged the resulting even-case goal with `nia`; only the enclosing theorem's separate odd-case obligation remained. This is a distinct disjunction-shape operation from b23's bounded quadratic strategy.",
+        "receipts": [
+          "snippet-aac67075793ee08e598ae798"
+        ],
+        "section": "tactics",
+        "target_id": "rocq-00029"
+      },
+      {
+        "action": "example",
+        "before_sha256": "a1263a17b8fcbafc7a2f6ebecee6c3a8697406f52a8584a48d295640bd1ab9f6",
+        "content": "",
+        "reason": "Evidence support: supported. The executed replacements normalize the instantiated ln_pow equality from ln (2 ^ 3) = (1 + 1 + 1) * ln 2 to ln 8 = 3 * ln 2, discharging the original local obligation. The enclosing theorem remains open, and the empty proposed text is an example of b22 rather than new advice.",
+        "receipts": [
+          "snippet-162a29bb737c8659e16917c7"
+        ],
+        "section": "",
+        "target_id": "rocq-00023"
+      }
+    ],
+    "plan": {
+      "decisions": [
+        {
+          "action": "add",
+          "closest_rule": "b23",
+          "content": "When `prime_divisors` yields a nested binary disjunction in an integer-arithmetic proof, destruct it with a right-nested pattern matching the actual two-branch structure, for example `destruct (...) as [H | [H | [H | H]]].`; then use `nia` in each resulting branch, preserving the active bullet.",
+          "draft": "d1",
+          "failure_receipt": "",
+          "reason": "b23 covers splitting an arithmetic problem for `nia` but not the specific right-nested destructuring required by the binary disjunction returned by `prime_divisors`; the flat pattern is rejected, while the right-nested pattern executes successfully.",
+          "receipts": [
+            "r1"
+          ],
+          "section": "tactics"
+        },
+        {
+          "action": "example",
+          "closest_rule": "b22",
+          "content": "",
+          "draft": "d2",
+          "failure_receipt": "",
+          "reason": "This is additional checked evidence for b22: after `cbv [INR]`, closed powers and the coefficient in `ln_pow` may need explicit `replace` normalization before the hypothesis matches the target. It does not correct or extend the reusable logarithm rule.",
+          "receipts": [
+            "r3"
+          ],
+          "section": ""
+        },
+        {
+          "action": "drop",
+          "closest_rule": "b26",
+          "content": "",
+          "draft": "d3",
+          "failure_receipt": "",
+          "reason": "This is a numeral-specific instance of the square-root technique already covered by b26, with no new operation or correction.",
+          "receipts": [],
+          "section": ""
+        },
+        {
+          "action": "drop",
+          "closest_rule": "b13",
+          "content": "",
+          "draft": "d4",
+          "failure_receipt": "",
+          "reason": "This is a worked application of the existing natural-product monotonicity guidance in b13; it adds no reusable rule beyond the checked factor-inequality chain.",
+          "receipts": [],
+          "section": ""
+        },
+        {
+          "action": "drop",
+          "closest_rule": "b5",
+          "content": "",
+          "draft": "d5",
+          "failure_receipt": "",
+          "reason": "The proposed normalization-and-rewrite repair was rejected, and no successful replacement check establishes a reusable correction.",
+          "receipts": [],
+          "section": ""
+        }
+      ],
+      "reasoning": "Compared all drafts with the closest existing rules. d1 records a genuinely missing reusable pattern for destructuring the nested binary disjunction returned by `prime_divisors`, so it is retained as an addition. d2 is only checked numeral-normalization evidence for b22 and is retained as an example. d3 and d4 are worked instances of b26 and b13 respectively, with no new operation or correction; d5 has no successful repair and is dropped."
+    },
+    "receipts": [
+      {
+        "checked": {
+          "elapsed": 0.6449703890830278,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof amc12_2000_p6): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 8,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "intros Hp Hq Hpp Hpq Hpbound Hqbound Heq.",
+              "destruct (Zeven_odd_dec p) as [Hpe | Hpo].",
+              "- destruct (Zeven_ex p Hpe) as [k Hpk].",
+              "assert (Hdiv : (2 | p)%Z).",
+              "{ exists k.",
+              "nia.",
+              "}",
+              "destruct (prime_divisors p Hpp 2 Hdiv) as [H | [H | [H | H]]].\nall: nia."
+            ],
+            "remaining_goals": [],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 13,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof amc12_2000_p6): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"intros Hp Hq Hpp Hpq Hpbound Hqbound Heq.\", \"destruct (Zeven_odd_dec p) as [Hpe | Hpo].\", \"- destruct (Zeven_ex p Hpe) as [k Hpk].\", \"assert (Hdiv : (2 | p)%Z).\", \"{ exists k.\", \"nia.\", \"}\", \"destruct (prime_divisors p Hpp 2 Hdiv) as [H | [H | [H | H]]].\\nall: nia.\"], \"total_goals\": 0, \"goals\": [], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import ZArith.\nRequire Import Nat.\nRequire Import PArith.\nRequire Import Arith.\nRequire Import Znumtheory.\nRequire Import Lia.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros Hp Hq Hpp Hpq Hpbound Hqbound Heq.",
+            "destruct (Zeven_odd_dec p) as [Hpe | Hpo].",
+            "- destruct (Zeven_ex p Hpe) as [k Hpk].",
+            "assert (Hdiv : (2 | p)%Z).",
+            "{ exists k.",
+            "nia.",
+            "}"
+          ],
+          "problem_file": "miniF2F/test/amc/amc12_2000_p6.v",
+          "problem_sha256": "683be44c862465779357878c4cbd30909ce1b6967cf03395ab0cf59f188e8e19",
+          "source": "166971fc823db5e7eb78efc0ed8ededbbdb463292cd8014979e0754f2e3177f2",
+          "theorem_name": "amc12_2000_p6",
+          "version": 1
+        },
+        "elapsed": 0.6449703890830278,
+        "rpc_calls": 13,
+        "snippet": "destruct (prime_divisors p Hpp 2 Hdiv) as [H | [H | [H | H]]].\nall: nia.",
+        "status": "executed_open"
+      },
+      {
+        "checked": {
+          "elapsed": 0.5694330744445324,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof aime_1988_p3): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 19,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "intros x Hx Heq.",
+              "unfold logb in *.",
+              "assert (Hln2 : 0 < ln 2).",
+              "{ rewrite <- ln_1.",
+              "apply ln_increasing.",
+              "- lra.",
+              "- lra.",
+              "}",
+              "assert (Hlnx : 0 < ln x).",
+              "{ rewrite <- ln_1.",
+              "apply ln_increasing.",
+              "- lra.",
+              "- lra.",
+              "}",
+              "assert (Hln8 : ln 8 = 3 * ln 2).",
+              "{ assert (Htwo : (0:R) < 2) by lra.",
+              "pose proof (ln_pow 2 Htwo 3) as H.",
+              "cbv [INR] in H.",
+              "assert (Hp : (2:R)^3 = 8) by ring. rewrite Hp in H. replace ((1 + 1 + 1 : R)) with 3 in H by ring. exact H."
+            ],
+            "remaining_goals": [],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 29,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof aime_1988_p3): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"intros x Hx Heq.\", \"unfold logb in *.\", \"assert (Hln2 : 0 < ln 2).\", \"{ rewrite <- ln_1.\", \"apply ln_increasing.\", \"- lra.\", \"- lra.\", \"}\", \"assert (Hlnx : 0 < ln x).\", \"{ rewrite <- ln_1.\", \"apply ln_increasing.\", \"- lra.\", \"- lra.\", \"}\", \"assert (Hln8 : ln 8 = 3 * ln 2).\", \"{ assert (Htwo : (0:R) < 2) by lra.\", \"pose proof (ln_pow 2 Htwo 3) as H.\", \"cbv [INR] in H.\", \"assert (Hp : (2:R)^3 = 8) by ring. rewrite Hp in H. replace ((1 + 1 + 1 : R)) with 3 in H by ring. exact H.\"], \"total_goals\": 0, \"goals\": [], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros x Hx Heq.",
+            "unfold logb in *.",
+            "assert (Hln2 : 0 < ln 2).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hlnx : 0 < ln x).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hln8 : ln 8 = 3 * ln 2).",
+            "{ assert (Htwo : (0:R) < 2) by lra.",
+            "pose proof (ln_pow 2 Htwo 3) as H.",
+            "cbv [INR] in H."
+          ],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "elapsed": 0.5694330744445324,
+        "rpc_calls": 29,
+        "snippet": "assert (Hp : (2:R)^3 = 8) by ring. rewrite Hp in H. replace ((1 + 1 + 1 : R)) with 3 in H by ring. exact H.",
+        "status": "executed_open"
+      },
+      {
+        "checked": {
+          "elapsed": 0.004268428310751915,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof aime_1988_p3): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 19,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "intros x Hx Heq.",
+              "unfold logb in *.",
+              "assert (Hln2 : 0 < ln 2).",
+              "{ rewrite <- ln_1.",
+              "apply ln_increasing.",
+              "- lra.",
+              "- lra.",
+              "}",
+              "assert (Hlnx : 0 < ln x).",
+              "{ rewrite <- ln_1.",
+              "apply ln_increasing.",
+              "- lra.",
+              "- lra.",
+              "}",
+              "assert (Hln8 : ln 8 = 3 * ln 2).",
+              "{ assert (Htwo : (0:R) < 2) by lra.",
+              "pose proof (ln_pow 2 Htwo 3) as H.",
+              "cbv [INR] in H.",
+              "replace (2 ^ 3) with (8 : R) in H by ring.\nreplace (1 + 1 + 1 : R) with 3 in H by ring.\nexact H."
+            ],
+            "remaining_goals": [],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 3,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof aime_1988_p3): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"intros x Hx Heq.\", \"unfold logb in *.\", \"assert (Hln2 : 0 < ln 2).\", \"{ rewrite <- ln_1.\", \"apply ln_increasing.\", \"- lra.\", \"- lra.\", \"}\", \"assert (Hlnx : 0 < ln x).\", \"{ rewrite <- ln_1.\", \"apply ln_increasing.\", \"- lra.\", \"- lra.\", \"}\", \"assert (Hln8 : ln 8 = 3 * ln 2).\", \"{ assert (Htwo : (0:R) < 2) by lra.\", \"pose proof (ln_pow 2 Htwo 3) as H.\", \"cbv [INR] in H.\", \"replace (2 ^ 3) with (8 : R) in H by ring.\\nreplace (1 + 1 + 1 : R) with 3 in H by ring.\\nexact H.\"], \"total_goals\": 0, \"goals\": [], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros x Hx Heq.",
+            "unfold logb in *.",
+            "assert (Hln2 : 0 < ln 2).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hlnx : 0 < ln x).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hln8 : ln 8 = 3 * ln 2).",
+            "{ assert (Htwo : (0:R) < 2) by lra.",
+            "pose proof (ln_pow 2 Htwo 3) as H.",
+            "cbv [INR] in H."
+          ],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "elapsed": 0.004268428310751915,
+        "rpc_calls": 3,
+        "snippet": "replace (2 ^ 3) with (8 : R) in H by ring.\nreplace (1 + 1 + 1 : R) with 3 in H by ring.\nexact H.",
+        "status": "executed_open"
+      },
+      {
+        "checked": {
+          "elapsed": 0.6299440637230873,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof amc12a_2002_p13): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 38,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "intros a b Ha Hb Hab Haa Hbb.",
+              "assert (Ha0 : a <> 0) by nra.",
+              "assert (Hb0 : b <> 0) by nra.",
+              "destruct (Rle_or_lt 0 (a - 1 / a)) as [Hap | Han].",
+              "- rewrite (Rabs_pos_eq _ Hap) in Haa.",
+              "assert (Haa' : a * a - a - 1 = 0).",
+              "{ assert (Hm : a * (a - 1 / a) = a) by nra.",
+              "unfold Rdiv in Hm.",
+              "assert (Hi : a * / a = 1).",
+              "{ apply Rinv_r.",
+              "exact Ha0. }",
+              "nra. }",
+              "destruct (Rle_or_lt 0 (b - 1 / b)) as [Hbp | Hbn].",
+              "+ rewrite (Rabs_pos_eq _ Hbp) in Hbb.",
+              "assert (Hbb' : b * b - b - 1 = 0).",
+              "{ assert (Hm : b * (b - 1 / b) = b) by nra.",
+              "unfold Rdiv in Hm.",
+              "assert (Hi : b * / b = 1).",
+              "{ apply Rinv_r.",
+              "exact Hb0. }",
+              "nra. }",
+              "assert (Hap1 : 1 < a) by nra.",
+              "assert (Hbp1 : 1 < b) by nra.",
+              "exfalso.",
+              "apply Hab.",
+              "nra.",
+              "+ rewrite (Rabs_left _ Hbn) in Hbb.",
+              "assert (Hbb' : b * b + b - 1 = 0).",
+              "{ assert (Hm : b * (b - 1 / b) = - b) by nra.",
+              "unfold Rdiv in Hm.",
+              "assert (Hi : b * / b = 1).",
+              "{ apply Rinv_r.",
+              "exact Hb0. }",
+              "nra. }",
+              "assert (Hs : (a + b) * (a + b) = 5) by nra.",
+              "assert (Hr : (sqrt 5) * (sqrt 5) = 5).",
+              "{ pose proof (Rsqr_sqrt 5) as H.",
+              "assert (H5 : (0 : R) <= 5) by lra.\nspecialize (H H5).\nunfold Rsqr in H.\nexact H."
+            ],
+            "remaining_goals": [],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 51,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof amc12a_2002_p13): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"intros a b Ha Hb Hab Haa Hbb.\", \"assert (Ha0 : a <> 0) by nra.\", \"assert (Hb0 : b <> 0) by nra.\", \"destruct (Rle_or_lt 0 (a - 1 / a)) as [Hap | Han].\", \"- rewrite (Rabs_pos_eq _ Hap) in Haa.\", \"assert (Haa' : a * a - a - 1 = 0).\", \"{ assert (Hm : a * (a - 1 / a) = a) by nra.\", \"unfold Rdiv in Hm.\", \"assert (Hi : a * / a = 1).\", \"{ apply Rinv_r.\", \"exact Ha0. }\", \"nra. }\", \"destruct (Rle_or_lt 0 (b - 1 / b)) as [Hbp | Hbn].\", \"+ rewrite (Rabs_pos_eq _ Hbp) in Hbb.\", \"assert (Hbb' : b * b - b - 1 = 0).\", \"{ assert (Hm : b * (b - 1 / b) = b) by nra.\", \"unfold Rdiv in Hm.\", \"assert (Hi : b * / b = 1).\", \"{ apply Rinv_r.\", \"exact Hb0. }\", \"nra. }\", \"assert (Hap1 : 1 < a) by nra.\", \"assert (Hbp1 : 1 < b) by nra.\", \"exfalso.\", \"apply Hab.\", \"nra.\", \"+ rewrite (Rabs_left _ Hbn) in Hbb.\", \"assert (Hbb' : b * b + b - 1 = 0).\", \"{ assert (Hm : b * (b - 1 / b) = - b) by nra.\", \"unfold Rdiv in Hm.\", \"assert (Hi : b * / b = 1).\", \"{ apply Rinv_r.\", \"exact Hb0. }\", \"nra. }\", \"assert (Hs : (a + b) * (a + b) = 5) by nra.\", \"assert (Hr : (sqrt 5) * (sqrt 5) = 5).\", \"{ pose proof (Rsqr_sqrt 5) as H.\", \"assert (H5 : (0 : R) <= 5) by lra.\\nspecialize (H H5).\\nunfold Rsqr in H.\\nexact H.\"], \"total_goals\": 0, \"goals\": [], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Reals.\nRequire Import Psatz.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros a b Ha Hb Hab Haa Hbb.",
+            "assert (Ha0 : a <> 0) by nra.",
+            "assert (Hb0 : b <> 0) by nra.",
+            "destruct (Rle_or_lt 0 (a - 1 / a)) as [Hap | Han].",
+            "- rewrite (Rabs_pos_eq _ Hap) in Haa.",
+            "assert (Haa' : a * a - a - 1 = 0).",
+            "{ assert (Hm : a * (a - 1 / a) = a) by nra.",
+            "unfold Rdiv in Hm.",
+            "assert (Hi : a * / a = 1).",
+            "{ apply Rinv_r.",
+            "exact Ha0. }",
+            "nra. }",
+            "destruct (Rle_or_lt 0 (b - 1 / b)) as [Hbp | Hbn].",
+            "+ rewrite (Rabs_pos_eq _ Hbp) in Hbb.",
+            "assert (Hbb' : b * b - b - 1 = 0).",
+            "{ assert (Hm : b * (b - 1 / b) = b) by nra.",
+            "unfold Rdiv in Hm.",
+            "assert (Hi : b * / b = 1).",
+            "{ apply Rinv_r.",
+            "exact Hb0. }",
+            "nra. }",
+            "assert (Hap1 : 1 < a) by nra.",
+            "assert (Hbp1 : 1 < b) by nra.",
+            "exfalso.",
+            "apply Hab.",
+            "nra.",
+            "+ rewrite (Rabs_left _ Hbn) in Hbb.",
+            "assert (Hbb' : b * b + b - 1 = 0).",
+            "{ assert (Hm : b * (b - 1 / b) = - b) by nra.",
+            "unfold Rdiv in Hm.",
+            "assert (Hi : b * / b = 1).",
+            "{ apply Rinv_r.",
+            "exact Hb0. }",
+            "nra. }",
+            "assert (Hs : (a + b) * (a + b) = 5) by nra.",
+            "assert (Hr : (sqrt 5) * (sqrt 5) = 5).",
+            "{ pose proof (Rsqr_sqrt 5) as H."
+          ],
+          "problem_file": "miniF2F/test/amc/amc12a_2002_p13.v",
+          "problem_sha256": "c07fe677a8f5a3d154a19cb6276948ec9b07d641cb844848c1db20704c076f69",
+          "source": "ecc249164236aa334d3e8b9592c9034c2c5172e34b1db72a610f0660493fec5d",
+          "theorem_name": "amc12a_2002_p13",
+          "version": 1
+        },
+        "elapsed": 0.6299440637230873,
+        "rpc_calls": 51,
+        "snippet": "assert (H5 : (0 : R) <= 5) by lra.\nspecialize (H H5).\nunfold Rsqr in H.\nexact H.",
+        "status": "executed_open"
+      },
+      {
+        "checked": {
+          "elapsed": 1.0844353921711445,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof amc12_2000_p1): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 18,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "intros i m o H.",
+              "destruct H as [Him [Hmo [Hoi Hprod]]].",
+              "assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <= 671).",
+              "{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.",
+              "destruct (eq_nat_dec x 1) as [Hx1 | Hx1].",
+              "- subst x.",
+              "assert (Hy3 : 3 <= y) by nia.",
+              "assert (Hyy : y * y <= y * z).",
+              "{ apply Nat.mul_le_mono_l. exact Hyz. }",
+              "simpl in Hp.",
+              "nia.",
+              "- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].",
+              "+ subst x.",
+              "nia.",
+              "+ assert (Hx3 : 3 <= x) by nia.",
+              "assert (Hy4 : 4 <= y) by nia.",
+              "assert (Hxy12 : 12 <= x * y).",
+              "assert (H1 : 3 * 4 <= 3 * y) by (apply Nat.mul_le_mono_l; exact Hy4).\nassert (H2 : 3 * y <= x * y) by (apply Nat.mul_le_mono_r; exact Hx3).\nlia."
+            ],
+            "remaining_goals": [
+              "i, m, o  : nat\nHim  : i <> m\nHmo  : m <> o\nHoi  : o <> i\nHprod  : i * m * o = 2001\nx, y, z  : nat\nHxy  : x <= y\nHyz  : y <= z\nHxyneq  : x <> y\nHyzneq  : y <> z\nHp  : x * y * z = 2001\nHx1  : x <> 1\nHx2  : x <> 2\nHx3  : 3 <= x\nHy4  : 4 <= y\nHxy12  : 12 <= x * y\n|-x + y + z <= 671"
+            ],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 27,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof amc12_2000_p1): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"intros i m o H.\", \"destruct H as [Him [Hmo [Hoi Hprod]]].\", \"assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <= 671).\", \"{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.\", \"destruct (eq_nat_dec x 1) as [Hx1 | Hx1].\", \"- subst x.\", \"assert (Hy3 : 3 <= y) by nia.\", \"assert (Hyy : y * y <= y * z).\", \"{ apply Nat.mul_le_mono_l. exact Hyz. }\", \"simpl in Hp.\", \"nia.\", \"- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].\", \"+ subst x.\", \"nia.\", \"+ assert (Hx3 : 3 <= x) by nia.\", \"assert (Hy4 : 4 <= y) by nia.\", \"assert (Hxy12 : 12 <= x * y).\", \"assert (H1 : 3 * 4 <= 3 * y) by (apply Nat.mul_le_mono_l; exact Hy4).\\nassert (H2 : 3 * y <= x * y) by (apply Nat.mul_le_mono_r; exact Hx3).\\nlia.\"], \"total_goals\": 1, \"goals\": [\"i, m, o  : nat\\nHim  : i <> m\\nHmo  : m <> o\\nHoi  : o <> i\\nHprod  : i * m * o = 2001\\nx, y, z  : nat\\nHxy  : x <= y\\nHyz  : y <= z\\nHxyneq  : x <> y\\nHyzneq  : y <> z\\nHp  : x * y * z = 2001\\nHx1  : x <> 1\\nHx2  : x <> 2\\nHx3  : 3 <= x\\nHy4  : 4 <= y\\nHxy12  : 12 <= x * y\\n|-x + y + z <= 671\"], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros i m o H.",
+            "destruct H as [Him [Hmo [Hoi Hprod]]].",
+            "assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <= 671).",
+            "{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.",
+            "destruct (eq_nat_dec x 1) as [Hx1 | Hx1].",
+            "- subst x.",
+            "assert (Hy3 : 3 <= y) by nia.",
+            "assert (Hyy : y * y <= y * z).",
+            "{ apply Nat.mul_le_mono_l. exact Hyz. }",
+            "simpl in Hp.",
+            "nia.",
+            "- destruct (eq_nat_dec x 2) as [Hx2 | Hx2].",
+            "+ subst x.",
+            "nia.",
+            "+ assert (Hx3 : 3 <= x) by nia.",
+            "assert (Hy4 : 4 <= y) by nia.",
+            "assert (Hxy12 : 12 <= x * y)."
+          ],
+          "problem_file": "miniF2F/test/amc/amc12_2000_p1.v",
+          "problem_sha256": "bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a",
+          "source": "25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02",
+          "theorem_name": "amc12_2000_p1",
+          "version": 1
+        },
+        "elapsed": 1.0844353921711445,
+        "rpc_calls": 27,
+        "snippet": "assert (H1 : 3 * 4 <= 3 * y) by (apply Nat.mul_le_mono_l; exact Hy4).\nassert (H2 : 3 * y <= x * y) by (apply Nat.mul_le_mono_r; exact Hx3).\nlia.",
+        "status": "executed_open"
+      },
+      {
+        "checked": {
+          "elapsed": 0.05304484348744154,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq: Syntax error: [ltac_use_default] expected after [tactic] (in [tactic_command]).')",
+            "failing_index": 10,
+            "failing_tactic": "change 3 * z <= (y + 0) * z in Hyzprod.\nrewrite Hp in Hyzprod.\nia.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "intros i m o H.",
+              "destruct H as [Him [Hmo [Hoi Hprod]]].",
+              "assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <= 671).",
+              "{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.",
+              "destruct (eq_nat_dec x 1) as [Hx1 | Hx1].",
+              "- subst x.",
+              "assert (Hy3 : 3 <= y) by nia.",
+              "assert (Hyzprod : 3 * z <= y * z).",
+              "{ apply Nat.mul_le_mono_r. exact Hy3. }",
+              "simpl in Hp."
+            ],
+            "remaining_goals": [
+              "i, m, o  : nat\nHim  : i <> m\nHmo  : m <> o\nHoi  : o <> i\nHprod  : i * m * o = 2001\ny, z  : nat\nHxy  : 1 <= y\nHyz  : y <= z\nHxyneq  : 1 <> y\nHyzneq  : y <> z\nHp  : (y + 0) * z = 2001\nHy3  : 3 <= y\nHyzprod  : 3 * z <= y * z\n|-1 + y + z <= 671"
+            ],
+            "success": false
+          },
+          "outcome": "rejected",
+          "rpc_calls": 6,
+          "view": "{\"outcome\": \"rejected\", \"failing_tactic\": \"change 3 * z <= (y + 0) * z in Hyzprod.\\nrewrite Hp in Hyzprod.\\nia.\", \"error\": \"(-32003, 'Coq: Syntax error: [ltac_use_default] expected after [tactic] (in [tactic_command]).')\", \"verified_prefix\": [\"intros i m o H.\", \"destruct H as [Him [Hmo [Hoi Hprod]]].\", \"assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <= 671).\", \"{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.\", \"destruct (eq_nat_dec x 1) as [Hx1 | Hx1].\", \"- subst x.\", \"assert (Hy3 : 3 <= y) by nia.\", \"assert (Hyzprod : 3 * z <= y * z).\", \"{ apply Nat.mul_le_mono_r. exact Hy3. }\", \"simpl in Hp.\"], \"total_goals\": 1, \"goals\": [\"i, m, o  : nat\\nHim  : i <> m\\nHmo  : m <> o\\nHoi  : o <> i\\nHprod  : i * m * o = 2001\\ny, z  : nat\\nHxy  : 1 <= y\\nHyz  : y <= z\\nHxyneq  : 1 <> y\\nHyzneq  : y <> z\\nHp  : (y + 0) * z = 2001\\nHy3  : 3 <= y\\nHyzprod  : 3 * z <= y * z\\n|-1 + y + z <= 671\"], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Arith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros i m o H.",
+            "destruct H as [Him [Hmo [Hoi Hprod]]].",
+            "assert (Hsorted : forall x y z : nat, x <= y -> y <= z -> x <> y -> y <> z -> x * y * z = 2001 -> x + y + z <= 671).",
+            "{ intros x y z Hxy Hyz Hxyneq Hyzneq Hp.",
+            "destruct (eq_nat_dec x 1) as [Hx1 | Hx1].",
+            "- subst x.",
+            "assert (Hy3 : 3 <= y) by nia.",
+            "assert (Hyzprod : 3 * z <= y * z).",
+            "{ apply Nat.mul_le_mono_r. exact Hy3. }",
+            "simpl in Hp."
+          ],
+          "problem_file": "miniF2F/test/amc/amc12_2000_p1.v",
+          "problem_sha256": "bb6e8b90b533d9c81468bd3371e8cf9d607f0dfaa9176980674ebd21e1c7a79a",
+          "source": "25672c88163c53fbb8138559068ad3c876e0829b2d1105a3a51f9e5b33c31a02",
+          "theorem_name": "amc12_2000_p1",
+          "version": 1
+        },
+        "elapsed": 0.05304484348744154,
+        "rpc_calls": 6,
+        "snippet": "change 3 * z <= (y + 0) * z in Hyzprod.\nrewrite Hp in Hyzprod.\nia.",
+        "status": "rejected"
+      }
+    ],
+    "reviews": [
+      {
+        "draft": "d1",
+        "error": "",
+        "verdict": {
+          "closest_rule": "b23",
+          "reason": "Evidence support: supported. The executed snippet successfully destructed `prime_divisors p Hpp 2 Hdiv` using the right-nested four-branch pattern and discharged the resulting even-case goal with `nia`; only the enclosing theorem's separate odd-case obligation remained. This is a distinct disjunction-shape operation from b23's bounded quadratic strategy.",
+          "relation": "new_operation"
+        }
+      },
+      {
+        "draft": "d2",
+        "error": "",
+        "verdict": {
+          "closest_rule": "b22",
+          "reason": "Evidence support: supported. The executed replacements normalize the instantiated ln_pow equality from ln (2 ^ 3) = (1 + 1 + 1) * ln 2 to ln 8 = 3 * ln 2, discharging the original local obligation. The enclosing theorem remains open, and the empty proposed text is an example of b22 rather than new advice.",
+          "relation": "example"
+        }
+      }
+    ],
+    "role": "reducer",
+    "status": "complete"
+  }
+}
