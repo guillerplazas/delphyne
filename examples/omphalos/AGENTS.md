@@ -160,6 +160,21 @@ this restriction in both harnesses through this canonical instruction file.
 
 ## Running experiments (since 2026-08-26)
 
+**Active authorization, Guille 2026-09-17:** implement the sanitized ACE
+audit and refinements with **at most $25 new experiment spend**, independent
+of the older $50 campaign. trainX may supply learning and development;
+validationX supplies the benchmark (40 problems, two replicates). testX and
+protected challenge data remain completely closed. Use
+`python -m experiments.ace_sanitized`; both harnesses use this entry point.
+Ordinary agentic non-ACE without dropping is the headline comparator;
+matched generic controls isolate the playbook contribution. No handoff,
+summary, learned retrieval, failure notes or new tools for non-ACE. Report
+coverage percent and all-attempt budget reduction; useful trade-offs are
+allowed, with uncertainty disclosed. Include bounded playbook learning,
+freeze it before validation, preserve sealed archives, and leave changes
+staged and uncommitted. No default promotion. The older authorizations below
+describe historical campaigns and do not constrain this new trainX work.
+
 **Current campaign scope, Guille 2026-09-16:** the latest correction is
 **"Never touch testX"**. It supersedes the earlier permission in this session
 and restores the complete closure above, including hashing and mixed
