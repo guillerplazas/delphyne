@@ -1,0 +1,58 @@
+--- e0f2d1fb03685f8116fc93764a99e0273d1bfd94
++++ current
+@@ -136,7 +136,13 @@
+             )
+ 
+     def reserve(
+-        self, stage: str, model: str, amount: float, cell: str = ""
++        self,
++        stage: str,
++        model: str,
++        amount: float,
++        cell: str = "",
++        *,
++        halt_on_billing_issue: bool = False,
+     ) -> str:
+         if not math.isfinite(amount) or amount <= 0:
+             raise ValueError("reservation must be positive")
+@@ -144,6 +150,17 @@
+         while True:
+             with self.connect() as db:
+                 db.execute("BEGIN IMMEDIATE")
++                if (
++                    halt_on_billing_issue
++                    and db.execute(
++                        "SELECT 1 FROM receipts WHERE status='unknown_charge' "
++                        "OR charged > reserved + 1e-9 "
++                        "OR json_extract(usage, '$.exception') IS NOT NULL LIMIT 1"
++                    ).fetchone()
++                ):
++                    raise CampaignExhausted(
++                        "Campaign billing requires reconciliation"
++                    )
+                 row = db.execute("SELECT config FROM settings").fetchone()
+                 if row is None:
+                     raise ValueError("uninitialized campaign ledger")
+@@ -258,6 +275,7 @@
+     reasoning_allowance: int = field(init=False, default=0)
+     output_limit: int = 32768
+     estimate_dollars: bool = False
++    halt_on_billing_issue: bool = False
+ 
+     def _input_bound(self, req: LLMRequest) -> int:
+         inp, _ = oa.translate_chat_for_responses(
+@@ -324,7 +342,13 @@
+             * self.pricing.dollars_per_output_token
+         )
+         ledger = Ledger(Path(self.ledger_file))
+-        key = ledger.reserve(self.stage, options["model"], bound, self.cell)
++        key = ledger.reserve(
++            self.stage,
++            options["model"],
++            bound,
++            self.cell,
++            halt_on_billing_issue=self.halt_on_billing_issue,
++        )
+         record(
+             "model",
+             "invoked",
