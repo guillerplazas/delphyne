@@ -1,0 +1,337 @@
+{
+  "artifact_sha256": "7fc4d715d2736dc19ee1e76fe2b86893ca019ed2c5c3616ba3c6d4bc1de1c001",
+  "interpretation": "All active rules inspected. Descriptive limitations do not modify the sealed treatment. Fresh proof checking remains the correctness boundary.",
+  "rules": [
+    {
+      "assessment": "Rewriting is useful preprocessing. The claim that specialization cannot connect the equation is stronger than demonstrated: arithmetic can also use a specialized equality. Treat as advice, not necessity.",
+      "checked_examples": [
+        {
+          "identifier": "example-f108bdf7fb347af1b1e30a1d",
+          "rendered": true,
+          "source": "mathd_algebra_43",
+          "status": "completed"
+        }
+      ],
+      "content": "When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00001"
+    },
+    {
+      "assessment": "Source-specific recursion shape. change requires definitional equality in the actual definitions; the displayed schematic equality is not a universal template.",
+      "checked_examples": [],
+      "content": "For an induction hypothesis relating recursive `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then apply `rewrite IH; lia`.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00002"
+    },
+    {
+      "assessment": "nia handles many natural arithmetic goals but is not a complete procedure for all nonlinear or subtraction goals. No success guarantee.",
+      "checked_examples": [],
+      "content": "For goals over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use `intros` followed by `nia`; it can handle the nonlinear products and truncated subtraction directly.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00003"
+    },
+    {
+      "assessment": "Closed executable computations only. Large inputs can exceed memory/time; refl closes definitional equality, not an arbitrary computed proposition.",
+      "checked_examples": [],
+      "content": "For closed `nat` equalities built from executable finite-list operations such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`; use `reflexivity` afterward if the resulting definitional equality is not closed automatically.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00004"
+    },
+    {
+      "assessment": "Exact predecessor equality and natural-number scope are prerequisites. The numerical recurrence example supplies a local witness.",
+      "checked_examples": [],
+      "content": "When applying a recurrence hypothesis whose predecessor uses truncated subtraction, first prove the exact natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality before applying the hypothesis so its indices unify.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00005"
+    },
+    {
+      "assessment": "Scope annotations distinguish natural from real arithmetic. Expected types may resolve some expressions without annotations; this is defensive advice.",
+      "checked_examples": [
+        {
+          "identifier": "example-d605b0de9606ddfb3b0c467f",
+          "rendered": true,
+          "source": "mathd_algebra_224",
+          "status": "executed_open"
+        }
+      ],
+      "content": "Under an active `R_scope`, annotate natural-number indices, arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion and comparison-type errors.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00006"
+    },
+    {
+      "assessment": "Modulo rewrite requires the exact dividend orientation and namespace signature. Div0 semantics must not be silently replaced by a nonzero-divisor variant.",
+      "checked_examples": [
+        {
+          "identifier": "example-079d8eee882e675707582c3d",
+          "rendered": true,
+          "source": "mathd_numbertheory_301",
+          "status": "completed"
+        }
+      ],
+      "content": "For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00007"
+    },
+    {
+      "assessment": "AM-GM strengthening is a mathematical direction, not a completed inductive proof. The zero-length case and denominator are separate obligations; naive induction may still fail.",
+      "checked_examples": [],
+      "content": "For finite nonnegative real sequences with a fixed-sum product goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00009"
+    },
+    {
+      "assessment": "Correctly rejects multiplication by an unrestricted nonnegative factor as a proof of a product bound of one. It does not itself provide the induction step.",
+      "checked_examples": [],
+      "content": "Do not obtain a successor product bound by multiplying an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`. An induction proof must retain a bound parameterized by the total sum or average.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00010"
+    },
+    {
+      "assessment": "Unfolding exposes arithmetic structure; denominator nonzeroness needs a nonzero index. nra does not supply the general AM-GM theorem.",
+      "checked_examples": [],
+      "content": "Before using `nra` in AM-GM base or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition; `nra` cannot reason through opaque recursive definitions or supply the global inequality.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00011"
+    },
+    {
+      "assessment": "Square-to-product identity and Rle_0_sqr support local nonnegativity. Later inequalities still require sufficient hypotheses.",
+      "checked_examples": [
+        {
+          "identifier": "example-8accbd4b4ae06398879056d6",
+          "rendered": true,
+          "source": "imo_1983_p6",
+          "status": "executed_open"
+        },
+        {
+          "identifier": "example-33841d4a98bfee2d680df2fa",
+          "rendered": true,
+          "source": "mathd_algebra_28",
+          "status": "executed_open"
+        },
+        {
+          "identifier": "example-ebea3e66b381f8cb670d044f",
+          "rendered": true,
+          "source": "mathd_algebra_323",
+          "status": "executed_open"
+        }
+      ],
+      "content": "For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately for completing-square identities before finishing the resulting linear inequality with `lra`.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00012"
+    },
+    {
+      "assessment": "Positivity chaining requires positive multiplicative factors and the existing recursive-product positivity hypothesis. Rmult_pos_pos is not a way to prove positivity of an arbitrary denominator.",
+      "checked_examples": [],
+      "content": "For positivity of a recursive real product whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity through opaque recursive products.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00013"
+    },
+    {
+      "assessment": "Monotonicity needs factor bounds and the lemma argument order. A successful transitivity snippet was correctly rejected as evidence for this rule.",
+      "checked_examples": [],
+      "content": "For natural-number product bounds, use `Nat.mul_le_mono` to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply an established inequality by a nonnegative factor; provide the premises in the lemma's expected order instead of guessing a multiplication-monotonicity API.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00014"
+    },
+    {
+      "assessment": "Parenthesized change syntax repaired and executed. The natural lower-bound premise must actually be available; lia does not invent it.",
+      "checked_examples": [
+        {
+          "identifier": "example-fa0b8143dfb369f47491da1d",
+          "rendered": true,
+          "source": "aime_1988_p3",
+          "status": "executed_open"
+        }
+      ],
+      "content": "To lift a natural bound into `R`, expose the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change (INR 2 <= INR c); apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent `.mpr` projection.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00015"
+    },
+    {
+      "assessment": "Inverse cancellation requires nonzeroness and the matching multiplication orientation. One new example closes a focused subgoal while enclosing goals remain.",
+      "checked_examples": [
+        {
+          "identifier": "example-7aea0ab77123ed9448a9bda4",
+          "rendered": true,
+          "source": "aime_1990_p4",
+          "status": "executed_open"
+        }
+      ],
+      "content": "For real equations involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead of relying on `field_simplify` to normalize it.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00016"
+    },
+    {
+      "assessment": "The sign split matches the corresponding absolute-value rewrite premises. Branch names are schematic and exact argument implicitness can vary.",
+      "checked_examples": [],
+      "content": "To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00017"
+    },
+    {
+      "assessment": "A resource warning from observed evaluations. It does not mean every closed gcd/lcm computation is expensive or that vm_compute is generally unsuitable.",
+      "checked_examples": [],
+      "content": "For bounded natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce only explicitly closed numeral cases, using `change` to expose a known numeral equality when needed.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00018"
+    },
+    {
+      "assessment": "Finite exclusion requires the bound branch orientation and a genuinely finite residual interval. Bare le_gt_dec depends on imports; it is not available in every source environment.",
+      "checked_examples": [],
+      "content": "When proving a least witness by finite exclusion, first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch immediately, handle the finitely many numeral cases explicitly under `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00019"
+    },
+    {
+      "assessment": "Closed casts/indices must really be computational constants. Arbitrary symbolic indices need arithmetic proofs rather than reflexivity.",
+      "checked_examples": [
+        {
+          "identifier": "example-e777c5341e3e10d410745038",
+          "rendered": true,
+          "source": "amc12a_2013_p7",
+          "status": "completed"
+        }
+      ],
+      "content": "For instantiated recurrence equations containing closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then normalize each index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation chain.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00020"
+    },
+    {
+      "assessment": "Membership representations are inductive. Do not unfold an inductive Empty_set/Singleton as if it were a definition; use constructors, inversion or available equivalences. Cardinality requires freshness at every layer.",
+      "checked_examples": [
+        {
+          "identifier": "example-f7de69585c6b88506c612e22",
+          "rendered": true,
+          "source": "mathd_algebra_185",
+          "status": "executed_open"
+        }
+      ],
+      "content": "For an explicit `Ensemble` built from nested `Add`, first unfold `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions and `False` cases are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer by layer, prove each freshness premise by unfolding `In` and `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00021"
+    },
+    {
+      "assessment": "Trigonometric rewrites are orientation- and domain-sensitive. sin positivity needs both strict interval bounds, not just x > 0.",
+      "checked_examples": [
+        {
+          "identifier": "example-8718401e08dbb3a45ae20e1b",
+          "rendered": true,
+          "source": "imo_1963_p5",
+          "status": "executed_open"
+        }
+      ],
+      "content": "For trigonometric goals involving complementary or doubled angles, use the library lemma with the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00022"
+    },
+    {
+      "assessment": "ln positivity requires base > 1; ln_pow requires positive base and normalization of the real exponent coefficient. Local executed evidence preserves these premises.",
+      "checked_examples": [
+        {
+          "identifier": "example-fdb5c841a6984233d4e5f724",
+          "rendered": true,
+          "source": "aime_1988_p3",
+          "status": "executed_open"
+        }
+      ],
+      "content": "For logarithmic inequalities and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use the resulting instantiated equality directly.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00023"
+    },
+    {
+      "assessment": "The finite bound and contradiction depend on the original equation. Nat.square_le_mono reduces the displayed inequality only with matching natural terms.",
+      "checked_examples": [],
+      "content": "For an unbounded quadratic equation over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction from the original equation.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00024"
+    },
+    {
+      "assessment": "Closed INR equality checked in a real environment. ring bridges the nondefinitional numeral representation; a nat-only environment would not test this recipe.",
+      "checked_examples": [
+        {
+          "identifier": "example-2ca5179573e928919f27c4bf",
+          "rendered": true,
+          "source": "mathd_algebra_224",
+          "status": "executed_open"
+        }
+      ],
+      "content": "A closed cast such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality, for example with `cbv [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00025"
+    },
+    {
+      "assessment": "ln_mult requires positivity of each factor. New examples recreate already available local facts; executable evidence does not show that repeating the step helps the solver.",
+      "checked_examples": [
+        {
+          "identifier": "example-fa310b1e2a2630b4f082eaa1",
+          "rendered": false,
+          "source": "amc12a_2020_p13",
+          "status": "executed_open"
+        },
+        {
+          "identifier": "example-48e2490e4a2d071faf766f70",
+          "rendered": true,
+          "source": "amc12b_2003_p17",
+          "status": "executed_open"
+        },
+        {
+          "identifier": "example-afd1c118b12ada2367ef9f58",
+          "rendered": true,
+          "source": "aime_1988_p3",
+          "status": "executed_open"
+        },
+        {
+          "identifier": "example-61eecd5b2f00012798243e72",
+          "rendered": true,
+          "source": "aime_1988_p3",
+          "status": "executed_open"
+        }
+      ],
+      "content": "For a target or hypothesis containing `ln (a * b)`, prove positivity of both factors explicitly; when a factor is an `Rpower`, unfold `Rpower` and apply `exp_pos`, rather than reusing positivity of the enclosing product. Then rewrite with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation does not expose this logarithmic product identity or supply its positivity premises.",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00026"
+    },
+    {
+      "assessment": "Root identities require nonnegative radicands/base as stated. Comparing roots additionally needs the squared comparison; rewriting alone cannot prove it.",
+      "checked_examples": [],
+      "content": "For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00027"
+    },
+    {
+      "assessment": "Zero-factor contradiction needs the actual disequality and exposed polynomial equations. Not every root theorem implies a nonzero chosen factor.",
+      "checked_examples": [],
+      "content": "After rewriting a defining polynomial equation into multiple root hypotheses, prove a factor such as `b <> 0` by assuming it is zero, substituting with `subst`, applying the given disequality, and using `nra` on the exposed equations to derive the contradiction.",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00028"
+    },
+    {
+      "assessment": "Exact premise mismatch independently visible in types: Hfk has 0 < f k, while h0 (f k) has 0 < f (f k). The accepted induction application leaves the larger proof open.",
+      "checked_examples": [
+        {
+          "identifier": "example-d86f73b4ae6093a3e3c457b0",
+          "rendered": true,
+          "source": "imo_1977_p6",
+          "status": "executed_open"
+        }
+      ],
+      "content": "When applying a well-founded induction hypothesis at a recursive value such as `f k`, match every side-condition argument to its exact type: if the hypothesis requires `0 < f k`, pass the existing proof of `0 < f k` directly, such as `Hfk`; applying a positivity hypothesis to `f k` may instead produce `0 < f (f k)`, which is a different proposition and cannot satisfy the premise.",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00029"
+    },
+    {
+      "assessment": "Completed training proof supports this factorization workflow for the recorded quadratic. Factor choices and branch automation are problem-dependent.",
+      "checked_examples": [
+        {
+          "identifier": "example-782b95ef62114cbf84f5afee",
+          "rendered": true,
+          "source": "mathd_algebra_206",
+          "status": "completed"
+        }
+      ],
+      "content": "For two roots of a rewritten quadratic, first introduce all theorem variables and hypotheses, rewrite the defining polynomial in both root hypotheses, derive the factored zero product with `assert (...) by nra`, and split it using `Rmult_integral`; solve the factor branches with `nra` or `lra` as appropriate.",
+      "evidence_scope": "Qualitative source review and context-specific executable examples; no universal theorem of tactic correctness/completeness.",
+      "rule": "rocq-00030"
+    }
+  ]
+}

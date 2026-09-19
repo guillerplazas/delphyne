@@ -1,0 +1,958 @@
+{
+  "book": {
+    "bullets": [
+      {
+        "content": "When `Hf : forall x, f x = polynomial x` and `Hx : f x <= 0`, use `rewrite Hf in Hx` to expose the polynomial before invoking `nra`; merely specializing `Hf` does not connect it to `Hx`.\n",
+        "harmful": 0,
+        "helpful": 5,
+        "id": "rocq-00001",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For an induction hypothesis relating recursive `sum_f` expressions, if `rewrite IH` fails after `simpl`, use `change` to expose the successor case explicitly as `sum_f ... n + f n = sum_f ... n + g n + S n`; then apply `rewrite IH; lia`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00002",
+        "section": "tactics"
+      },
+      {
+        "content": "For goals over `nat` with hypotheses such as `(n - 1) * n * (n + 1) = k` and a successor or exact-value conclusion, use `intros` followed by `nia`; it can handle the nonlinear products and truncated subtraction directly.\n",
+        "harmful": 3,
+        "helpful": 4,
+        "id": "rocq-00003",
+        "section": "tactics"
+      },
+      {
+        "content": "For closed `nat` equalities built from executable finite-list operations such as `seq`, `filter`, boolean predicates, and `fold_right`, try `vm_compute`; use `reflexivity` afterward if the resulting definitional equality is not closed automatically.\n",
+        "harmful": 1,
+        "helpful": 1,
+        "id": "rocq-00004",
+        "section": "tactics"
+      },
+      {
+        "content": "When applying a recurrence hypothesis whose predecessor uses truncated subtraction, first prove the exact natural-number equality (for example, `((2 * S k + 1) - 2)%nat = 2 * k + 1` by `simpl; lia`), then rewrite with that equality before applying the hypothesis so its indices unify.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00005",
+        "section": "pitfalls"
+      },
+      {
+        "content": "Under an active `R_scope`, annotate natural-number indices, arithmetic, and order conditions with `%nat` (for example, `(1 < n)%nat`); reserve `INR` and unannotated arithmetic for real-valued conclusions to avoid coercion and comparison-type errors.\n",
+        "harmful": 0,
+        "helpful": 6,
+        "id": "rocq-00006",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For nat modulo goals, explicitly instantiate `Nat.div_mod_eq x y`; rewrite a hypothesis `x mod y = r` to obtain `x = y * (x / y) + r`, then use `nia` for the resulting arithmetic. When the dividend is normalized as `r + q * m`, use `Nat.Div0.mod_add` first and simplify the remaining `r mod m`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00007",
+        "section": "lemmas"
+      },
+      {
+        "content": "For finite nonnegative real sequences with a fixed-sum product goal, prove the stronger normalized inequality `prod_n a n <= (sum_n a n / INR n)^n` first, preserving an arbitrary sum or average throughout the induction; specialize to `sum_n a n = INR n` only afterward.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00009",
+        "section": "strategy"
+      },
+      {
+        "content": "Do not obtain a successor product bound by multiplying an induction hypothesis such as `prod_n a (S n) <= 1` by an arbitrary nonnegative factor: that factor may exceed `1`. An induction proof must retain a bound parameterized by the total sum or average.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00010",
+        "section": "pitfalls"
+      },
+      {
+        "content": "Before using `nra` in AM-GM base or successor cases, unfold or rewrite the relevant `sum_n` and `prod_n` expressions, including base cases such as `sum_n a 0` and `prod_n a 1`, and prove any required `INR n <> 0` denominator condition; `nra` cannot reason through opaque recursive definitions or supply the global inequality.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00011",
+        "section": "tactics"
+      },
+      {
+        "content": "For a real goal `0 <= t^2` where `Rle_0_sqr` does not unify directly, use `replace (t^2) with (t * t) by ring; apply Rle_0_sqr`; use `ring` separately for completing-square identities before finishing the resulting linear inequality with `lra`.\n",
+        "harmful": 0,
+        "helpful": 2,
+        "id": "rocq-00012",
+        "section": "tactics"
+      },
+      {
+        "content": "For positivity of a recursive real product whose successor factor is `1 + / d`, prove `0 < d` with `Rmult_pos_pos`, obtain `0 < / d` via `Rinv_0_lt_compat`, prove the factor with `lra`, and finish the product with `apply Rmult_pos_pos; assumption`; `nra` does not infer positivity through opaque recursive products.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00013",
+        "section": "lemmas"
+      },
+      {
+        "content": "For natural-number product bounds, use `Nat.mul_le_mono` to combine factor inequalities such as `3 <= y` and `2 <= z`, and use `Nat.mul_le_mono_nonneg_r` to multiply an established inequality by a nonnegative factor; provide the premises in the lemma's expected order instead of guessing a multiplication-monotonicity API.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00014",
+        "section": "lemmas"
+      },
+      {
+        "content": "To lift a natural bound into `R`, expose the coercion and apply `le_INR`: for example, prove `2 <= INR c` with `change (INR 2 <= INR c); apply le_INR; lia`; for strict positivity of a cast, apply `lt_0_INR` to the natural positivity hypothesis rather than using a nonexistent `.mpr` projection.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00015",
+        "section": "lemmas"
+      },
+      {
+        "content": "For real equations involving a single reciprocal `1 / x`, after proving `x <> 0`, multiply explicitly by `x` and expose the inverse identity with `unfold Rdiv` and `assert (x * / x = 1) by exact (Rinv_r x Hx)`; then use `ring` and `nra` on the resulting polynomial equation instead of relying on `field_simplify` to normalize it.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00016",
+        "section": "pitfalls"
+      },
+      {
+        "content": "To turn `Rabs t = 1` into a sign disjunction, destruct `(Rle_or_lt 0 t)`; in the nonnegative branch rewrite with `Rabs_pos_eq t H`, and in the negative branch rewrite with `Rabs_left t H`, yielding `t = 1 \\/ t = -1` by `lra`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00017",
+        "section": "tactics"
+      },
+      {
+        "content": "For bounded natural searches involving `Nat.lcm` or `Nat.gcd`, avoid broad `vm_compute`, `compute`, or `simpl [Nat.gcd]`, since recursive evaluation can stack-overflow; reduce only explicitly closed numeral cases, using `change` to expose a known numeral equality when needed.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00018",
+        "section": "pitfalls"
+      },
+      {
+        "content": "When proving a least witness by finite exclusion, first split with `destruct (le_gt_dec bound m) as [Hge | Hlt]`; close the lower-bound branch immediately, handle the finitely many numeral cases explicitly under `Hlt`, and discharge any residual symbolic successor branch directly from `Hlt` rather than using blanket `all:` tactics or unstable numbered selectors.\n",
+        "harmful": 1,
+        "helpful": 1,
+        "id": "rocq-00019",
+        "section": "strategy"
+      },
+      {
+        "content": "For instantiated recurrence equations containing closed casts and natural sums, use `cbv [INR]` to evaluate the casts, then normalize each index explicitly with `replace (a + b)%nat with c%nat in H by reflexivity`; after these rewrites, `lra` can solve the resulting linear real-equation chain.\n",
+        "harmful": 1,
+        "helpful": 0,
+        "id": "rocq-00020",
+        "section": "tactics"
+      },
+      {
+        "content": "For an explicit `Ensemble` built from nested `Add`, first unfold `Add` and rewrite membership using the corresponding `Empty_set`, `Singleton`, and `Union` equivalences; once the resulting disjunctions and `False` cases are exposed, use `intuition; lia`. For cardinality, apply `card_add` layer by layer, prove each freshness premise by unfolding `In` and `Add` and inverting membership hypotheses, and finish the empty base with `card_empty`.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00021",
+        "section": "tactics"
+      },
+      {
+        "content": "For trigonometric goals involving complementary or doubled angles, use the library lemma with the exact goal orientation\u2014such as `sin_PI_x` or `sin_2a`, rewriting with it before `reflexivity` when necessary. For positivity of `sin x`, apply `sin_gt_0` and prove the bounds `0 < x` and `x < PI` explicitly.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00022",
+        "section": "lemmas"
+      },
+      {
+        "content": "For logarithmic inequalities and identities, derive `0 < ln a` from `1 < a` by applying `ln_increasing` to obtain `ln 1 < ln a` and rewriting with `ln_1`. For `ln (t ^ 2) = 2 * ln t`, use `ln_pow` with a proof that the base `t` is positive, normalize the casted exponent with `cbv [INR]`, and use the resulting instantiated equality directly.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00023",
+        "section": "lemmas"
+      },
+      {
+        "content": "For an unbounded quadratic equation over `nat` that `nia` cannot solve directly, split with `destruct (lt_dec b k)` to obtain a finite bound. In the other branch derive `k * k <= b * b` with `rewrite Nat.square_le_mono; lia`, then let `nia` derive the contradiction from the original equation.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00024",
+        "section": "tactics"
+      },
+      {
+        "content": "A closed cast such as `INR 4` is not necessarily definitionally convertible to `(4 : R)`, so `change` may fail. First prove an explicit equality, for example with `cbv [INR]; ring`, and rewrite with that equality before applying real arithmetic.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00025",
+        "section": "pitfalls"
+      },
+      {
+        "content": "For a target or hypothesis containing `ln (a * b)`, prove positivity of both factors explicitly; when a factor is an `Rpower`, unfold `Rpower` and apply `exp_pos`, rather than reusing positivity of the enclosing product. Then rewrite with `ln_mult a b Ha Hb` before calling `nra`; arithmetic automation does not expose this logarithmic product identity or supply its positivity premises.",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00026",
+        "section": "lemmas"
+      },
+      {
+        "content": "For real square-root goals, use `pow2_sqrt` to prove `sqrt t ^ 2 = t` from `0 <= t`, and use `sqrt_pow2` to prove `sqrt (t ^ 2) = t` from `0 <= t`; to compare a root with `1 / 2`, first rewrite `sqrt ((1 / 2 : R) ^ 2)` using `sqrt_pow2`, then apply `sqrt_le_1_alt`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00027",
+        "section": "lemmas"
+      },
+      {
+        "content": "After rewriting a defining polynomial equation into multiple root hypotheses, prove a factor such as `b <> 0` by assuming it is zero, substituting with `subst`, applying the given disequality, and using `nra` on the exposed equations to derive the contradiction.",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00028",
+        "section": "pitfalls"
+      }
+    ],
+    "next_id": 29
+  },
+  "examples": [
+    {
+      "prerequisite_state": "[{\"output\": \"\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"a, b  : R\\nf  : R -> R\\nh0  : forall x : R, f x = a * x + b\\nh1  : f 7 = 4\\nh2  : f 6 = 3\\n|-f 3 = 0\"], \"next\": null}]",
+      "provenance": "experiments/campaigns/ace_sanitized_20260917/revisions/01.json:5282830e61b5d6f2952bedfbd6d3ba94f236df5d9b156b911e42a8319afc7da6",
+      "receipt": {
+        "checked": {
+          "elapsed": 0.5524618420749903,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": null,
+            "failing_index": null,
+            "failing_tactic": null,
+            "finished": true,
+            "probe": null,
+            "proof_so_far": [
+              "rewrite h0 in h1.\nrewrite h0 in h2.\nrewrite (h0 3).\nlra."
+            ],
+            "remaining_goals": [],
+            "success": true
+          },
+          "outcome": "accepted",
+          "rpc_calls": 3,
+          "view": "{\"outcome\": \"accepted\", \"failing_tactic\": null, \"error\": null, \"verified_prefix\": [\"rewrite h0 in h1.\\nrewrite h0 in h2.\\nrewrite (h0 3).\\nlra.\"], \"total_goals\": 0, \"goals\": [], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [],
+          "problem_file": "miniF2F/valid/mathd/algebra/mathd_algebra_43.v",
+          "problem_sha256": "c8eb12e0c1fdc81cb6d069e727821e16f06e0924c48ceeb7422a07f9494918d3",
+          "source": "d3eff5f980c9d1afccc531ca3b3184716bb0ba31dc76a6a58aaa5b6a291ddceb",
+          "theorem_name": "mathd_algebra_43",
+          "version": 1
+        },
+        "elapsed": 0.5524618420749903,
+        "rpc_calls": 3,
+        "snippet": "rewrite h0 in h1.\nrewrite h0 in h2.\nrewrite (h0 3).\nlra.",
+        "status": "completed"
+      },
+      "rule_id": "rocq-00001"
+    },
+    {
+      "prerequisite_state": "[{\"output\": \"\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"a, b, c  : nat\\nn  : R\\nHn  : 0 < n\\nHn1  : n <> 1\\nHa  : (1 < a)%nat\\nHb  : (1 < b)%nat\\nHc  : (1 < c)%nat\\nHeq  : Rpower (n * Rpower (n * Rpower n (/ INR c)) (/ INR b)) (/ INR a) =\\nRpower n (25 / 36)\\nHpc  : 0 < Rpower n (/ INR c)\\nHpb  : 0 < n * Rpower (n * Rpower n (/ INR c)) (/ INR b)\\nHpa  : 0 < Rpower (n * Rpower (n * Rpower n (/ INR c)) (/ INR b)) (/ INR a)\\nHlog  : / INR a * ln (n * Rpower (n * Rpower n (/ INR c)) (/ INR b)) = 25 / 36 * ln n\\n|-b = 3%nat\"], \"next\": null}]",
+      "provenance": "experiments/campaigns/ace_sanitized_20260917/revisions/01.json:5282830e61b5d6f2952bedfbd6d3ba94f236df5d9b156b911e42a8319afc7da6",
+      "receipt": {
+        "checked": {
+          "elapsed": 0.5792726697400212,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof amc12a_2020_p13): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 19,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "intros a b c n Hn Hn1 Habc Heq.",
+              "destruct Habc as [Ha [Hb Hc]].",
+              "assert (Hpc : 0 < Rpower n (/ INR c)).",
+              "{ unfold Rpower.",
+              "apply exp_pos.",
+              "}",
+              "assert (Hpb : 0 < n * Rpower (n * Rpower n (/ INR c)) (/ INR b)).",
+              "{ apply Rmult_pos_pos.",
+              "- exact Hn.",
+              "- unfold Rpower.",
+              "apply exp_pos.",
+              "}",
+              "assert (Hpa : 0 < Rpower (n * Rpower (n * Rpower n (/ INR c)) (/ INR b)) (/ INR a)).",
+              "{ unfold Rpower.",
+              "apply exp_pos.",
+              "}",
+              "assert (Hlog := f_equal ln Heq).",
+              "rewrite !ln_Rpower in Hlog.",
+              "assert (Hrb : 0 < Rpower (n * Rpower n (/ INR c)) (/ INR b)).\n{ unfold Rpower. apply exp_pos. }\nrewrite (ln_mult n (Rpower (n * Rpower n (/ INR c)) (/ INR b)) Hn Hrb) in Hlog."
+            ],
+            "remaining_goals": [
+              "a, b, c  : nat\nn  : R\nHn  : 0 < n\nHn1  : n <> 1\nHa  : (1 < a)%nat\nHb  : (1 < b)%nat\nHc  : (1 < c)%nat\nHeq  : Rpower (n * Rpower (n * Rpower n (/ INR c)) (/ INR b)) (/ INR a) =\nRpower n (25 / 36)\nHpc  : 0 < Rpower n (/ INR c)\nHpb  : 0 < n * Rpower (n * Rpower n (/ INR c)) (/ INR b)\nHpa  : 0 < Rpower (n * Rpower (n * Rpower n (/ INR c)) (/ INR b)) (/ INR a)\nHlog  : / INR a * (ln n + ln (Rpower (n * Rpower n (/ INR c)) (/ INR b))) =\n25 / 36 * ln n\nHrb  : 0 < Rpower (n * Rpower n (/ INR c)) (/ INR b)\n|-b = 3%nat"
+            ],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 27,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof amc12a_2020_p13): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"intros a b c n Hn Hn1 Habc Heq.\", \"destruct Habc as [Ha [Hb Hc]].\", \"assert (Hpc : 0 < Rpower n (/ INR c)).\", \"{ unfold Rpower.\", \"apply exp_pos.\", \"}\", \"assert (Hpb : 0 < n * Rpower (n * Rpower n (/ INR c)) (/ INR b)).\", \"{ apply Rmult_pos_pos.\", \"- exact Hn.\", \"- unfold Rpower.\", \"apply exp_pos.\", \"}\", \"assert (Hpa : 0 < Rpower (n * Rpower (n * Rpower n (/ INR c)) (/ INR b)) (/ INR a)).\", \"{ unfold Rpower.\", \"apply exp_pos.\", \"}\", \"assert (Hlog := f_equal ln Heq).\", \"rewrite !ln_Rpower in Hlog.\", \"assert (Hrb : 0 < Rpower (n * Rpower n (/ INR c)) (/ INR b)).\\n{ unfold Rpower. apply exp_pos. }\\nrewrite (ln_mult n (Rpower (n * Rpower n (/ INR c)) (/ INR b)) Hn Hrb) in Hlog.\"], \"total_goals\": 1, \"goals\": [\"a, b, c  : nat\\nn  : R\\nHn  : 0 < n\\nHn1  : n <> 1\\nHa  : (1 < a)%nat\\nHb  : (1 < b)%nat\\nHc  : (1 < c)%nat\\nHeq  : Rpower (n * Rpower (n * Rpower n (/ INR c)) (/ INR b)) (/ INR a) =\\nRpower n (25 / 36)\\nHpc  : 0 < Rpower n (/ INR c)\\nHpb  : 0 < n * Rpower (n * Rpower n (/ INR c)) (/ INR b)\\nHpa  : 0 < Rpower (n * Rpower (n * Rpower n (/ INR c)) (/ INR b)) (/ INR a)\\nHlog  : / INR a * (ln n + ln (Rpower (n * Rpower n (/ INR c)) (/ INR b))) =\\n25 / 36 * ln n\\nHrb  : 0 < Rpower (n * Rpower n (/ INR c)) (/ INR b)\\n|-b = 3%nat\"], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Reals.\nRequire Import ZArith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros a b c n Hn Hn1 Habc Heq.",
+            "destruct Habc as [Ha [Hb Hc]].",
+            "assert (Hpc : 0 < Rpower n (/ INR c)).",
+            "{ unfold Rpower.",
+            "apply exp_pos.",
+            "}",
+            "assert (Hpb : 0 < n * Rpower (n * Rpower n (/ INR c)) (/ INR b)).",
+            "{ apply Rmult_pos_pos.",
+            "- exact Hn.",
+            "- unfold Rpower.",
+            "apply exp_pos.",
+            "}",
+            "assert (Hpa : 0 < Rpower (n * Rpower (n * Rpower n (/ INR c)) (/ INR b)) (/ INR a)).",
+            "{ unfold Rpower.",
+            "apply exp_pos.",
+            "}",
+            "assert (Hlog := f_equal ln Heq).",
+            "rewrite !ln_Rpower in Hlog."
+          ],
+          "problem_file": "miniF2F/valid/amc/amc12a_2020_p13.v",
+          "problem_sha256": "5c3bef20c2380e8e771564559d67e734503ef36662db67b0faa70b56be9f60e9",
+          "source": "4e2c1307e14f4b3e2b28a504d92495f7604440caa2c3e0fb2a31ce79b75afd37",
+          "theorem_name": "amc12a_2020_p13",
+          "version": 1
+        },
+        "elapsed": 0.5792726697400212,
+        "rpc_calls": 27,
+        "snippet": "assert (Hrb : 0 < Rpower (n * Rpower n (/ INR c)) (/ INR b)).\n{ unfold Rpower. apply exp_pos. }\nrewrite (ln_mult n (Rpower (n * Rpower n (/ INR c)) (/ INR b)) Hn Hrb) in Hlog.",
+        "status": "executed_open"
+      },
+      "rule_id": "rocq-00026"
+    },
+    {
+      "prerequisite_state": "[{\"output\": \"\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"\\n|-forall j : nat, j > 0 -> (3 * (7 * j + 3)) mod 7 = 2\"], \"next\": null}]",
+      "provenance": "experiments/campaigns/ace_sanitized_20260917/revisions/02.json:ba20fbf9179d8f567d992019b3e0c249ab385ccb06394aa373745191f140224d",
+      "receipt": {
+        "checked": {
+          "elapsed": 0.5543329417705536,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": null,
+            "failing_index": null,
+            "failing_tactic": null,
+            "finished": true,
+            "probe": null,
+            "proof_so_far": [
+              "intros j Hj.\nreplace (3 * (7 * j + 3)) with (2 + (3 * j + 1) * 7) by nia.\nrewrite Nat.Div0.mod_add.\nreflexivity."
+            ],
+            "remaining_goals": [],
+            "success": true
+          },
+          "outcome": "accepted",
+          "rpc_calls": 3,
+          "view": "{\"outcome\": \"accepted\", \"failing_tactic\": null, \"error\": null, \"verified_prefix\": [\"intros j Hj.\\nreplace (3 * (7 * j + 3)) with (2 + (3 * j + 1) * 7) by nia.\\nrewrite Nat.Div0.mod_add.\\nreflexivity.\"], \"total_goals\": 0, \"goals\": [], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Arith.\nRequire Import ZArith.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [],
+          "problem_file": "miniF2F/valid/mathd/numbertheory/mathd_numbertheory_301.v",
+          "problem_sha256": "c565d1d5e1c48187ab2eec64abd7c54b5dbdf17a42b451ce65719786343f77c4",
+          "source": "59d30de2b0b94f24770cbee6f5e6e8489147add6fc4803039a62ab50e069aa50",
+          "theorem_name": "mathd_numbertheory_301",
+          "version": 1
+        },
+        "elapsed": 0.5543329417705536,
+        "rpc_calls": 3,
+        "snippet": "intros j Hj.\nreplace (3 * (7 * j + 3)) with (2 + (3 * j + 1) * 7) by nia.\nrewrite Nat.Div0.mod_add.\nreflexivity.",
+        "status": "completed"
+      },
+      "rule_id": "rocq-00007"
+    },
+    {
+      "prerequisite_state": "[{\"output\": \"\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"S0 := Empty_set Z : Ensemble Z\\nS1 := Add Z S0 (-12) : Ensemble Z\\nS2 := Add Z S1 (-11) : Ensemble Z\\nS3 := Add Z S2 (-10) : Ensemble Z\\nS4 := Add Z S3 (-9) : Ensemble Z\\nS5 := Add Z S4 (-8) : Ensemble Z\\nS6 := Add Z S5 (-7) : Ensemble Z\\nS7 := Add Z S6 (-6) : Ensemble Z\\nS8 := Add Z S7 (-5) : Ensemble Z\\nS9 := Add Z S8 (-4) : Ensemble Z\\nS10 := Add Z S9 (-3) : Ensemble Z\\nS11 := Add Z S10 (-2) : Ensemble Z\\nS12 := Add Z S11 (-1) : Ensemble Z\\nS13 := Add Z S12 0 : Ensemble Z\\nS14 := Add Z S13 1 : Ensemble Z\\nS15 := Add Z S14 2 : Ensemble Z\\nS16 := Add Z S15 3 : Ensemble Z\\nS17 := Add Z S16 4 : Ensemble Z\\nH  : In Z S0 (-12)\\n|-False\"], \"next\": null}]",
+      "provenance": "experiments/campaigns/ace_sanitized_20260917/revisions/03.json:2f79d97fb17f9db6598f7f28a0c7fe242335e1ecd12cc1234b15f39ab36f678f",
+      "receipt": {
+        "checked": {
+          "elapsed": 0.6105641489848495,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof mathd_algebra_185): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 24,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "pose (S0 := Empty_set Z).",
+              "pose (S1 := Add Z S0 (-12)).",
+              "pose (S2 := Add Z S1 (-11)).",
+              "pose (S3 := Add Z S2 (-10)).",
+              "pose (S4 := Add Z S3 (-9)).",
+              "pose (S5 := Add Z S4 (-8)).",
+              "pose (S6 := Add Z S5 (-7)).",
+              "pose (S7 := Add Z S6 (-6)).",
+              "pose (S8 := Add Z S7 (-5)).",
+              "pose (S9 := Add Z S8 (-4)).",
+              "pose (S10 := Add Z S9 (-3)).",
+              "pose (S11 := Add Z S10 (-2)).",
+              "pose (S12 := Add Z S11 (-1)).",
+              "pose (S13 := Add Z S12 0).",
+              "pose (S14 := Add Z S13 1).",
+              "pose (S15 := Add Z S14 2).",
+              "pose (S16 := Add Z S15 3).",
+              "pose (S17 := Add Z S16 4).",
+              "exists S17.",
+              "split.",
+              "- repeat apply Union_is_finite.",
+              "+ apply Empty_is_finite.",
+              "+ intro H.",
+              "unfold S0 in H; inversion H."
+            ],
+            "remaining_goals": [],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 30,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof mathd_algebra_185): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"pose (S0 := Empty_set Z).\", \"pose (S1 := Add Z S0 (-12)).\", \"pose (S2 := Add Z S1 (-11)).\", \"pose (S3 := Add Z S2 (-10)).\", \"pose (S4 := Add Z S3 (-9)).\", \"pose (S5 := Add Z S4 (-8)).\", \"pose (S6 := Add Z S5 (-7)).\", \"pose (S7 := Add Z S6 (-6)).\", \"pose (S8 := Add Z S7 (-5)).\", \"pose (S9 := Add Z S8 (-4)).\", \"pose (S10 := Add Z S9 (-3)).\", \"pose (S11 := Add Z S10 (-2)).\", \"pose (S12 := Add Z S11 (-1)).\", \"pose (S13 := Add Z S12 0).\", \"pose (S14 := Add Z S13 1).\", \"pose (S15 := Add Z S14 2).\", \"pose (S16 := Add Z S15 3).\", \"pose (S17 := Add Z S16 4).\", \"exists S17.\", \"split.\", \"- repeat apply Union_is_finite.\", \"+ apply Empty_is_finite.\", \"+ intro H.\", \"unfold S0 in H; inversion H.\"], \"total_goals\": 0, \"goals\": [], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import ZArith.\nRequire Import Sets.Ensembles.\nRequire Import Sets.Finite_sets.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "pose (S0 := Empty_set Z).",
+            "pose (S1 := Add Z S0 (-12)).",
+            "pose (S2 := Add Z S1 (-11)).",
+            "pose (S3 := Add Z S2 (-10)).",
+            "pose (S4 := Add Z S3 (-9)).",
+            "pose (S5 := Add Z S4 (-8)).",
+            "pose (S6 := Add Z S5 (-7)).",
+            "pose (S7 := Add Z S6 (-6)).",
+            "pose (S8 := Add Z S7 (-5)).",
+            "pose (S9 := Add Z S8 (-4)).",
+            "pose (S10 := Add Z S9 (-3)).",
+            "pose (S11 := Add Z S10 (-2)).",
+            "pose (S12 := Add Z S11 (-1)).",
+            "pose (S13 := Add Z S12 0).",
+            "pose (S14 := Add Z S13 1).",
+            "pose (S15 := Add Z S14 2).",
+            "pose (S16 := Add Z S15 3).",
+            "pose (S17 := Add Z S16 4).",
+            "exists S17.",
+            "split.",
+            "- repeat apply Union_is_finite.",
+            "+ apply Empty_is_finite.",
+            "+ intro H."
+          ],
+          "problem_file": "miniF2F/valid/mathd/algebra/mathd_algebra_185.v",
+          "problem_sha256": "cfa213ed7c4a5e78e743be1cc11486e96ce2b89ece6aad63717f4e397341ae52",
+          "source": "447614a2cf4fabc0f7e81ccc59e65e6eaf05a68e816fb5744545c9f4b143218f",
+          "theorem_name": "mathd_algebra_185",
+          "version": 1
+        },
+        "elapsed": 0.6105641489848495,
+        "rpc_calls": 30,
+        "snippet": "unfold S0 in H; inversion H.",
+        "status": "executed_open"
+      },
+      "rule_id": "rocq-00021"
+    },
+    {
+      "prerequisite_state": "[{\"output\": \"\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"x, y  : R\\nHx  : 0 < x\\nHy  : 0 < y\\nH1  : ln (x * y ^ 3) = 1\\nH2  : ln (x ^ 2 * y) = 1\\n|-ln (x * y) = 3 / 5\"], \"next\": null}]",
+      "provenance": "experiments/campaigns/ace_sanitized_20260917/revisions/03.json:2f79d97fb17f9db6598f7f28a0c7fe242335e1ecd12cc1234b15f39ab36f678f",
+      "receipt": {
+        "checked": {
+          "elapsed": 0.5667734956368804,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof amc12b_2003_p17): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 2,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "intros x y Hx Hy H1 H2.",
+              "assert (Hy1 : 0 < y * 1).\n{ apply Rmult_pos_pos.\n- exact Hy.\n- exact Rlt_0_1.\n}\nassert (Hy2 : 0 < y * (y * 1)).\n{ apply Rmult_pos_pos.\n- exact Hy.\n- exact Hy1.\n}\nassert (Hy3 : 0 < y * (y * (y * 1))).\n{ apply Rmult_pos_pos.\n- exact Hy.\n- exact Hy2.\n}\nassert (Hy3' : 0 < y ^ 3).\n{ replace (y ^ 3) with (y * (y * (y * 1))) by ring.\n  exact Hy3.\n}\nrewrite (ln_mult x (y ^ 3) Hx Hy3') in H1."
+            ],
+            "remaining_goals": [
+              "x, y  : R\nHx  : 0 < x\nHy  : 0 < y\nH1  : ln x + ln (y ^ 3) = 1\nH2  : ln (x ^ 2 * y) = 1\nHy1  : 0 < y * 1\nHy2  : 0 < y * (y * 1)\nHy3  : 0 < y * (y * (y * 1))\nHy3'  : 0 < y ^ 3\n|-ln (x * y) = 3 / 5"
+            ],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 5,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof amc12b_2003_p17): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"intros x y Hx Hy H1 H2.\", \"assert (Hy1 : 0 < y * 1).\\n{ apply Rmult_pos_pos.\\n- exact Hy.\\n- exact Rlt_0_1.\\n}\\nassert (Hy2 : 0 < y * (y * 1)).\\n{ apply Rmult_pos_pos.\\n- exact Hy.\\n- exact Hy1.\\n}\\nassert (Hy3 : 0 < y * (y * (y * 1))).\\n{ apply Rmult_pos_pos.\\n- exact Hy.\\n- exact Hy2.\\n}\\nassert (Hy3' : 0 < y ^ 3).\\n{ replace (y ^ 3) with (y * (y * (y * 1))) by ring.\\n  exact Hy3.\\n}\\nrewrite (ln_mult x (y ^ 3) Hx Hy3') in H1.\"], \"total_goals\": 1, \"goals\": [\"x, y  : R\\nHx  : 0 < x\\nHy  : 0 < y\\nH1  : ln x + ln (y ^ 3) = 1\\nH2  : ln (x ^ 2 * y) = 1\\nHy1  : 0 < y * 1\\nHy2  : 0 < y * (y * 1)\\nHy3  : 0 < y * (y * (y * 1))\\nHy3'  : 0 < y ^ 3\\n|-ln (x * y) = 3 / 5\"], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros x y Hx Hy H1 H2."
+          ],
+          "problem_file": "miniF2F/valid/amc/amc12b_2003_p17.v",
+          "problem_sha256": "e3b01eb04bfcdac740fae2162ebaf78fdf239be4c9ca68145026d15685504c32",
+          "source": "1e9a4ac90ecb79c06ed4fbae21a5e5c2d181fbd5da28b59c8ef5a1d559e31ee2",
+          "theorem_name": "amc12b_2003_p17",
+          "version": 1
+        },
+        "elapsed": 0.5667734956368804,
+        "rpc_calls": 5,
+        "snippet": "assert (Hy1 : 0 < y * 1).\n{ apply Rmult_pos_pos.\n- exact Hy.\n- exact Rlt_0_1.\n}\nassert (Hy2 : 0 < y * (y * 1)).\n{ apply Rmult_pos_pos.\n- exact Hy.\n- exact Hy1.\n}\nassert (Hy3 : 0 < y * (y * (y * 1))).\n{ apply Rmult_pos_pos.\n- exact Hy.\n- exact Hy2.\n}\nassert (Hy3' : 0 < y ^ 3).\n{ replace (y ^ 3) with (y * (y * (y * 1))) by ring.\n  exact Hy3.\n}\nrewrite (ln_mult x (y ^ 3) Hx Hy3') in H1.",
+        "status": "executed_open"
+      },
+      "rule_id": "rocq-00026"
+    },
+    {
+      "prerequisite_state": "[{\"output\": \"\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"\\n|-cos (PI / 7) - cos (2 * PI / 7) + cos (3 * PI / 7) = 1 / 2\"], \"next\": null}]",
+      "provenance": "experiments/campaigns/ace_sanitized_20260917/revisions/03.json:2f79d97fb17f9db6598f7f28a0c7fe242335e1ecd12cc1234b15f39ab36f678f",
+      "receipt": {
+        "checked": {
+          "elapsed": 0.5632623229175806,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof imo_1963_p5): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 1,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "assert (H2 : 2 * sin (PI / 7) * cos (PI / 7) = sin (2 * PI / 7)).\n{ symmetry.\n  assert (Heq : 2 * PI / 7 = PI / 7 + PI / 7) by nra.\n  rewrite Heq.\n  rewrite sin_plus.\n  ring.\n}"
+            ],
+            "remaining_goals": [
+              "H2  : 2 * sin (PI / 7) * cos (PI / 7) = sin (2 * PI / 7)\n|-cos (PI / 7) - cos (2 * PI / 7) + cos (3 * PI / 7) = 1 / 2"
+            ],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 4,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof imo_1963_p5): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"assert (H2 : 2 * sin (PI / 7) * cos (PI / 7) = sin (2 * PI / 7)).\\n{ symmetry.\\n  assert (Heq : 2 * PI / 7 = PI / 7 + PI / 7) by nra.\\n  rewrite Heq.\\n  rewrite sin_plus.\\n  ring.\\n}\"], \"total_goals\": 1, \"goals\": [\"H2  : 2 * sin (PI / 7) * cos (PI / 7) = sin (2 * PI / 7)\\n|-cos (PI / 7) - cos (2 * PI / 7) + cos (3 * PI / 7) = 1 / 2\"], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [],
+          "problem_file": "miniF2F/test/imo/imo_1963_p5.v",
+          "problem_sha256": "aeb52f1bdc39cb5c1e9be85c0a1f8dd1e9919d5bf528d58c79a08fdb3ea318de",
+          "source": "0bbac42b166d1b424fede20e05e900781ce159c09285b48e2038125b0a49d77d",
+          "theorem_name": "imo_1963_p5",
+          "version": 1
+        },
+        "elapsed": 0.5632623229175806,
+        "rpc_calls": 4,
+        "snippet": "assert (H2 : 2 * sin (PI / 7) * cos (PI / 7) = sin (2 * PI / 7)).\n{ symmetry.\n  assert (Heq : 2 * PI / 7 = PI / 7 + PI / 7) by nra.\n  rewrite Heq.\n  rewrite sin_plus.\n  ring.\n}",
+        "status": "executed_open"
+      },
+      "rule_id": "rocq-00022"
+    },
+    {
+      "prerequisite_state": "[{\"output\": \"\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"k  : nat\\nHk1  : (5 <= k)%nat\\nHk2  : (k <= 12)%nat\\nH  : 1 + 1 + 1 + 1 <\\n(fix INR (n : nat) : R :=\\n   match n with\\n   | 0%nat => 0\\n   | 1%nat => 1\\n   | S (S _ as n0) => INR n0 + 1\\n   end)\\n  k\\n|-4 < INR k\"], \"next\": null}]",
+      "provenance": "experiments/campaigns/ace_sanitized_20260917/revisions/05.json:d218e6a047e3d26983ec6214b176af436448d50ecdda5fea516cd0e958275f74",
+      "receipt": {
+        "checked": {
+          "elapsed": 0.5851127114146948,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof mathd_algebra_224): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 7,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "assert (Hgood : forall k : nat, (5 <= k)%nat -> (k <= 12)%nat -> satisfies_condition k).",
+              "{ intros k Hk1 Hk2.",
+              "unfold satisfies_condition.",
+              "assert (Hk1R : (4:R) < INR k).",
+              "{ pose proof (lt_INR 4 k Hk1) as H.",
+              "cbv [INR] in H.",
+              "replace (1 + 1 + 1 + 1 : R) with (4:R) in H by ring. exact H."
+            ],
+            "remaining_goals": [],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 12,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof mathd_algebra_224): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"assert (Hgood : forall k : nat, (5 <= k)%nat -> (k <= 12)%nat -> satisfies_condition k).\", \"{ intros k Hk1 Hk2.\", \"unfold satisfies_condition.\", \"assert (Hk1R : (4:R) < INR k).\", \"{ pose proof (lt_INR 4 k Hk1) as H.\", \"cbv [INR] in H.\", \"replace (1 + 1 + 1 + 1 : R) with (4:R) in H by ring. exact H.\"], \"total_goals\": 0, \"goals\": [], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Reals.\nRequire Import Finite_sets.\nRequire Import Finite_sets_facts.\nRequire Import Ensembles.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "assert (Hgood : forall k : nat, (5 <= k)%nat -> (k <= 12)%nat -> satisfies_condition k).",
+            "{ intros k Hk1 Hk2.",
+            "unfold satisfies_condition.",
+            "assert (Hk1R : (4:R) < INR k).",
+            "{ pose proof (lt_INR 4 k Hk1) as H.",
+            "cbv [INR] in H."
+          ],
+          "problem_file": "miniF2F/valid/mathd/algebra/mathd_algebra_224.v",
+          "problem_sha256": "68c4b88342ca0041fd98d3f8f5b7335b4754594386c7e9da4275046f464b0326",
+          "source": "d638eebac882550ea3a578e31ff13cfdb220032b4abb9516f501d9901f0210f5",
+          "theorem_name": "mathd_algebra_224",
+          "version": 1
+        },
+        "elapsed": 0.5851127114146948,
+        "rpc_calls": 12,
+        "snippet": "replace (1 + 1 + 1 + 1 : R) with (4:R) in H by ring. exact H.",
+        "status": "executed_open"
+      },
+      "rule_id": "rocq-00025"
+    },
+    {
+      "prerequisite_state": "[{\"output\": \"\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"Hgood  : forall k : nat, (5 <= k)%nat -> (k <= 12)%nat -> satisfies_condition k\\nE0 := Empty_set nat : Ensemble nat\\n|-cardinal nat (fun n : nat => satisfies_condition n) 8\"], \"next\": null}]",
+      "provenance": "experiments/campaigns/ace_sanitized_20260917/revisions/05.json:d218e6a047e3d26983ec6214b176af436448d50ecdda5fea516cd0e958275f74",
+      "receipt": {
+        "checked": {
+          "elapsed": 0.04888139199465513,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof mathd_algebra_224): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 36,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "assert (Hgood : forall k : nat, (5 <= k)%nat -> (k <= 12)%nat -> satisfies_condition k).",
+              "{ intros k Hk1 Hk2.",
+              "unfold satisfies_condition.",
+              "assert (Hlow : (4:R) < INR k).",
+              "{ assert (H : INR 4 < INR k).",
+              "{ apply lt_INR.",
+              "lia.",
+              "}",
+              "assert (Heq : (4:R) = INR 4).",
+              "{ cbv [INR].",
+              "ring.",
+              "}",
+              "rewrite <- Heq in H.",
+              "exact H.",
+              "}",
+              "assert (Hup : INR k <= (12:R)).",
+              "{ assert (H : INR k <= INR 12).",
+              "{ apply le_INR.",
+              "exact Hk2.",
+              "}",
+              "assert (Heq : (12:R) = INR 12).",
+              "{ cbv [INR].",
+              "ring.",
+              "}",
+              "rewrite <- Heq in H.",
+              "exact H.",
+              "}",
+              "assert (Hs : sqrt (INR k) ^ 2 = INR k).",
+              "{ apply pow2_sqrt.",
+              "apply pos_INR; lia.",
+              "}",
+              "pose proof (sqrt_pos (INR k)) as Hroot.",
+              "nra.",
+              "}",
+              "set (E0 := Empty_set nat).",
+              "set (E1 := Add nat E0 (5%nat))."
+            ],
+            "remaining_goals": [
+              "Hgood  : forall k : nat, (5 <= k)%nat -> (k <= 12)%nat -> satisfies_condition k\nE0 := Empty_set nat : Ensemble nat\nE1 := Add nat E0 5%nat : Ensemble nat\n|-cardinal nat (fun n : nat => satisfies_condition n) 8"
+            ],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 42,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof mathd_algebra_224): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"assert (Hgood : forall k : nat, (5 <= k)%nat -> (k <= 12)%nat -> satisfies_condition k).\", \"{ intros k Hk1 Hk2.\", \"unfold satisfies_condition.\", \"assert (Hlow : (4:R) < INR k).\", \"{ assert (H : INR 4 < INR k).\", \"{ apply lt_INR.\", \"lia.\", \"}\", \"assert (Heq : (4:R) = INR 4).\", \"{ cbv [INR].\", \"ring.\", \"}\", \"rewrite <- Heq in H.\", \"exact H.\", \"}\", \"assert (Hup : INR k <= (12:R)).\", \"{ assert (H : INR k <= INR 12).\", \"{ apply le_INR.\", \"exact Hk2.\", \"}\", \"assert (Heq : (12:R) = INR 12).\", \"{ cbv [INR].\", \"ring.\", \"}\", \"rewrite <- Heq in H.\", \"exact H.\", \"}\", \"assert (Hs : sqrt (INR k) ^ 2 = INR k).\", \"{ apply pow2_sqrt.\", \"apply pos_INR; lia.\", \"}\", \"pose proof (sqrt_pos (INR k)) as Hroot.\", \"nra.\", \"}\", \"set (E0 := Empty_set nat).\", \"set (E1 := Add nat E0 (5%nat)).\"], \"total_goals\": 1, \"goals\": [\"Hgood  : forall k : nat, (5 <= k)%nat -> (k <= 12)%nat -> satisfies_condition k\\nE0 := Empty_set nat : Ensemble nat\\nE1 := Add nat E0 5%nat : Ensemble nat\\n|-cardinal nat (fun n : nat => satisfies_condition n) 8\"], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Reals.\nRequire Import Finite_sets.\nRequire Import Finite_sets_facts.\nRequire Import Ensembles.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "assert (Hgood : forall k : nat, (5 <= k)%nat -> (k <= 12)%nat -> satisfies_condition k).",
+            "{ intros k Hk1 Hk2.",
+            "unfold satisfies_condition.",
+            "assert (Hlow : (4:R) < INR k).",
+            "{ assert (H : INR 4 < INR k).",
+            "{ apply lt_INR.",
+            "lia.",
+            "}",
+            "assert (Heq : (4:R) = INR 4).",
+            "{ cbv [INR].",
+            "ring.",
+            "}",
+            "rewrite <- Heq in H.",
+            "exact H.",
+            "}",
+            "assert (Hup : INR k <= (12:R)).",
+            "{ assert (H : INR k <= INR 12).",
+            "{ apply le_INR.",
+            "exact Hk2.",
+            "}",
+            "assert (Heq : (12:R) = INR 12).",
+            "{ cbv [INR].",
+            "ring.",
+            "}",
+            "rewrite <- Heq in H.",
+            "exact H.",
+            "}",
+            "assert (Hs : sqrt (INR k) ^ 2 = INR k).",
+            "{ apply pow2_sqrt.",
+            "apply pos_INR; lia.",
+            "}",
+            "pose proof (sqrt_pos (INR k)) as Hroot.",
+            "nra.",
+            "}",
+            "set (E0 := Empty_set nat)."
+          ],
+          "problem_file": "miniF2F/valid/mathd/algebra/mathd_algebra_224.v",
+          "problem_sha256": "68c4b88342ca0041fd98d3f8f5b7335b4754594386c7e9da4275046f464b0326",
+          "source": "d638eebac882550ea3a578e31ff13cfdb220032b4abb9516f501d9901f0210f5",
+          "theorem_name": "mathd_algebra_224",
+          "version": 1
+        },
+        "elapsed": 0.04888139199465513,
+        "rpc_calls": 42,
+        "snippet": "set (E1 := Add nat E0 (5%nat)).",
+        "status": "executed_open"
+      },
+      "rule_id": "rocq-00006"
+    },
+    {
+      "prerequisite_state": "[{\"output\": \"\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"x  : R\\nHx  : 1 < x\\nHeq  : ln (ln x / ln 8) / ln 2 = ln (ln x / ln 2) / ln 8\\nHln2  : 0 < ln 2\\nHlnx  : 0 < ln x\\nHtwo  : (0 : R) < 2\\nH  : ln (2 ^ 3) = (1 + 1 + 1) * ln 2\\n|-ln 8 = 3 * ln 2\"], \"next\": null}]",
+      "provenance": "experiments/campaigns/ace_sanitized_20260917/revisions/06.json:f2558ccc85b2accbcf62f75a5e0deeeca4fdaf076f49fe79d1d2d2688ab00db5",
+      "receipt": {
+        "checked": {
+          "elapsed": 0.5701780654489994,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof aime_1988_p3): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 19,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "intros x Hx Heq.",
+              "unfold logb in *.",
+              "assert (Hln2 : 0 < ln 2).",
+              "{ rewrite <- ln_1.",
+              "apply ln_increasing.",
+              "- lra.",
+              "- lra.",
+              "}",
+              "assert (Hlnx : 0 < ln x).",
+              "{ rewrite <- ln_1.",
+              "apply ln_increasing.",
+              "- lra.",
+              "- lra.",
+              "}",
+              "assert (Hln8 : ln 8 = 3 * ln 2).",
+              "{ assert (Htwo : (0:R) < 2) by lra.",
+              "pose proof (ln_pow 2 Htwo 3) as H.",
+              "cbv [INR] in H.",
+              "replace (2 ^ 3) with (8 : R) in H by ring.\nreplace (1 + 1 + 1 : R) with 3 in H by ring.\nexact H."
+            ],
+            "remaining_goals": [],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 29,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof aime_1988_p3): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"intros x Hx Heq.\", \"unfold logb in *.\", \"assert (Hln2 : 0 < ln 2).\", \"{ rewrite <- ln_1.\", \"apply ln_increasing.\", \"- lra.\", \"- lra.\", \"}\", \"assert (Hlnx : 0 < ln x).\", \"{ rewrite <- ln_1.\", \"apply ln_increasing.\", \"- lra.\", \"- lra.\", \"}\", \"assert (Hln8 : ln 8 = 3 * ln 2).\", \"{ assert (Htwo : (0:R) < 2) by lra.\", \"pose proof (ln_pow 2 Htwo 3) as H.\", \"cbv [INR] in H.\", \"replace (2 ^ 3) with (8 : R) in H by ring.\\nreplace (1 + 1 + 1 : R) with 3 in H by ring.\\nexact H.\"], \"total_goals\": 0, \"goals\": [], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros x Hx Heq.",
+            "unfold logb in *.",
+            "assert (Hln2 : 0 < ln 2).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hlnx : 0 < ln x).",
+            "{ rewrite <- ln_1.",
+            "apply ln_increasing.",
+            "- lra.",
+            "- lra.",
+            "}",
+            "assert (Hln8 : ln 8 = 3 * ln 2).",
+            "{ assert (Htwo : (0:R) < 2) by lra.",
+            "pose proof (ln_pow 2 Htwo 3) as H.",
+            "cbv [INR] in H."
+          ],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "dc5363ffce4179e970f7beed3569093a1cf629dcc8411323294e1e889a3e8347",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "elapsed": 0.5701780654489994,
+        "rpc_calls": 29,
+        "snippet": "replace (2 ^ 3) with (8 : R) in H by ring.\nreplace (1 + 1 + 1 : R) with 3 in H by ring.\nexact H.",
+        "status": "executed_open"
+      },
+      "rule_id": "rocq-00023"
+    },
+    {
+      "prerequisite_state": "[{\"output\": \"\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"s  : nat -> R\\nh0  : forall n : nat, s (S (S n)) = s (S n) + s n\\nh1  : s 9%nat = 110\\nh2  : s 7%nat = 42\\n|-s 4%nat = 10\"], \"next\": null}]",
+      "provenance": "experiments/campaigns/ace_sanitized_20260917/revisions/07.json:5889b28a700698b6bc995e10eb7db4cd2d83f3f3dcee318f517a196d97db7362",
+      "receipt": {
+        "checked": {
+          "elapsed": 0.5639977790415287,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": null,
+            "failing_index": null,
+            "failing_tactic": null,
+            "finished": true,
+            "probe": null,
+            "proof_so_far": [
+              "pose proof (h0 7%nat) as H7.\npose proof (h0 6%nat) as H6.\npose proof (h0 5%nat) as H5.\npose proof (h0 4%nat) as H4.\ncbv [Nat.succ] in H7, H6, H5, H4.\nlra."
+            ],
+            "remaining_goals": [],
+            "success": true
+          },
+          "outcome": "accepted",
+          "rpc_calls": 3,
+          "view": "{\"outcome\": \"accepted\", \"failing_tactic\": null, \"error\": null, \"verified_prefix\": [\"pose proof (h0 7%nat) as H7.\\npose proof (h0 6%nat) as H6.\\npose proof (h0 5%nat) as H5.\\npose proof (h0 4%nat) as H4.\\ncbv [Nat.succ] in H7, H6, H5, H4.\\nlra.\"], \"total_goals\": 0, \"goals\": [], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [],
+          "problem_file": "miniF2F/valid/amc/amc12a_2013_p7.v",
+          "problem_sha256": "829a61246ceaf4456f7901acf5cecaf31056f4fa4788540fdaa98229e9caed71",
+          "source": "5e6d9952d5d5ca1ea52df8a76319ac24f456cc2bf8bfa6b3f8c865a7c8fb5e06",
+          "theorem_name": "amc12a_2013_p7",
+          "version": 1
+        },
+        "elapsed": 0.5639977790415287,
+        "rpc_calls": 3,
+        "snippet": "pose proof (h0 7%nat) as H7.\npose proof (h0 6%nat) as H6.\npose proof (h0 5%nat) as H5.\npose proof (h0 4%nat) as H4.\ncbv [Nat.succ] in H7, H6, H5, H4.\nlra.",
+        "status": "completed"
+      },
+      "rule_id": "rocq-00020"
+    },
+    {
+      "prerequisite_state": "[{\"output\": \"\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"a, b, c  : R\\nHa  : 0 < a\\nHb  : 0 < b\\nHc  : 0 < c\\nHcab  : c < a + b\\nHbac  : b < a + c\\nHacb  : a < b + c\\nx := (b + c - a) / 2 : R\\ny := (c + a - b) / 2 : R\\nz := (a + b - c) / 2 : R\\nHx  : 0 < x\\nHy  : 0 < y\\nHz  : 0 < z\\nHxy  : 0 <= x * y\\nHyz  : 0 <= y * z\\nHxz  : 0 <= x * z\\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)\"], \"next\": null}]",
+      "provenance": "experiments/campaigns/ace_sanitized_20260917/revisions/08.json:557b12df3ac714061dd52e1694f75d88a2e2337321a493498b35a8c2b2ad2f28",
+      "receipt": {
+        "checked": {
+          "elapsed": 0.5990295140072703,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof imo_1983_p6): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 11,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.",
+              "set (x := (b + c - a) / 2).",
+              "set (y := (c + a - b) / 2).",
+              "set (z := (a + b - c) / 2).",
+              "assert (Hx : 0 < x) by (unfold x; lra).",
+              "assert (Hy : 0 < y) by (unfold y; lra).",
+              "assert (Hz : 0 < z) by (unfold z; lra).",
+              "assert (Hxy : 0 <= x * y) by nra.",
+              "assert (Hyz : 0 <= y * z) by nra.",
+              "assert (Hxz : 0 <= x * z) by nra.",
+              "assert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr."
+            ],
+            "remaining_goals": [
+              "a, b, c  : R\nHa  : 0 < a\nHb  : 0 < b\nHc  : 0 < c\nHcab  : c < a + b\nHbac  : b < a + c\nHacb  : a < b + c\nx := (b + c - a) / 2 : R\ny := (c + a - b) / 2 : R\nz := (a + b - c) / 2 : R\nHx  : 0 < x\nHy  : 0 < y\nHz  : 0 < z\nHxy  : 0 <= x * y\nHyz  : 0 <= y * z\nHxz  : 0 <= x * z\nHsq1  : 0 <= (y - z) * (y - z)\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)"
+            ],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 14,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof imo_1983_p6): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.\", \"set (x := (b + c - a) / 2).\", \"set (y := (c + a - b) / 2).\", \"set (z := (a + b - c) / 2).\", \"assert (Hx : 0 < x) by (unfold x; lra).\", \"assert (Hy : 0 < y) by (unfold y; lra).\", \"assert (Hz : 0 < z) by (unfold z; lra).\", \"assert (Hxy : 0 <= x * y) by nra.\", \"assert (Hyz : 0 <= y * z) by nra.\", \"assert (Hxz : 0 <= x * z) by nra.\", \"assert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.\"], \"total_goals\": 1, \"goals\": [\"a, b, c  : R\\nHa  : 0 < a\\nHb  : 0 < b\\nHc  : 0 < c\\nHcab  : c < a + b\\nHbac  : b < a + c\\nHacb  : a < b + c\\nx := (b + c - a) / 2 : R\\ny := (c + a - b) / 2 : R\\nz := (a + b - c) / 2 : R\\nHx  : 0 < x\\nHy  : 0 < y\\nHz  : 0 < z\\nHxy  : 0 <= x * y\\nHyz  : 0 <= y * z\\nHxz  : 0 <= x * z\\nHsq1  : 0 <= (y - z) * (y - z)\\n|-0 <= a ^ 2 * b * (a - b) + b ^ 2 * c * (b - c) + c ^ 2 * a * (c - a)\"], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros a b c [Ha [Hb Hc]] Hcab Hbac Hacb.",
+            "set (x := (b + c - a) / 2).",
+            "set (y := (c + a - b) / 2).",
+            "set (z := (a + b - c) / 2).",
+            "assert (Hx : 0 < x) by (unfold x; lra).",
+            "assert (Hy : 0 < y) by (unfold y; lra).",
+            "assert (Hz : 0 < z) by (unfold z; lra).",
+            "assert (Hxy : 0 <= x * y) by nra.",
+            "assert (Hyz : 0 <= y * z) by nra.",
+            "assert (Hxz : 0 <= x * z) by nra."
+          ],
+          "problem_file": "miniF2F/test/imo/imo_1983_p6.v",
+          "problem_sha256": "c54ecac0fbea0f987508dc35fc8a1412d527cfdab091d300fc5874fd0704ee4d",
+          "source": "3d3693db74cc10ec6f13a9a4f7a835ba4530744f342fb3aa1b254c2dba6abb2a",
+          "theorem_name": "imo_1983_p6",
+          "version": 1
+        },
+        "elapsed": 0.5990295140072703,
+        "rpc_calls": 14,
+        "snippet": "assert (Hsq1 : 0 <= (y - z) * (y - z)) by apply Rle_0_sqr.",
+        "status": "executed_open"
+      },
+      "rule_id": "rocq-00012"
+    },
+    {
+      "prerequisite_state": "[{\"output\": \"\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"c  : R\\nf  : R -> R\\nHf  : forall x0 : R, f x0 = 2 * x0 ^ 2 + 5 * x0 + c\\nx  : R\\nHx  : 2 * x ^ 2 + 5 * x + c <= 0\\n|-c <= 25 / 8\"], \"next\": null}]",
+      "provenance": "experiments/campaigns/ace_sanitized_20260917/revisions/09.json:90a0528a0c98ff581888010fbedba8330ade7793a335fb7c250d542b63ac5503",
+      "receipt": {
+        "checked": {
+          "elapsed": 0.5779488179832697,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof mathd_algebra_28): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 4,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "intros c f Hf Hex.",
+              "destruct Hex as [x Hx].",
+              "rewrite Hf in Hx.",
+              "assert (Hs : 0 <= (4 * x + 5) * (4 * x + 5)) by apply Rle_0_sqr."
+            ],
+            "remaining_goals": [
+              "c  : R\nf  : R -> R\nHf  : forall x0 : R, f x0 = 2 * x0 ^ 2 + 5 * x0 + c\nx  : R\nHx  : 2 * x ^ 2 + 5 * x + c <= 0\nHs  : 0 <= (4 * x + 5) * (4 * x + 5)\n|-c <= 25 / 8"
+            ],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 7,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof mathd_algebra_28): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"intros c f Hf Hex.\", \"destruct Hex as [x Hx].\", \"rewrite Hf in Hx.\", \"assert (Hs : 0 <= (4 * x + 5) * (4 * x + 5)) by apply Rle_0_sqr.\"], \"total_goals\": 1, \"goals\": [\"c  : R\\nf  : R -> R\\nHf  : forall x0 : R, f x0 = 2 * x0 ^ 2 + 5 * x0 + c\\nx  : R\\nHx  : 2 * x ^ 2 + 5 * x + c <= 0\\nHs  : 0 <= (4 * x + 5) * (4 * x + 5)\\n|-c <= 25 / 8\"], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [
+            "intros c f Hf Hex.",
+            "destruct Hex as [x Hx].",
+            "rewrite Hf in Hx."
+          ],
+          "problem_file": "miniF2F/valid/mathd/algebra/mathd_algebra_28.v",
+          "problem_sha256": "96bf087525968212a7f639a317f22ad7129ba88281c07dd1b309cfac07f684a7",
+          "source": "71c3f49f1a98da03ca3f1db269cd3579e7e32198fae142a1fa7f4631ab316cab",
+          "theorem_name": "mathd_algebra_28",
+          "version": 1
+        },
+        "elapsed": 0.5779488179832697,
+        "rpc_calls": 7,
+        "snippet": "assert (Hs : 0 <= (4 * x + 5) * (4 * x + 5)) by apply Rle_0_sqr.",
+        "status": "executed_open"
+      },
+      "rule_id": "rocq-00012"
+    },
+    {
+      "prerequisite_state": "[{\"output\": \"\", \"start\": 0, \"total_goals\": 1, \"goals\": [\"\\n|-forall x : R,\\n1 < x -> logb 2 (logb 8 x) = logb 8 (logb 2 x) -> logb 2 x ^ 2 = 27\"], \"next\": null}]",
+      "provenance": "experiments/campaigns/ace_sanitized_20260917/audits/cast_bound_recipe.json",
+      "receipt": {
+        "checked": {
+          "elapsed": 0.5524943135678768,
+          "feedback": {
+            "auto_finished": false,
+            "error_message": "(-32003, 'Coq:  (in proof aime_1988_p3): Attempt to save an incomplete proof\\n(there are remaining open goals).')",
+            "failing_index": 1,
+            "failing_tactic": "Qed.",
+            "finished": false,
+            "probe": null,
+            "proof_so_far": [
+              "assert (Hlift : forall c:nat, (2 <= c)%nat -> 2 <= INR c). { intros c Hc. change (INR 2 <= INR c); apply le_INR; lia. }"
+            ],
+            "remaining_goals": [
+              "Hlift  : forall c : nat, (2 <= c)%nat -> 2 <= INR c\n|-forall x : R,\n1 < x -> logb 2 (logb 8 x) = logb 8 (logb 2 x) -> logb 2 x ^ 2 = 27"
+            ],
+            "success": false
+          },
+          "outcome": "incomplete",
+          "rpc_calls": 4,
+          "view": "{\"outcome\": \"incomplete\", \"failing_tactic\": \"Qed.\", \"error\": \"(-32003, 'Coq:  (in proof aime_1988_p3): Attempt to save an incomplete proof\\\\n(there are remaining open goals).')\", \"verified_prefix\": [\"assert (Hlift : forall c:nat, (2 <= c)%nat -> 2 <= INR c). { intros c Hc. change (INR 2 <= INR c); apply le_INR; lia. }\"], \"total_goals\": 1, \"goals\": [\"Hlift  : forall c : nat, (2 <= c)%nat -> 2 <= INR c\\n|-forall x : R,\\n1 < x -> logb 2 (logb 8 x) = logb 8 (logb 2 x) -> logb 2 x ^ 2 = 27\"], \"automation\": [], \"inspection\": \"InspectProofState(tactics=verified prefix, start=4)\"}"
+        },
+        "context": {
+          "environment": "Require Import Coq.Reals.Reals.('Require Import Lia.', 'Require Import Lra.', 'Require Import Psatz.', 'Require Import Field.')",
+          "prefix": [],
+          "problem_file": "miniF2F/valid/aime/aime_1988_p3.v",
+          "problem_sha256": "1a0b65ffcbbb657cacb5fb6f03b2ea36c55b4b4c7d22b87d33ea6e3dde49ade0",
+          "source": "runtime",
+          "theorem_name": "aime_1988_p3",
+          "version": 1
+        },
+        "elapsed": 0.5524943135678768,
+        "rpc_calls": 4,
+        "snippet": "assert (Hlift : forall c:nat, (2 <= c)%nat -> 2 <= INR c). { intros c Hc. change (INR 2 <= INR c); apply le_INR; lia. }",
+        "status": "executed_open"
+      },
+      "rule_id": "rocq-00015"
+    }
+  ],
+  "lineage": [
+    "30bd01a797321dd7897a928ff647f838164fc3ba607d31fb0951e8784a9faa20"
+  ]
+}
