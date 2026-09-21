@@ -178,7 +178,7 @@ def test_variant_table_invariants() -> None:
         if name.startswith("x-"):
             assert v.render_version == 2 and v.curator_contract == 2
             assert v.show_definitions and v.dedup == "embedding"
-            assert v.generator_cap == ad.x.X_DOLLAR_CAP
+            assert v.generator_cap == ad.X_DOLLAR_CAP
         assert v.name == name
     assert ad.VARIANTS["x-online-s1"].seed == 1
     assert (

@@ -495,20 +495,14 @@ class TerraVariant(adapt.AdaptVariant):
 
 def training_variant() -> TerraVariant:
     original = adapt.VARIANTS["x3-offline"]
-    return TerraVariant(
-        **(
-            asdict(original)
-            | dict(
-                name=VARIANT,
-                final_playbook="ace_attribution_terra_20260912.yaml",
-                generator_cap=1.0,
-                role_cap=0.20,
-                campaign_runtime=str(
-                    (CAMPAIGN / "runtime.json").relative_to(ROOT)
-                ),
-            )
-        )
+    values: dict[str, Any] = asdict(original) | dict(
+        name=VARIANT,
+        final_playbook="ace_attribution_terra_20260912.yaml",
+        generator_cap=1.0,
+        role_cap=0.20,
+        campaign_runtime=str((CAMPAIGN / "runtime.json").relative_to(ROOT)),
     )
+    return TerraVariant(**values)
 
 
 def launch(

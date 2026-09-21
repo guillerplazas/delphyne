@@ -1,0 +1,435 @@
+{
+  "author": [
+    "sol_medium",
+    "gpt-5.6-sol",
+    "medium"
+  ],
+  "playbook": {
+    "bullets": [
+      {
+        "content": "WHEN a congruence hypothesis must rewrite inside `(d * t) mod m`, DO first rewrite with `Nat.mul_mod`, then rewrite the exposed `t mod m`; preserve symbolic remainders and normalize only concrete factors explicitly, EXCEPT do not use unrestricted `simpl` while symbolic `mod` expressions remain, and discharge the required `m <> 0`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00001",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN normalizing `m mod m` or `(m + r) mod m`, DO use `Nat.mod_same` (after `Nat.add_mod` for the sum), then use `Nat.mod_small` only for `r mod m`, PROVIDED `m <> 0` and `r < m`; never apply `Nat.mod_small` to `m mod m`, since it requires the false side condition `m < m`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00002",
+        "section": "pitfalls"
+      },
+      {
+        "content": "WHEN inversion of nested `Ensembles` membership creates many branches, DO clear each inverted membership hypothesis and distribute the closer with `all:`, e.g. `repeat match goal with | Hm : In _ _ _ |- _ => inversion Hm; clear Hm end. all: lia.`, PROVIDED every branch is arithmetic; a plain subsequent `lia.` handles only the focused branch.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00003",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a deeply nested explicit finite `Ensemble` witness causes a first-tactic parse error, DO build it incrementally with `let E0 := constr:(Empty_set T) in let E1 := constr:(Add T E0 v1) in ... exists En.`, PROVIDED each local term is chained within the same tactic expression.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00004",
+        "section": "strategy"
+      },
+      {
+        "content": "WHEN proving positivity of a concrete real square or cube, DO rewrite it as `x*x` or `x*(x*x)` by `ring` and give nested `Rmult_lt_0_compat` proof terms, PROVIDED `0 < x`; avoid `pow_pos` when its generated obligations do not match real-order goals.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00005",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `field_simplify` fails on an equality of real quotients, DO first rewrite one quotient so both denominators are syntactically identical, then apply `Rdiv_eq_reg_r` to obtain numerator equality, PROVIDED the common denominator is proved nonzero and any scaling rewrite uses an exact parenthesized numerator.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00006",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a real polynomial inequality reduces to nonnegativity of a completed square, DO assert `0 <= t * t`, prove the focused assertion with `apply Rle_0_sqr.`, then run `nra` on the original goal, PROVIDED the remaining consequence is polynomial arithmetic over `R`.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00007",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a strict real inequality must be multiplied on the right by a symbolic factor, DO prove the factor positive and apply `Rmult_lt_compat_r` before using `nra`, PROVIDED both inequalities are normalized to matching right-multiplication syntax.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00008",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN natural-number indices differ propositionally but `change` reports \u201cNot convertible,\u201d DO assert their equality with explicitly scoped arithmetic, e.g. `assert (He : (i + c)%nat = j) by lia.`, then `rewrite He` or `rewrite <- He`, PROVIDED the equality is arithmetic; under `R_scope`, omitting `%nat` may make the expression parse as real arithmetic.\n",
+        "harmful": 0,
+        "helpful": 2,
+        "id": "rocq-00009",
+        "section": "pitfalls"
+      },
+      {
+        "content": "WHEN conversion of a large closed `nat` power expands unary numerals, loses rewrite matches, or overflows, DO first `remember (B ^ k) as c in H`, prove its symbolic form via `forall n, B ^ n = (b ^ d) ^ n` by induction, rewrite `c`, then normalize powers and apply `Nat.pow_inj_r`, PROVIDED the base conversion closes without evaluating the large power and `1 < b`; remembering only `B` is insufficient.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00010",
+        "section": "strategy"
+      },
+      {
+        "content": "WHEN `cbv.` on a closed arithmetic equality leaves a syntactically reflexive goal, DO append `reflexivity.` rather than resubmitting the reduction alone, PROVIDED both normalized sides are convertible; read a compact goal display like `|-24 = 24` as turnstile plus `24 = 24`, not necessarily a negative numeral.\n",
+        "harmful": 0,
+        "helpful": 3,
+        "id": "rocq-00011",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a recurrence advances by two and the target remains odd, DO induct on `k` with an invariant indexed by `((2 * k + 1)%nat)`, prove parity using `Nat.odd_odd`, and align the predecessor via `replace (2 * S k + 1 - 2)%nat with (2 * k + 1)%nat by lia.`, PROVIDED the base is at index one and every required step satisfies the recurrence guard.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00012",
+        "section": "strategy"
+      },
+      {
+        "content": "WHEN a hypothesis contains a closed cast `INR c` and `change` fails as non-convertible, DO `repeat rewrite S_INR in H; rewrite INR_0 in H; nra.`, PROVIDED `c` is a modest closed natural numeral and the resulting expression is real arithmetic; EXCEPT avoid this linear-size expansion for very large numerals.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00013",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN real-valued linear equalities determine the variables and the goal is a polynomial equality with small fixed powers, DO introduce the variables and hypotheses, then try `nra.` directly, PROVIDED there are no divisions with unresolved nonzero conditions, symbolic exponents, or non-polynomial operations.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00014",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a prime divides another prime and their equality is needed, DO apply `prime_div_prime` directly and reverse the resulting equality explicitly if required, PROVIDED primality of both integers and divisibility in the lemma\u2019s argument order are available; avoid destructing a multi-case characterization of prime divisors.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00015",
+        "section": "lemmas"
+      },
+      {
+        "content": "WHEN verifier feedback reports no remaining goals after a successful branch but flags the following command because no goal remains at the current focus, DO remove that trailing command rather than modify the verified branch, PROVIDED the verified prefix includes the branch-closing tactic; EXCEPT when the error explicitly directs focus to a sibling bullet, follow the indicated bullet structure instead.",
+        "harmful": 2,
+        "helpful": 1,
+        "id": "rocq-00016",
+        "section": "pitfalls"
+      },
+      {
+        "content": "WHEN proving an affine form for `u : nat -> R` from `forall n, u (n+1)%nat = u n + 1`, DO induct on `n`, replace `S n` by `(n+1)%nat`, rewrite the recurrence and IH, then use `rewrite (plus_INR n 1); simpl; ring`, PROVIDED the base index is explicitly `0%nat`; the reverse `plus_INR` direction does not match the casted sum.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00017",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN both hypothesis and goal contain `sum_f_R0` at modest closed bounds and a pointwise closed form `Hu`, DO `cbn [sum_f_R0]`, simplify concrete indices, `repeat rewrite Hu` separately in the hypothesis and goal, simplify casts, then use `lra`, PROVIDED the resulting expressions are linear over `R`; prefer this standard-Ltac pipeline when `simp` or `norm_num` is unavailable.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00018",
+        "section": "strategy"
+      },
+      {
+        "content": "WHEN `ring` reports \u201cnot a valid ring equation\u201d while normalizing a real expression containing `/`, DO prove an explicit equality with `field` and rewrite it, e.g. `assert (E : x / c + x / c = 2 * x / c) by field; rewrite E in H.`, PROVIDED denominators are concrete nonzero constants or all generated nonzero obligations can be discharged.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00019",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN proving `0 < sin x` from bounds on an angle, DO prove `Hx : 0 < x` and `Hy : x < PI` separately, then use `exact (sin_gt_0 x Hx Hy)`, PROVIDED both strict bounds are available; applying the lemma creates two independent goals, so do not `split` them as a conjunction.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00020",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN hypotheses give concrete values of a function and a pointwise polynomial specification describes that function, DO rewrite the specification at each known input in its hypothesis and at the target, then run `nra`, PROVIDED rewriting removes all relevant function applications and leaves a sufficiently constrained real polynomial system; EXCEPT unresolved divisions or non-polynomial operations require separate preprocessing.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00021",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN converting `Rabs x = Rabs y` to polynomial real arithmetic, DO `pose proof (Rsqr_eq_asb_1 x y Habs) as Hsq; unfold Rsqr in Hsq.`, PROVIDED the hypothesis has exactly that absolute-value shape; do not prestate the conclusion using `^ 2`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00022",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `nra` cannot conclude `u = v` from equal squares, DO first supply compatible sign facts for both roots; for `v = sqrt c`, use `assert (Hv : 0 <= sqrt c) by exact (sqrt_pos c).`, PROVIDED the squared equalities are polynomial after unfolding `Rsqr` and the other root is also known nonnegative.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00023",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN concrete recurrence and symmetry equations connect a real-valued function application to a known base value, DO `pose proof` of every required edge, normalize the resulting hypotheses with `cbn` together or separately, then run `lra` or `nra`, PROVIDED all indices are closed naturals and normalization leaves a determined polynomial system; EXCEPT use separate `cbn in H.` commands when combined normalization syntax is rejected.",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00024",
+        "section": "strategy"
+      },
+      {
+        "content": "WHEN substituting a closed natural index leaves concrete `INR`, products, and fixed powers in a real-valued hypothesis, DO `cbn in H`, derive the variable\u2019s concrete value with `lra`, rewrite that value into dependent equations, then `cbn` and use `lra`, PROVIDED normalization leaves linear real arithmetic; EXCEPT symbolic products, powers, or large computations may require other preprocessing.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00025",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a `nat` hypothesis is a closed-coefficient polynomial equation involving products and truncated subtraction and the goal is a concrete arithmetic consequence, DO introduce the variables and try `nia` directly before expanding expressions or querying tactic metadata, PROVIDED no symbolic powers, division, modulo, recursive functions, or other non-arithmetic terms remain.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00026",
+        "section": "strategy"
+      },
+      {
+        "content": "WHEN strong induction needs both a property at smaller indices and uniqueness/injectivity information derived from it, DO strengthen the induction conclusion to a conjunction and obtain instances with `pose proof (IH m Hmk Hm) as IHm`, using `proj1`/`proj2`, PROVIDED every `Hmk` proves `m` is below the outer induction index; derive that bound explicitly rather than passing a bound below an intermediate index.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00027",
+        "section": "strategy"
+      },
+      {
+        "content": "WHEN a recurrence concludes with `f (S p)` but the target has `f t` and `t` also occurs inside subtraction, DO first derive the recurrence in its native `S p` form, prove `S p = t`, then rewrite only the derived hypothesis, PROVIDED positivity makes the index equality valid; rewriting the whole target may transform `t - 1` into `S p - 1`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00028",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN the goal is `exists q, A * q = B` with recursive products, DO first obtain an explicit equation `Hdiv : B = A * r` (or its symmetric form), then `exists r`, normalize multiplication association, and rewrite with `Hdiv`, PROVIDED the divisibility equation was proved independently; `nia` and `eexists; nia` do not synthesize such quotient witnesses from product structure.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00029",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN an equality is fully closed and built from finite `nat`, `bool`, or list computations, DO try `compute.` followed by `reflexivity.` before searching for specialized tactics or lemmas, PROVIDED reduction is reasonably sized and the normalized sides are convertible; EXCEPT large computations may make full reduction too costly.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00031",
+        "section": "strategy"
+      },
+      {
+        "content": "WHEN `field_simplify in H` leaves `H : numerator / denominator = 0`, DO prove `Hd : denominator <> 0`, then `pose proof (f_equal (fun z : R => z * denominator) H) as Hmul; field_simplify in Hmul`, and reason from `Hmul`, PROVIDED all generated denominator side goals are closed with `Hd`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00032",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN Rocq reports \u201cNo such goal. Focus next goal with bullet +\u201d or \u201cExpecting +\u201d after a branch closes, DO open the indicated sibling with that bullet and discharge it before returning to the outer bullet level, PROVIDED the proof contains nested goal-generating tactics; EXCEPT do not infer global completion from an empty displayed `remaining_goals` list while bullet focus remains.\n",
+        "harmful": 0,
+        "helpful": 2,
+        "id": "rocq-00033",
+        "section": "pitfalls"
+      },
+      {
+        "content": "WHEN `n mod M = r` is known and the goal asks for `n mod D` with concrete moduli, DO assert `n = M * (n / M) + n mod M` using `Nat.div_mod_eq`, rewrite the hypothesis, then use `Nat.Div0.add_mod` and `Nat.Div0.mul_mod` before concrete reduction, PROVIDED `M mod D` reduces to zero and `r mod D` reduces to the target remainder.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00034",
+        "section": "strategy"
+      },
+      {
+        "content": "WHEN a real equality `x ^ 3 = c ^ 3` must imply `x = c`, DO `destruct (Rtotal_order x c) as [Hlt | [Heq | Hgt]]`, close `Heq` directly, and in each strict branch prove positivity of the factor `x^2 + c*x + c^2` via a completed square before `nra`, PROVIDED the constants and resulting obligations are polynomial real arithmetic.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00035",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN finite case splitting leaves branches with a closed equality hypothesis and a concrete arithmetic goal, DO use `all: first [ discriminate H | lia ].` before normalizing recursive computations, PROVIDED impossible branches are constructor-discriminable and every surviving goal is linear arithmetic.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00036",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN proving an index-uniform fact while unrelated hypotheses depend on that index, DO first assert `forall n, P n`, then `intro n; induction n`, and specialize the completed assertion afterward, PROVIDED `P` itself does not require those surrounding hypotheses; this prevents an induction hypothesis specialized to the unrelated context.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00037",
+        "section": "strategy"
+      },
+      {
+        "content": "WHEN a natural-number remainder contains a symbolic term algebraically equal to a multiple of the modulus, DO expose it as `q * m` using `replace ... by lia`, then rewrite with `Nat.mod_mul` before simplifying, PROVIDED `m <> 0` is available or easily discharged; EXCEPT retain `Nat.mul_mod` when propagating an actual congruence rather than eliminating a known multiple.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00038",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN the goal is `0 <= E` for any `E : nat`, including products or truncated subtractions, DO use `exact (le_0_n _).`, PROVIDED the order is natural-number order; bare `exact le_0_n` may fail because its argument is not instantiated.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00039",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `lia` or `nia` times out because the context contains unrelated nonlinear equations or parity witnesses, DO clear those facts locally while proving linear auxiliaries, then clear irrelevant witnesses before the final arithmetic call, PROVIDED their dependencies allow `clear` and every nonlinear equation needed for the final conclusion is retained.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00040",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN hypotheses involve logarithms of products and small fixed powers of positive reals, DO obtain the corresponding `ln_mult` and `ln_pow` equations, normalize closed `INR` coefficients, then use `lra` while treating logarithm applications as atomic real variables, PROVIDED the resulting system is linear and every factor needed by `ln_mult` has a strict positivity proof.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00041",
+        "section": "strategy"
+      },
+      {
+        "content": "WHEN `nia` cannot derive `b <= K` from a natural polynomial equation containing `b ^ 2`, DO split `le_gt_dec b K`; in the greater branch derive `S K <= b`, obtain `(S K)*(S K) <= b*b` via `proj1 (Nat.square_le_mono _ _)`, rewrite `b ^ 2 = b*b`, then retry `nia`, PROVIDED that lower square bound contradicts the equation.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00042",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN all goals are closed but `Qed` reports stack overflow, DO treat it as proof-term/kernel-conversion failure and replace long successor enumeration or recursive closed computation with a substantially smaller structural argument, PROVIDED the verifier reports completion rather than a focused-goal error; merely rearranging bullets or wrapping the same proof in `abstract` need not help.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00044",
+        "section": "pitfalls"
+      },
+      {
+        "content": "WHEN `discriminate` overflows on a false closed `nat` equality containing small fixed powers, DO `change` the hypothesis to the definitionally equal nested-multiplication form and close the contradiction with `lia`, PROVIDED the exact multiplication form is convertible; EXCEPT this only repairs the local branch and does not prevent `Qed` overflow from a large enclosing case enumeration.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00045",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a real goal is syntactically `0 <= E ^ 2`, DO state it as a separate assertion and prove it with `apply pow2_ge_0.`, PROVIDED `E : R`; EXCEPT `Rle_0_sqr` targets a different square representation, and bare `nra` need not establish power-square nonnegativity.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00046",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a completed-square fact from `Rle_0_sqr` is not combined with polynomial hypotheses by `nra`, DO `unfold Rsqr in Hs`, prove the exact identity `t * t = E` with `assert (He : t * t = E) by ring`, rewrite `He` in `Hs`, then use `lra`, PROVIDED the rewritten inequalities are linear when their remaining monomials are treated as atoms.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00047",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a branch contradicts `Hneq : x <> y` but the current goal is an unrelated proposition, DO use `exfalso; apply Hneq` and then prove `x = y` from the branch context, PROVIDED the equality is derivable by the chosen closing tactic, such as `nra` for polynomial real arithmetic; direct `apply Hneq` only matches a `False` goal.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00048",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `x : Z` satisfies `prime x` and a closed composite must be excluded, DO destruct the primality proof, derive `rel_prime d C` for a closed proper divisor `d`, convert it with `Zis_gcd_gcd` to `Z.gcd d C = 1`, then `vm_compute` and `lia`, PROVIDED `1 <= d < C` and the computed gcd is not one.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00049",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN bounded case analysis on one variable can make the main equation force another prime variable to a forbidden composite, DO prove the composite-exclusion fact for every affected prime variable before enumerating, PROVIDED each exclusion follows from its own primality hypothesis; EXCEPT an exclusion for only the enumerated variable is insufficient when arithmetic transfers the exceptional value to another variable.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00050",
+        "section": "strategy"
+      },
+      {
+        "content": "WHEN induction over prefixes uses an ambient hypothesis valid only below a fixed bound, DO strengthen the invariant to `forall m, (m <= n)%nat -> P m` and derive each predecessor bound with a local `assert ... by lia`, PROVIDED the property genuinely concerns only prefixes up to `n`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00051",
+        "section": "strategy"
+      },
+      {
+        "content": "WHEN specializing an induction hypothesis requires a function such as `forall i, (i < m)%nat -> Q i` from a successor-bounded premise, DO assert that function explicitly, introduce `i` and its bound, then `apply` the premise and `lia`, PROVIDED the index inclusion is Presburger arithmetic; avoid `(by lia)` inside a term.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00052",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `Rsqr_sqrt` provides an identity in `Rsqr` form but the goal uses `(sqrt u) ^ 2`, DO `pose proof (Rsqr_sqrt u) as H; unfold Rsqr in H; nra.`, PROVIDED `0 <= u` is available or derivable and the remaining conversion is polynomial real arithmetic; avoid applying the lemma directly to the power-form goal.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00053",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN unfolding a recursive sum in an induction step normalizes the function argument and `rewrite IH` reports no matching subterm, DO use `change` to expose one recursive layer while preserving exactly the lambda syntax appearing in the induction hypothesis, then rewrite with the IH, PROVIDED the changed goal is definitionally convertible; EXCEPT use explicit function-extensional or arithmetic rewrites when the desired forms are only propositionally equal.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00054",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `apply Extensionality_Ensembles` leaves `Same_set U A B`, DO immediately `split`, then prove each inclusion with `intros x Hx`, PROVIDED the original goal is equality of ensembles; introducing an element before splitting fails because `Same_set` is a conjunction of inclusions, not a product.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00056",
+        "section": "tactics"
+      }
+    ],
+    "next_id": 57
+  },
+  "refinement_batches": [
+    "full_B1-terminal-refine-0",
+    "full_B1-terminal-refine-1",
+    "full_B1-terminal-refine-2",
+    "full_B1-terminal-refine-3",
+    "full_B1-terminal-refine-4"
+  ],
+  "source": "source_plain_v2",
+  "text": "### tactics\n- [rocq-00001] WHEN a congruence hypothesis must rewrite inside `(d * t) mod m`, DO first rewrite with `Nat.mul_mod`, then rewrite the exposed `t mod m`; preserve symbolic remainders and normalize only concrete factors explicitly, EXCEPT do not use unrestricted `simpl` while symbolic `mod` expressions remain, and discharge the required `m <> 0`.\n\n- [rocq-00003] WHEN inversion of nested `Ensembles` membership creates many branches, DO clear each inverted membership hypothesis and distribute the closer with `all:`, e.g. `repeat match goal with | Hm : In _ _ _ |- _ => inversion Hm; clear Hm end. all: lia.`, PROVIDED every branch is arithmetic; a plain subsequent `lia.` handles only the focused branch.\n\n- [rocq-00005] WHEN proving positivity of a concrete real square or cube, DO rewrite it as `x*x` or `x*(x*x)` by `ring` and give nested `Rmult_lt_0_compat` proof terms, PROVIDED `0 < x`; avoid `pow_pos` when its generated obligations do not match real-order goals.\n\n- [rocq-00006] WHEN `field_simplify` fails on an equality of real quotients, DO first rewrite one quotient so both denominators are syntactically identical, then apply `Rdiv_eq_reg_r` to obtain numerator equality, PROVIDED the common denominator is proved nonzero and any scaling rewrite uses an exact parenthesized numerator.\n\n- [rocq-00007] WHEN a real polynomial inequality reduces to nonnegativity of a completed square, DO assert `0 <= t * t`, prove the focused assertion with `apply Rle_0_sqr.`, then run `nra` on the original goal, PROVIDED the remaining consequence is polynomial arithmetic over `R`.\n\n- [rocq-00008] WHEN a strict real inequality must be multiplied on the right by a symbolic factor, DO prove the factor positive and apply `Rmult_lt_compat_r` before using `nra`, PROVIDED both inequalities are normalized to matching right-multiplication syntax.\n\n- [rocq-00011] WHEN `cbv.` on a closed arithmetic equality leaves a syntactically reflexive goal, DO append `reflexivity.` rather than resubmitting the reduction alone, PROVIDED both normalized sides are convertible; read a compact goal display like `|-24 = 24` as turnstile plus `24 = 24`, not necessarily a negative numeral.\n\n- [rocq-00013] WHEN a hypothesis contains a closed cast `INR c` and `change` fails as non-convertible, DO `repeat rewrite S_INR in H; rewrite INR_0 in H; nra.`, PROVIDED `c` is a modest closed natural numeral and the resulting expression is real arithmetic; EXCEPT avoid this linear-size expansion for very large numerals.\n\n- [rocq-00014] WHEN real-valued linear equalities determine the variables and the goal is a polynomial equality with small fixed powers, DO introduce the variables and hypotheses, then try `nra.` directly, PROVIDED there are no divisions with unresolved nonzero conditions, symbolic exponents, or non-polynomial operations.\n\n- [rocq-00017] WHEN proving an affine form for `u : nat -> R` from `forall n, u (n+1)%nat = u n + 1`, DO induct on `n`, replace `S n` by `(n+1)%nat`, rewrite the recurrence and IH, then use `rewrite (plus_INR n 1); simpl; ring`, PROVIDED the base index is explicitly `0%nat`; the reverse `plus_INR` direction does not match the casted sum.\n\n- [rocq-00019] WHEN `ring` reports \u201cnot a valid ring equation\u201d while normalizing a real expression containing `/`, DO prove an explicit equality with `field` and rewrite it, e.g. `assert (E : x / c + x / c = 2 * x / c) by field; rewrite E in H.`, PROVIDED denominators are concrete nonzero constants or all generated nonzero obligations can be discharged.\n\n- [rocq-00020] WHEN proving `0 < sin x` from bounds on an angle, DO prove `Hx : 0 < x` and `Hy : x < PI` separately, then use `exact (sin_gt_0 x Hx Hy)`, PROVIDED both strict bounds are available; applying the lemma creates two independent goals, so do not `split` them as a conjunction.\n\n- [rocq-00021] WHEN hypotheses give concrete values of a function and a pointwise polynomial specification describes that function, DO rewrite the specification at each known input in its hypothesis and at the target, then run `nra`, PROVIDED rewriting removes all relevant function applications and leaves a sufficiently constrained real polynomial system; EXCEPT unresolved divisions or non-polynomial operations require separate preprocessing.\n\n- [rocq-00022] WHEN converting `Rabs x = Rabs y` to polynomial real arithmetic, DO `pose proof (Rsqr_eq_asb_1 x y Habs) as Hsq; unfold Rsqr in Hsq.`, PROVIDED the hypothesis has exactly that absolute-value shape; do not prestate the conclusion using `^ 2`.\n\n- [rocq-00023] WHEN `nra` cannot conclude `u = v` from equal squares, DO first supply compatible sign facts for both roots; for `v = sqrt c`, use `assert (Hv : 0 <= sqrt c) by exact (sqrt_pos c).`, PROVIDED the squared equalities are polynomial after unfolding `Rsqr` and the other root is also known nonnegative.\n\n- [rocq-00025] WHEN substituting a closed natural index leaves concrete `INR`, products, and fixed powers in a real-valued hypothesis, DO `cbn in H`, derive the variable\u2019s concrete value with `lra`, rewrite that value into dependent equations, then `cbn` and use `lra`, PROVIDED normalization leaves linear real arithmetic; EXCEPT symbolic products, powers, or large computations may require other preprocessing.\n\n- [rocq-00028] WHEN a recurrence concludes with `f (S p)` but the target has `f t` and `t` also occurs inside subtraction, DO first derive the recurrence in its native `S p` form, prove `S p = t`, then rewrite only the derived hypothesis, PROVIDED positivity makes the index equality valid; rewriting the whole target may transform `t - 1` into `S p - 1`.\n\n- [rocq-00029] WHEN the goal is `exists q, A * q = B` with recursive products, DO first obtain an explicit equation `Hdiv : B = A * r` (or its symmetric form), then `exists r`, normalize multiplication association, and rewrite with `Hdiv`, PROVIDED the divisibility equation was proved independently; `nia` and `eexists; nia` do not synthesize such quotient witnesses from product structure.\n\n- [rocq-00032] WHEN `field_simplify in H` leaves `H : numerator / denominator = 0`, DO prove `Hd : denominator <> 0`, then `pose proof (f_equal (fun z : R => z * denominator) H) as Hmul; field_simplify in Hmul`, and reason from `Hmul`, PROVIDED all generated denominator side goals are closed with `Hd`.\n\n- [rocq-00035] WHEN a real equality `x ^ 3 = c ^ 3` must imply `x = c`, DO `destruct (Rtotal_order x c) as [Hlt | [Heq | Hgt]]`, close `Heq` directly, and in each strict branch prove positivity of the factor `x^2 + c*x + c^2` via a completed square before `nra`, PROVIDED the constants and resulting obligations are polynomial real arithmetic.\n\n- [rocq-00036] WHEN finite case splitting leaves branches with a closed equality hypothesis and a concrete arithmetic goal, DO use `all: first [ discriminate H | lia ].` before normalizing recursive computations, PROVIDED impossible branches are constructor-discriminable and every surviving goal is linear arithmetic.\n\n- [rocq-00038] WHEN a natural-number remainder contains a symbolic term algebraically equal to a multiple of the modulus, DO expose it as `q * m` using `replace ... by lia`, then rewrite with `Nat.mod_mul` before simplifying, PROVIDED `m <> 0` is available or easily discharged; EXCEPT retain `Nat.mul_mod` when propagating an actual congruence rather than eliminating a known multiple.\n\n- [rocq-00039] WHEN the goal is `0 <= E` for any `E : nat`, including products or truncated subtractions, DO use `exact (le_0_n _).`, PROVIDED the order is natural-number order; bare `exact le_0_n` may fail because its argument is not instantiated.\n\n- [rocq-00040] WHEN `lia` or `nia` times out because the context contains unrelated nonlinear equations or parity witnesses, DO clear those facts locally while proving linear auxiliaries, then clear irrelevant witnesses before the final arithmetic call, PROVIDED their dependencies allow `clear` and every nonlinear equation needed for the final conclusion is retained.\n\n- [rocq-00042] WHEN `nia` cannot derive `b <= K` from a natural polynomial equation containing `b ^ 2`, DO split `le_gt_dec b K`; in the greater branch derive `S K <= b`, obtain `(S K)*(S K) <= b*b` via `proj1 (Nat.square_le_mono _ _)`, rewrite `b ^ 2 = b*b`, then retry `nia`, PROVIDED that lower square bound contradicts the equation.\n\n- [rocq-00045] WHEN `discriminate` overflows on a false closed `nat` equality containing small fixed powers, DO `change` the hypothesis to the definitionally equal nested-multiplication form and close the contradiction with `lia`, PROVIDED the exact multiplication form is convertible; EXCEPT this only repairs the local branch and does not prevent `Qed` overflow from a large enclosing case enumeration.\n\n- [rocq-00046] WHEN a real goal is syntactically `0 <= E ^ 2`, DO state it as a separate assertion and prove it with `apply pow2_ge_0.`, PROVIDED `E : R`; EXCEPT `Rle_0_sqr` targets a different square representation, and bare `nra` need not establish power-square nonnegativity.\n\n- [rocq-00047] WHEN a completed-square fact from `Rle_0_sqr` is not combined with polynomial hypotheses by `nra`, DO `unfold Rsqr in Hs`, prove the exact identity `t * t = E` with `assert (He : t * t = E) by ring`, rewrite `He` in `Hs`, then use `lra`, PROVIDED the rewritten inequalities are linear when their remaining monomials are treated as atoms.\n\n- [rocq-00048] WHEN a branch contradicts `Hneq : x <> y` but the current goal is an unrelated proposition, DO use `exfalso; apply Hneq` and then prove `x = y` from the branch context, PROVIDED the equality is derivable by the chosen closing tactic, such as `nra` for polynomial real arithmetic; direct `apply Hneq` only matches a `False` goal.\n\n- [rocq-00049] WHEN `x : Z` satisfies `prime x` and a closed composite must be excluded, DO destruct the primality proof, derive `rel_prime d C` for a closed proper divisor `d`, convert it with `Zis_gcd_gcd` to `Z.gcd d C = 1`, then `vm_compute` and `lia`, PROVIDED `1 <= d < C` and the computed gcd is not one.\n\n- [rocq-00052] WHEN specializing an induction hypothesis requires a function such as `forall i, (i < m)%nat -> Q i` from a successor-bounded premise, DO assert that function explicitly, introduce `i` and its bound, then `apply` the premise and `lia`, PROVIDED the index inclusion is Presburger arithmetic; avoid `(by lia)` inside a term.\n\n- [rocq-00053] WHEN `Rsqr_sqrt` provides an identity in `Rsqr` form but the goal uses `(sqrt u) ^ 2`, DO `pose proof (Rsqr_sqrt u) as H; unfold Rsqr in H; nra.`, PROVIDED `0 <= u` is available or derivable and the remaining conversion is polynomial real arithmetic; avoid applying the lemma directly to the power-form goal.\n\n- [rocq-00054] WHEN unfolding a recursive sum in an induction step normalizes the function argument and `rewrite IH` reports no matching subterm, DO use `change` to expose one recursive layer while preserving exactly the lambda syntax appearing in the induction hypothesis, then rewrite with the IH, PROVIDED the changed goal is definitionally convertible; EXCEPT use explicit function-extensional or arithmetic rewrites when the desired forms are only propositionally equal.\n\n- [rocq-00056] WHEN `apply Extensionality_Ensembles` leaves `Same_set U A B`, DO immediately `split`, then prove each inclusion with `intros x Hx`, PROVIDED the original goal is equality of ensembles; introducing an element before splitting fails because `Same_set` is a conjunction of inclusions, not a product.\n\n\n### pitfalls\n- [rocq-00002] WHEN normalizing `m mod m` or `(m + r) mod m`, DO use `Nat.mod_same` (after `Nat.add_mod` for the sum), then use `Nat.mod_small` only for `r mod m`, PROVIDED `m <> 0` and `r < m`; never apply `Nat.mod_small` to `m mod m`, since it requires the false side condition `m < m`.\n\n- [rocq-00009] WHEN natural-number indices differ propositionally but `change` reports \u201cNot convertible,\u201d DO assert their equality with explicitly scoped arithmetic, e.g. `assert (He : (i + c)%nat = j) by lia.`, then `rewrite He` or `rewrite <- He`, PROVIDED the equality is arithmetic; under `R_scope`, omitting `%nat` may make the expression parse as real arithmetic.\n\n- [rocq-00016] WHEN verifier feedback reports no remaining goals after a successful branch but flags the following command because no goal remains at the current focus, DO remove that trailing command rather than modify the verified branch, PROVIDED the verified prefix includes the branch-closing tactic; EXCEPT when the error explicitly directs focus to a sibling bullet, follow the indicated bullet structure instead.\n- [rocq-00033] WHEN Rocq reports \u201cNo such goal. Focus next goal with bullet +\u201d or \u201cExpecting +\u201d after a branch closes, DO open the indicated sibling with that bullet and discharge it before returning to the outer bullet level, PROVIDED the proof contains nested goal-generating tactics; EXCEPT do not infer global completion from an empty displayed `remaining_goals` list while bullet focus remains.\n\n- [rocq-00044] WHEN all goals are closed but `Qed` reports stack overflow, DO treat it as proof-term/kernel-conversion failure and replace long successor enumeration or recursive closed computation with a substantially smaller structural argument, PROVIDED the verifier reports completion rather than a focused-goal error; merely rearranging bullets or wrapping the same proof in `abstract` need not help.\n\n\n### strategy\n- [rocq-00004] WHEN a deeply nested explicit finite `Ensemble` witness causes a first-tactic parse error, DO build it incrementally with `let E0 := constr:(Empty_set T) in let E1 := constr:(Add T E0 v1) in ... exists En.`, PROVIDED each local term is chained within the same tactic expression.\n\n- [rocq-00010] WHEN conversion of a large closed `nat` power expands unary numerals, loses rewrite matches, or overflows, DO first `remember (B ^ k) as c in H`, prove its symbolic form via `forall n, B ^ n = (b ^ d) ^ n` by induction, rewrite `c`, then normalize powers and apply `Nat.pow_inj_r`, PROVIDED the base conversion closes without evaluating the large power and `1 < b`; remembering only `B` is insufficient.\n\n- [rocq-00012] WHEN a recurrence advances by two and the target remains odd, DO induct on `k` with an invariant indexed by `((2 * k + 1)%nat)`, prove parity using `Nat.odd_odd`, and align the predecessor via `replace (2 * S k + 1 - 2)%nat with (2 * k + 1)%nat by lia.`, PROVIDED the base is at index one and every required step satisfies the recurrence guard.\n\n- [rocq-00018] WHEN both hypothesis and goal contain `sum_f_R0` at modest closed bounds and a pointwise closed form `Hu`, DO `cbn [sum_f_R0]`, simplify concrete indices, `repeat rewrite Hu` separately in the hypothesis and goal, simplify casts, then use `lra`, PROVIDED the resulting expressions are linear over `R`; prefer this standard-Ltac pipeline when `simp` or `norm_num` is unavailable.\n\n- [rocq-00024] WHEN concrete recurrence and symmetry equations connect a real-valued function application to a known base value, DO `pose proof` of every required edge, normalize the resulting hypotheses with `cbn` together or separately, then run `lra` or `nra`, PROVIDED all indices are closed naturals and normalization leaves a determined polynomial system; EXCEPT use separate `cbn in H.` commands when combined normalization syntax is rejected.\n- [rocq-00026] WHEN a `nat` hypothesis is a closed-coefficient polynomial equation involving products and truncated subtraction and the goal is a concrete arithmetic consequence, DO introduce the variables and try `nia` directly before expanding expressions or querying tactic metadata, PROVIDED no symbolic powers, division, modulo, recursive functions, or other non-arithmetic terms remain.\n\n- [rocq-00027] WHEN strong induction needs both a property at smaller indices and uniqueness/injectivity information derived from it, DO strengthen the induction conclusion to a conjunction and obtain instances with `pose proof (IH m Hmk Hm) as IHm`, using `proj1`/`proj2`, PROVIDED every `Hmk` proves `m` is below the outer induction index; derive that bound explicitly rather than passing a bound below an intermediate index.\n\n- [rocq-00031] WHEN an equality is fully closed and built from finite `nat`, `bool`, or list computations, DO try `compute.` followed by `reflexivity.` before searching for specialized tactics or lemmas, PROVIDED reduction is reasonably sized and the normalized sides are convertible; EXCEPT large computations may make full reduction too costly.\n\n- [rocq-00034] WHEN `n mod M = r` is known and the goal asks for `n mod D` with concrete moduli, DO assert `n = M * (n / M) + n mod M` using `Nat.div_mod_eq`, rewrite the hypothesis, then use `Nat.Div0.add_mod` and `Nat.Div0.mul_mod` before concrete reduction, PROVIDED `M mod D` reduces to zero and `r mod D` reduces to the target remainder.\n\n- [rocq-00037] WHEN proving an index-uniform fact while unrelated hypotheses depend on that index, DO first assert `forall n, P n`, then `intro n; induction n`, and specialize the completed assertion afterward, PROVIDED `P` itself does not require those surrounding hypotheses; this prevents an induction hypothesis specialized to the unrelated context.\n\n- [rocq-00041] WHEN hypotheses involve logarithms of products and small fixed powers of positive reals, DO obtain the corresponding `ln_mult` and `ln_pow` equations, normalize closed `INR` coefficients, then use `lra` while treating logarithm applications as atomic real variables, PROVIDED the resulting system is linear and every factor needed by `ln_mult` has a strict positivity proof.\n\n- [rocq-00050] WHEN bounded case analysis on one variable can make the main equation force another prime variable to a forbidden composite, DO prove the composite-exclusion fact for every affected prime variable before enumerating, PROVIDED each exclusion follows from its own primality hypothesis; EXCEPT an exclusion for only the enumerated variable is insufficient when arithmetic transfers the exceptional value to another variable.\n\n- [rocq-00051] WHEN induction over prefixes uses an ambient hypothesis valid only below a fixed bound, DO strengthen the invariant to `forall m, (m <= n)%nat -> P m` and derive each predecessor bound with a local `assert ... by lia`, PROVIDED the property genuinely concerns only prefixes up to `n`.\n\n\n### lemmas\n- [rocq-00015] WHEN a prime divides another prime and their equality is needed, DO apply `prime_div_prime` directly and reverse the resulting equality explicitly if required, PROVIDED primality of both integers and divisibility in the lemma\u2019s argument order are available; avoid destructing a multi-case characterization of prime divisors.",
+  "training_theorems": [
+    "mathd_numbertheory_42",
+    "mathd_algebra_185",
+    "aime_1988_p3",
+    "mathd_algebra_410",
+    "induction_pord1p1on2powklt5on2",
+    "amc12a_2016_p2",
+    "mathd_numbertheory_35",
+    "amc12a_2017_p7",
+    "mathd_algebra_37",
+    "amc12b_2002_p11",
+    "mathd_numbertheory_403",
+    "aime_1984_p1",
+    "imo_1963_p5",
+    "mathd_algebra_43",
+    "amc12a_2002_p13",
+    "aime_1988_p8",
+    "mathd_algebra_247",
+    "mathd_numbertheory_326",
+    "imo_1977_p6",
+    "imo_1967_p3",
+    "mathd_numbertheory_221",
+    "aime_1990_p4",
+    "mathd_numbertheory_458",
+    "mathd_algebra_323",
+    "amc12b_2004_p3",
+    "amc12a_2013_p7",
+    "mathd_numbertheory_301",
+    "amc12_2000_p1",
+    "amc12b_2003_p17",
+    "mathd_numbertheory_48",
+    "amc12a_2020_p13",
+    "mathd_numbertheory_629",
+    "imo_1983_p6",
+    "mathd_algebra_28",
+    "mathd_algebra_206",
+    "amc12_2000_p6",
+    "algebra_amgm_sum1toneqn_prod1tonleq1",
+    "imo_1968_p5_1",
+    "amc12a_2003_p1",
+    "mathd_algebra_224"
+  ],
+  "unrefined_book": "books/full_B1__sol_medium.json"
+}

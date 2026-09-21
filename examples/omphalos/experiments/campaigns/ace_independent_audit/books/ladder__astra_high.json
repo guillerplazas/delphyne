@@ -1,0 +1,97 @@
+{
+  "author": "astra_high",
+  "playbook": {
+    "bullets": [
+      {
+        "content": "WHEN `Huv : u * v = 0` and `Hu : u <> 0` are over `R`, DO\n`destruct (Rmult_integral u v Huv) as [Hu0 | Hv0].`\nClose the first branch with `exfalso; exact (Hu Hu0).` and use\n`Hv0` in the remaining branch, PROVIDED `Reals` is imported.\nFinish with `nra` when the surviving equation and context\narithmetically imply the goal.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00001",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN real root hypotheses `Hr : f r = 0` hide a polynomial behind\n`Hpoly : forall x, f x = ...`, DO `rewrite (Hpoly r) in Hr.`\nfor each root. To exclude a factor `u`, use\n`assert (Hu : u <> 0) by (intro Hu0; apply Hneq; nra).`,\nPROVIDED `Hneq : r <> s` and the exposed equations plus `u = 0`\narithmetically force `r = s`; distinctness alone is insufficient.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00002",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN normalizing `H` containing `nat` powers with common-base factorizations,\nDO keep powers symbolic:\n`rewrite (Nat.pow_mul_l b c k) in H.`\n`rewrite <- (Nat.pow_mul_r b u v) in H.`\n`rewrite <- (Nat.pow_add_r b u v) in H.`\nExpand nested product powers before combining. PROVIDED each rewrite matches\nthe subterm. Replace bases by small products, larger-first, inspecting\nresults: smaller numerals can match unary suffixes. Use `reflexivity` for\nsmall base identities, not enormous power equalities.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00003",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `Hpow : b ^ E = b ^ F` is over `nat`, DO extract the exact\nexponent equality before solving for an unknown:\n`assert (Hex : E = F) by (apply Nat.pow_inj_r with (a := b); [exact Hb | exact Hpow]).`\nThen use `lia` or `nia`, PROVIDED `Hb : 1 < b` and `Hex` arithmetically\nimplies the goal. Applying injectivity directly to a different target\nequality generates a power obligation that need not match `Hpow`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00004",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN proving `c <= y` from `Hy : y = P` over `R` by completing\nthe square, DO use\n`assert (Hs : 0 <= t * t) by apply Rle_0_sqr.`\n`assert (Hid : P = t * t + c) by ring.`\nThen `rewrite Hid in Hy; lra.`\nPROVIDED `Reals` is imported, `R_scope` is open, and the identity\nis polynomially valid. Use the same explicit product in both\nassertions rather than `Rsqr t`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00005",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN deriving `k*A=B` from `Heq : A/d=B/(k*d)` over `R` but\n`field_simplify in Heq` leaves fractions, DO\n`assert (Hmul : (A/d)*(k*d*d) = (B/(k*d))*(k*d*d)).`\n`{ rewrite Heq. reflexivity. }`\n`field_simplify in Hmul.`\nUse `nra` on the cancellation goal and `lra` on denominator obligations;\ninspect their order rather than assuming side conditions come first,\nPROVIDED `0<d` and `k` is a fixed positive numeral.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00006",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN proving `u=v` from algebraic relations between real logarithms,\nDO `apply ln_inv.`; prove `0<u`, `0<v`, then `ln u = ln v`.\nExpand every remaining product using `ln_mult` and reciprocal using\n`ln_Rinv`, closing their strict-positivity side goals. Finish with `nra`\nwhen contextual log relations imply the expanded equality, not `ring`,\nPROVIDED `Reals` is imported and the required arguments and factors\nare strictly positive.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00007",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN the goal is a closed equality computing a finite-list count with\nBoolean tests and natural-number arithmetic, DO try\n`compute. reflexivity.` before searching for mathematical lemmas.\nPROVIDED all inputs are concrete, the relevant definitions are\ntransparent, and the enumeration is reasonably sized. Evaluation\nperforms the enumeration and tests; `reflexivity` explicitly closes\nthe resulting convertible equality.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00008",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `field_simplify` needs denominator-nonzero facts already in the\ncontext, DO use `field_simplify in Hmul; try easy.` rather than\npassing those facts as bracketed arguments. PROVIDED the generated\nside conditions are contextual facts or conjunctions of them:\n`easy` handles such conjunctions whereas `assumption` does not.\nInspect the transformed equality separately; discharging nonzero\nobligations does not guarantee that fractions disappeared.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00009",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN instantiating natural-number hypotheses under `R_scope`, or a numeral\nhas type `R` where `nat` is expected, DO annotate concrete natural arguments\nwith `%nat`, e.g.\n`pose proof (Hrec 4%nat 2%nat ltac:(lia) ltac:(lia)) as Hr.`,\nPROVIDED this hypothesis takes two naturals followed by two arithmetic\npremises solvable by `lia`. Apply the same scope discipline to other\nnatural arguments; expected argument types need not override numeral scope.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00010",
+        "section": "pitfalls"
+      },
+      {
+        "content": "WHEN real equations contain small concrete `INR` coefficients and\nnatural-index arithmetic, DO fold matching sums with\n`rewrite <- (plus_INR a b) in H.`, then run separate `cbn in H.`\ncommands for each instantiated fact and finish with `nra`,\nPROVIDED `a,b` are concrete naturals and the normalized equations\narithmetically imply the goal. If `norm_num in H.` fails to parse,\nuse this route rather than retrying `at`; avoid whitespace-separated\nlists such as `cbn in H1 H2.`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00011",
+        "section": "tactics"
+      }
+    ],
+    "next_id": 12
+  },
+  "source": "source_assisted",
+  "text": "### tactics\n- [rocq-00001] WHEN `Huv : u * v = 0` and `Hu : u <> 0` are over `R`, DO\n`destruct (Rmult_integral u v Huv) as [Hu0 | Hv0].`\nClose the first branch with `exfalso; exact (Hu Hu0).` and use\n`Hv0` in the remaining branch, PROVIDED `Reals` is imported.\nFinish with `nra` when the surviving equation and context\narithmetically imply the goal.\n\n- [rocq-00002] WHEN real root hypotheses `Hr : f r = 0` hide a polynomial behind\n`Hpoly : forall x, f x = ...`, DO `rewrite (Hpoly r) in Hr.`\nfor each root. To exclude a factor `u`, use\n`assert (Hu : u <> 0) by (intro Hu0; apply Hneq; nra).`,\nPROVIDED `Hneq : r <> s` and the exposed equations plus `u = 0`\narithmetically force `r = s`; distinctness alone is insufficient.\n\n- [rocq-00003] WHEN normalizing `H` containing `nat` powers with common-base factorizations,\nDO keep powers symbolic:\n`rewrite (Nat.pow_mul_l b c k) in H.`\n`rewrite <- (Nat.pow_mul_r b u v) in H.`\n`rewrite <- (Nat.pow_add_r b u v) in H.`\nExpand nested product powers before combining. PROVIDED each rewrite matches\nthe subterm. Replace bases by small products, larger-first, inspecting\nresults: smaller numerals can match unary suffixes. Use `reflexivity` for\nsmall base identities, not enormous power equalities.\n\n- [rocq-00004] WHEN `Hpow : b ^ E = b ^ F` is over `nat`, DO extract the exact\nexponent equality before solving for an unknown:\n`assert (Hex : E = F) by (apply Nat.pow_inj_r with (a := b); [exact Hb | exact Hpow]).`\nThen use `lia` or `nia`, PROVIDED `Hb : 1 < b` and `Hex` arithmetically\nimplies the goal. Applying injectivity directly to a different target\nequality generates a power obligation that need not match `Hpow`.\n\n- [rocq-00005] WHEN proving `c <= y` from `Hy : y = P` over `R` by completing\nthe square, DO use\n`assert (Hs : 0 <= t * t) by apply Rle_0_sqr.`\n`assert (Hid : P = t * t + c) by ring.`\nThen `rewrite Hid in Hy; lra.`\nPROVIDED `Reals` is imported, `R_scope` is open, and the identity\nis polynomially valid. Use the same explicit product in both\nassertions rather than `Rsqr t`.\n\n- [rocq-00006] WHEN deriving `k*A=B` from `Heq : A/d=B/(k*d)` over `R` but\n`field_simplify in Heq` leaves fractions, DO\n`assert (Hmul : (A/d)*(k*d*d) = (B/(k*d))*(k*d*d)).`\n`{ rewrite Heq. reflexivity. }`\n`field_simplify in Hmul.`\nUse `nra` on the cancellation goal and `lra` on denominator obligations;\ninspect their order rather than assuming side conditions come first,\nPROVIDED `0<d` and `k` is a fixed positive numeral.\n\n- [rocq-00007] WHEN proving `u=v` from algebraic relations between real logarithms,\nDO `apply ln_inv.`; prove `0<u`, `0<v`, then `ln u = ln v`.\nExpand every remaining product using `ln_mult` and reciprocal using\n`ln_Rinv`, closing their strict-positivity side goals. Finish with `nra`\nwhen contextual log relations imply the expanded equality, not `ring`,\nPROVIDED `Reals` is imported and the required arguments and factors\nare strictly positive.\n\n- [rocq-00008] WHEN the goal is a closed equality computing a finite-list count with\nBoolean tests and natural-number arithmetic, DO try\n`compute. reflexivity.` before searching for mathematical lemmas.\nPROVIDED all inputs are concrete, the relevant definitions are\ntransparent, and the enumeration is reasonably sized. Evaluation\nperforms the enumeration and tests; `reflexivity` explicitly closes\nthe resulting convertible equality.\n\n- [rocq-00009] WHEN `field_simplify` needs denominator-nonzero facts already in the\ncontext, DO use `field_simplify in Hmul; try easy.` rather than\npassing those facts as bracketed arguments. PROVIDED the generated\nside conditions are contextual facts or conjunctions of them:\n`easy` handles such conjunctions whereas `assumption` does not.\nInspect the transformed equality separately; discharging nonzero\nobligations does not guarantee that fractions disappeared.\n\n- [rocq-00011] WHEN real equations contain small concrete `INR` coefficients and\nnatural-index arithmetic, DO fold matching sums with\n`rewrite <- (plus_INR a b) in H.`, then run separate `cbn in H.`\ncommands for each instantiated fact and finish with `nra`,\nPROVIDED `a,b` are concrete naturals and the normalized equations\narithmetically imply the goal. If `norm_num in H.` fails to parse,\nuse this route rather than retrying `at`; avoid whitespace-separated\nlists such as `cbn in H1 H2.`.\n\n\n### pitfalls\n- [rocq-00010] WHEN instantiating natural-number hypotheses under `R_scope`, or a numeral\nhas type `R` where `nat` is expected, DO annotate concrete natural arguments\nwith `%nat`, e.g.\n`pose proof (Hrec 4%nat 2%nat ltac:(lia) ltac:(lia)) as Hr.`,\nPROVIDED this hypothesis takes two naturals followed by two arithmetic\npremises solvable by `lia`. Apply the same scope discipline to other\nnatural arguments; expected argument types need not override numeral scope.",
+  "training_theorems": [
+    "mathd_algebra_206",
+    "amc12a_2016_p2",
+    "mathd_algebra_410",
+    "aime_1988_p3",
+    "mathd_numbertheory_221",
+    "aime_1990_p4",
+    "mathd_numbertheory_403",
+    "aime_1988_p8"
+  ]
+}

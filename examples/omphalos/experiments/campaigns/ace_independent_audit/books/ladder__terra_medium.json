@@ -1,0 +1,90 @@
+{
+  "author": "terra_medium",
+  "playbook": {
+    "bullets": [
+      {
+        "content": "WHEN real polynomial equations yield a product equality x * y = 0 and a hypothesis can rule out x = 0, DO prove `assert (Hx0 : x <> 0) by (intro Hx; ...).`, derive the product with `assert (Hprod : x * y = 0) by nra.`, then `destruct (Rmult_integral x y Hprod) as [Hx | Hy]`; close the impossible branch with `exact (Hx0 Hx)`. PROVIDED the context is over R with Reals imported and the needed factorization is derivable by nra.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00001",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a nat power equality contains composite numeral bases or products of same-base powers, DO rewrite bases as products, distribute with `rewrite (Nat.pow_mul_l a b n) in H`, then merge only syntactically present factors using `rewrite <- (Nat.pow_add_r a m n) in H`. PROVIDED inspect the displayed hypothesis between rewrites; EXCEPT do not use `reflexivity` to evaluate large concrete powers, which can overflow.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00002",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN normalization yields `H : b ^ E = b ^ F` over nat, DO first assert the exponent equality with `apply Nat.pow_inj_r with (a := b)`, solve its first goal `1 < b` separately (often `lia`), and use `exact H` for the remaining equality-of-powers goal. PROVIDED a proof of `1 < b` is available; then use `lia` or `nia` on the asserted exponent equality.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00003",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a real quadratic lower bound is proved by completing the square and `ring` rejects an identity containing square notation, DO state the square as an explicit product: `assert (Hs : 0 <= t * t) by apply Rle_0_sqr.`, prove `assert (Hid : q = t * t + c) by ring.`, rewrite `Hid` in the defining equality, then finish with `lra`. PROVIDED the rewritten goal is linear from `Hs`; EXCEPT this is a workaround for ring normalization, not a general failure of square notation.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00004",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `exact H` fails because the goal still contains a transparent defined wrapper while `H` states its unfolded body, DO `unfold` that wrapper in the goal immediately before the final match, then use a local `replace ... by ring` if only notation such as `t ^ 2` versus `t * t` differs. PROVIDED unfolding exposes the same expression as `H`; EXCEPT do not unfold opaque or unrelated definitions.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00005",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN the goal is a fully closed equality or proposition built from executable `nat`, `bool`, and `list` operations with concrete inputs, DO try `compute; reflexivity.` before lemma search or manual unfolding. PROVIDED reduction is of modest size; EXCEPT avoid this for large recursive computations that may reduce impractically slowly or create huge terms.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00006",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a real rational equality with explicit nonzero denominator hypotheses remains unsuitable for nra after `field_simplify in H`, DO copy and clear denominators first: `assert (Hmul := f_equal (fun z : R => z * (d1 * d2 * d3)) H).` then `field_simplify in Hmul; try easy.` and derive polynomial consequences from `Hmul` with `nra`. PROVIDED each `di` exactly matches a denominator factor and existing hypotheses prove their nonzeroness.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00007",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a closed equality over executable nat, bool, and list programs includes moderately sized finite enumeration, filtering, folding, or modulus tests, DO use `vm_compute; reflexivity.` PROVIDED all definitions involved are transparent and executable; EXCEPT avoid it for open goals, opaque definitions, or computations large enough to risk excessive time or memory.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00008",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `Open Scope R_scope` is active and a hypothesis expects concrete `nat` arguments, DO annotate each supplied numeral with `%nat`, e.g. `pose proof (Hrec a%nat b%nat ltac:(lia) ltac:(lia)) as h.` PROVIDED the parameters are nat-indexed; EXCEPT do not annotate numerals intended as real coefficients.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00009",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN instantiated real equations contain concrete casts as `INR a + INR b` and arithmetic needs evaluated numerals, DO rewrite `rewrite <- (plus_INR a%nat b%nat) in h.` then run `cbn in h.` before `nra`. PROVIDED `a` and `b` are concrete naturals; EXCEPT if multi-hypothesis `cbn in h1 h2` is rejected, normalize each hypothesis in a separate command.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00010",
+        "section": "tactics"
+      }
+    ],
+    "next_id": 11
+  },
+  "source": "source_assisted",
+  "text": "### tactics\n- [rocq-00001] WHEN real polynomial equations yield a product equality x * y = 0 and a hypothesis can rule out x = 0, DO prove `assert (Hx0 : x <> 0) by (intro Hx; ...).`, derive the product with `assert (Hprod : x * y = 0) by nra.`, then `destruct (Rmult_integral x y Hprod) as [Hx | Hy]`; close the impossible branch with `exact (Hx0 Hx)`. PROVIDED the context is over R with Reals imported and the needed factorization is derivable by nra.\n\n- [rocq-00002] WHEN a nat power equality contains composite numeral bases or products of same-base powers, DO rewrite bases as products, distribute with `rewrite (Nat.pow_mul_l a b n) in H`, then merge only syntactically present factors using `rewrite <- (Nat.pow_add_r a m n) in H`. PROVIDED inspect the displayed hypothesis between rewrites; EXCEPT do not use `reflexivity` to evaluate large concrete powers, which can overflow.\n\n- [rocq-00003] WHEN normalization yields `H : b ^ E = b ^ F` over nat, DO first assert the exponent equality with `apply Nat.pow_inj_r with (a := b)`, solve its first goal `1 < b` separately (often `lia`), and use `exact H` for the remaining equality-of-powers goal. PROVIDED a proof of `1 < b` is available; then use `lia` or `nia` on the asserted exponent equality.\n\n- [rocq-00004] WHEN a real quadratic lower bound is proved by completing the square and `ring` rejects an identity containing square notation, DO state the square as an explicit product: `assert (Hs : 0 <= t * t) by apply Rle_0_sqr.`, prove `assert (Hid : q = t * t + c) by ring.`, rewrite `Hid` in the defining equality, then finish with `lra`. PROVIDED the rewritten goal is linear from `Hs`; EXCEPT this is a workaround for ring normalization, not a general failure of square notation.\n\n- [rocq-00005] WHEN `exact H` fails because the goal still contains a transparent defined wrapper while `H` states its unfolded body, DO `unfold` that wrapper in the goal immediately before the final match, then use a local `replace ... by ring` if only notation such as `t ^ 2` versus `t * t` differs. PROVIDED unfolding exposes the same expression as `H`; EXCEPT do not unfold opaque or unrelated definitions.\n\n- [rocq-00006] WHEN the goal is a fully closed equality or proposition built from executable `nat`, `bool`, and `list` operations with concrete inputs, DO try `compute; reflexivity.` before lemma search or manual unfolding. PROVIDED reduction is of modest size; EXCEPT avoid this for large recursive computations that may reduce impractically slowly or create huge terms.\n\n- [rocq-00007] WHEN a real rational equality with explicit nonzero denominator hypotheses remains unsuitable for nra after `field_simplify in H`, DO copy and clear denominators first: `assert (Hmul := f_equal (fun z : R => z * (d1 * d2 * d3)) H).` then `field_simplify in Hmul; try easy.` and derive polynomial consequences from `Hmul` with `nra`. PROVIDED each `di` exactly matches a denominator factor and existing hypotheses prove their nonzeroness.\n\n- [rocq-00008] WHEN a closed equality over executable nat, bool, and list programs includes moderately sized finite enumeration, filtering, folding, or modulus tests, DO use `vm_compute; reflexivity.` PROVIDED all definitions involved are transparent and executable; EXCEPT avoid it for open goals, opaque definitions, or computations large enough to risk excessive time or memory.\n\n- [rocq-00009] WHEN `Open Scope R_scope` is active and a hypothesis expects concrete `nat` arguments, DO annotate each supplied numeral with `%nat`, e.g. `pose proof (Hrec a%nat b%nat ltac:(lia) ltac:(lia)) as h.` PROVIDED the parameters are nat-indexed; EXCEPT do not annotate numerals intended as real coefficients.\n\n- [rocq-00010] WHEN instantiated real equations contain concrete casts as `INR a + INR b` and arithmetic needs evaluated numerals, DO rewrite `rewrite <- (plus_INR a%nat b%nat) in h.` then run `cbn in h.` before `nra`. PROVIDED `a` and `b` are concrete naturals; EXCEPT if multi-hypothesis `cbn in h1 h2` is rejected, normalize each hypothesis in a separate command.",
+  "training_theorems": [
+    "mathd_algebra_206",
+    "amc12a_2016_p2",
+    "mathd_algebra_410",
+    "aime_1988_p3",
+    "mathd_numbertheory_221",
+    "aime_1990_p4",
+    "mathd_numbertheory_403",
+    "aime_1988_p8"
+  ]
+}

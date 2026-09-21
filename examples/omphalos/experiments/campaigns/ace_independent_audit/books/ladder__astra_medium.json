@@ -1,0 +1,90 @@
+{
+  "author": "astra_medium",
+  "playbook": {
+    "bullets": [
+      {
+        "content": "WHEN real polynomial equations yield a useful zero product, DO expose it\nwith `assert (Hprod : u * v = 0) by nra`, then\n`destruct (Rmult_integral u v Hprod) as [Hu | Hv]`.\nEliminate any excluded zero-factor branch and use `nra` on the surviving\nequation, PROVIDED `Reals` is imported and the factorization follows from\nthe context. Prove any needed nonzeroness separately; root distinctness\nalone does not imply a root is nonzero.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00001",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN nat powers have related concrete bases, DO factor bases using\nsmall equalities proved by `reflexivity`, distribute every nested\nproduct-power layer with `Nat.pow_mul_l`, then combine equal-base\nfactors with reverse `Nat.pow_add_r`; keep large powers symbolic.\nPROVIDED the bases admit such factorizations. For global numeral\nreplacements, process larger bases first and inspect the result:\nsmaller unary numerals can match inside larger ones, and larger-first\nordering does not protect unrelated numeral occurrences.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00002",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `H : b ^ E = b ^ F` over nat must yield an arithmetic conclusion,\nDO extract the actual exponents with\n`assert (Hex : E = F) by (apply Nat.pow_inj_r with (a := b); [lia | exact H]).`\nThen use `lia` or `nia`, PROVIDED `1 < b` is provable by `lia` and the\ntarget follows arithmetically. Do not apply injectivity directly to\na target whose sides differ from `E` and `F`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00003",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a real quadratic bound admits completing the square but square\nnotation obstructs automation, DO use explicit products:\n`assert (Hs : 0 <= (x-c)*(x-c)) by apply Rle_0_sqr.`\nProve the completed-square identity with `ring`, also writing its\nsquare as `(x-c)*(x-c)`, rewrite the identity in the defining\nhypothesis, and finish with `lra`, PROVIDED `Reals` is imported,\nthe chosen center makes the identity true, and the remaining\nbound follows linearly from `Hs`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00004",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `Heq : A / d = B / (c*d)` over reals resists\n`field_simplify in Heq`, DO assert\n`Hmul : (A/d)*(c*d*d) = (B/(c*d))*(c*d*d)`\nusing `rewrite Heq. reflexivity.`, then run\n`field_simplify in Hmul`. Use `nra` for the polynomial cancellation\nand discharge denominator obligations separately; inspect their order.\nPROVIDED `c` is a positive numeral and `0 < d` is established.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00005",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN real logarithm equations contain products or reciprocals, DO\nexpand every nested product layer with `ln_mult` and reciprocals\nwith `ln_Rinv`, discharging each rewrite's positivity obligations\nbefore leaving its branch. Then use `ring` for identities or\n`lra`/`nra` with hypotheses, treating normalized logarithms as atoms.\nTo recover argument equality, apply `ln_inv`.\nPROVIDED all factors and both arguments for injectivity are positive;\n`ring` cannot expand a remaining `ln (u*v)`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00006",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN the goal is a closed equality computing a finite enumeration\nthrough transparent nat, boolean, and list definitions, DO try\n`compute. reflexivity.` before searching for counting or arithmetic\nlemmas, PROVIDED the enumeration is computationally manageable and\nno opaque definitions or symbolic inputs block reduction. This can\nevaluate nested filters and arithmetic predicates directly, avoiding\na mathematical classification of the counted objects.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00007",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `field_simplify` needs several denominator nonzeroness facts\nalready in context, DO use `field_simplify in Hmul; try easy.`\nrather than passing hypothesis names in bracket arguments:\nobligations may be conjunctions that `assumption` cannot close.\nPROVIDED the required nonzeroness facts are available; inspect\nremaining goals because `try easy` silently leaves obligations\nrequiring additional reasoning.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00008",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a concrete value of a symmetric nat-indexed real function is\ndetermined by a recurrence linking `f x y` with `f x (x+y)` and\nknown diagonal values, DO instantiate only the backward subtraction\npath: subtract the smaller index from the larger, using symmetry\nas needed, and stop at a diagonal. Keep equations multiplied\nthrough; normalize concrete indices and coefficients, then try\n`nra`. PROVIDED the path is short and all recurrence arguments\nremain positive; never subtract a diagonal to zero.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00009",
+        "section": "strategy"
+      },
+      {
+        "content": "WHEN instantiating nat-indexed real equations under `R_scope`, DO\nannotate numeral arguments with `%nat`. For concrete coefficients\n`INR a + INR b`, use `rewrite <- (plus_INR a b) in Hstep.`\nthen `cbn in Hstep.` before arithmetic automation. Normalize\nhypotheses with separate commands, not `cbn in h1 h2.`.\nPROVIDED the numerals are small enough to reduce; in the standard\nReals environment, avoid the rejected `norm_num at ...` and\n`norm_num in ...` forms.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00010",
+        "section": "tactics"
+      }
+    ],
+    "next_id": 11
+  },
+  "source": "source_assisted",
+  "text": "### tactics\n- [rocq-00001] WHEN real polynomial equations yield a useful zero product, DO expose it\nwith `assert (Hprod : u * v = 0) by nra`, then\n`destruct (Rmult_integral u v Hprod) as [Hu | Hv]`.\nEliminate any excluded zero-factor branch and use `nra` on the surviving\nequation, PROVIDED `Reals` is imported and the factorization follows from\nthe context. Prove any needed nonzeroness separately; root distinctness\nalone does not imply a root is nonzero.\n\n- [rocq-00002] WHEN nat powers have related concrete bases, DO factor bases using\nsmall equalities proved by `reflexivity`, distribute every nested\nproduct-power layer with `Nat.pow_mul_l`, then combine equal-base\nfactors with reverse `Nat.pow_add_r`; keep large powers symbolic.\nPROVIDED the bases admit such factorizations. For global numeral\nreplacements, process larger bases first and inspect the result:\nsmaller unary numerals can match inside larger ones, and larger-first\nordering does not protect unrelated numeral occurrences.\n\n- [rocq-00003] WHEN `H : b ^ E = b ^ F` over nat must yield an arithmetic conclusion,\nDO extract the actual exponents with\n`assert (Hex : E = F) by (apply Nat.pow_inj_r with (a := b); [lia | exact H]).`\nThen use `lia` or `nia`, PROVIDED `1 < b` is provable by `lia` and the\ntarget follows arithmetically. Do not apply injectivity directly to\na target whose sides differ from `E` and `F`.\n\n- [rocq-00004] WHEN a real quadratic bound admits completing the square but square\nnotation obstructs automation, DO use explicit products:\n`assert (Hs : 0 <= (x-c)*(x-c)) by apply Rle_0_sqr.`\nProve the completed-square identity with `ring`, also writing its\nsquare as `(x-c)*(x-c)`, rewrite the identity in the defining\nhypothesis, and finish with `lra`, PROVIDED `Reals` is imported,\nthe chosen center makes the identity true, and the remaining\nbound follows linearly from `Hs`.\n\n- [rocq-00005] WHEN `Heq : A / d = B / (c*d)` over reals resists\n`field_simplify in Heq`, DO assert\n`Hmul : (A/d)*(c*d*d) = (B/(c*d))*(c*d*d)`\nusing `rewrite Heq. reflexivity.`, then run\n`field_simplify in Hmul`. Use `nra` for the polynomial cancellation\nand discharge denominator obligations separately; inspect their order.\nPROVIDED `c` is a positive numeral and `0 < d` is established.\n\n- [rocq-00006] WHEN real logarithm equations contain products or reciprocals, DO\nexpand every nested product layer with `ln_mult` and reciprocals\nwith `ln_Rinv`, discharging each rewrite's positivity obligations\nbefore leaving its branch. Then use `ring` for identities or\n`lra`/`nra` with hypotheses, treating normalized logarithms as atoms.\nTo recover argument equality, apply `ln_inv`.\nPROVIDED all factors and both arguments for injectivity are positive;\n`ring` cannot expand a remaining `ln (u*v)`.\n\n- [rocq-00007] WHEN the goal is a closed equality computing a finite enumeration\nthrough transparent nat, boolean, and list definitions, DO try\n`compute. reflexivity.` before searching for counting or arithmetic\nlemmas, PROVIDED the enumeration is computationally manageable and\nno opaque definitions or symbolic inputs block reduction. This can\nevaluate nested filters and arithmetic predicates directly, avoiding\na mathematical classification of the counted objects.\n\n- [rocq-00008] WHEN `field_simplify` needs several denominator nonzeroness facts\nalready in context, DO use `field_simplify in Hmul; try easy.`\nrather than passing hypothesis names in bracket arguments:\nobligations may be conjunctions that `assumption` cannot close.\nPROVIDED the required nonzeroness facts are available; inspect\nremaining goals because `try easy` silently leaves obligations\nrequiring additional reasoning.\n\n- [rocq-00010] WHEN instantiating nat-indexed real equations under `R_scope`, DO\nannotate numeral arguments with `%nat`. For concrete coefficients\n`INR a + INR b`, use `rewrite <- (plus_INR a b) in Hstep.`\nthen `cbn in Hstep.` before arithmetic automation. Normalize\nhypotheses with separate commands, not `cbn in h1 h2.`.\nPROVIDED the numerals are small enough to reduce; in the standard\nReals environment, avoid the rejected `norm_num at ...` and\n`norm_num in ...` forms.\n\n\n### strategy\n- [rocq-00009] WHEN a concrete value of a symmetric nat-indexed real function is\ndetermined by a recurrence linking `f x y` with `f x (x+y)` and\nknown diagonal values, DO instantiate only the backward subtraction\npath: subtract the smaller index from the larger, using symmetry\nas needed, and stop at a diagonal. Keep equations multiplied\nthrough; normalize concrete indices and coefficients, then try\n`nra`. PROVIDED the path is short and all recurrence arguments\nremain positive; never subtract a diagonal to zero.",
+  "training_theorems": [
+    "mathd_algebra_206",
+    "amc12a_2016_p2",
+    "mathd_algebra_410",
+    "aime_1988_p3",
+    "mathd_numbertheory_221",
+    "aime_1990_p4",
+    "mathd_numbertheory_403",
+    "aime_1988_p8"
+  ]
+}

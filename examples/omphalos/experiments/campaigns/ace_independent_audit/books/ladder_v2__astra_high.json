@@ -1,0 +1,90 @@
+{
+  "author": "astra_high",
+  "playbook": {
+    "bullets": [
+      {
+        "content": "WHEN `Hprod : u * v = 0` over stdlib reals, DO\n`destruct (Rmult_integral u v Hprod) as [Hu | Hv].`\nrather than guessing `Rmult_eq_zero` or `mul_eq_zero`, PROVIDED\n`Reals` is imported. If `Hnz : u <> 0` is established, close the\nfirst branch with `exfalso; exact (Hnz Hu).` and use `Hv` in the\nsurviving branch.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00001",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN normalizing large `nat` powers to a common base, DO rewrite in `H`\nusing `Nat.pow_mul_l` forward for every nested product power,\n`Nat.pow_mul_r` backward for towers, and `Nat.pow_add_r` backward for\nmatching same-base products, PROVIDED stdlib `PeanoNat` is available.\nAvoid whole-power computation by `reflexivity`; factor small concrete\nbases largest-first and inspect replacements, since replacing smaller\nnumerals can alter unary suffixes of larger ones.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00002",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `H : b ^ u = b ^ v` over `nat`, DO extract its actual exponents:\n`assert (Hex : u = v). { apply Nat.pow_inj_r with (a := b).\n- exact Hb. - exact H. }`\nThen use `lia`/`nia` on the arithmetic goal, PROVIDED `Hb : 1 < b`\n(use `lia` instead for concrete bases). Do not apply injectivity to a\ndifferent target equality: it generates powers of that target's sides.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00003",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN proving a real polynomial lower bound by completing a square,\nDO use `assert (Hs : 0 <= t * t) by apply Rle_0_sqr.` for the chosen\nreal expression `t`. Prove the completed-square identity with `ring`,\nspelling its square as `t * t` too; rewrite it in the polynomial\nhypothesis and retain `Hs` for `lra`, PROVIDED `Reals` is imported\nand the rewritten bound follows by linear arithmetic from `Hs`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00004",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN reducing stdlib real logarithms, DO derive `0 < ln t` from\n`1 < t` by asserting `ln 1 < ln t` using `ln_increasing`\n(premises `0 < 1`, `1 < t`), then rewriting `ln_1`.\nUse `ln_mult` for products, `ln_Rinv` for reciprocals, `ln_inv`\nfor injectivity, and `Rdiv_pos_pos` for quotient positivity;\nPROVIDED `Reals` is imported and the respective operands are strictly\npositive. Discharge positivity premises from each logarithm rewrite.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00005",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `H : A/d = B/(c*d)` over `R` remains unchanged after\n`field_simplify in H`, DO assert\n`Hmul : (A/d)*(c*d*d) = (B/(c*d))*(c*d*d)`\nusing `rewrite H. reflexivity.`, then run `field_simplify in Hmul`.\nUse `nra` for cancellation toward `c*A = B` and `lra` for\ndenominator obligations, inspecting their order;\nPROVIDED `0 < d` and `c` is a positive concrete numeral.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00006",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN an equality compares a closed finite computation with a concrete\nvalue, such as counting a filtered finite sequence, DO first try\n`compute. reflexivity.` before searching for mathematical classification\nlemmas or Boolean-equality facts, PROVIDED all inputs are concrete,\npredicates are transparent and executable, and enumeration is\ncomputationally manageable. Nested finite filters, modulo, and Boolean\nequality need not require separate lemmas. Include `reflexivity.`:\nnormalization alone may leave the equality open.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00007",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `field_simplify` needs already-known denominator disequalities or\nrejects them in bracket arguments, DO omit those proof arguments and\nuse `field_simplify in H; try easy.`. This handles conjunctions of\nnonzero conditions that `assumption` leaves open, PROVIDED every\ngenerated condition follows directly from the context. Inspect the\nnormalized `H` separately: discharging side conditions does not\nguarantee that all divisions disappeared.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00008",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN specializing a local hypothesis with concrete natural-number\narguments under `Open Scope R_scope`, DO annotate each numeral\nexplicitly, e.g. `pose proof (Hrec 3%nat 5%nat ltac:(lia) ltac:(lia)) as h.`,\nPROVIDED those binders are `nat` and any premises supplied by `lia`\nare arithmetic. Expected argument types need not override numeral\nscope; bare numerals can still elaborate as `R`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00009",
+        "section": "pitfalls"
+      },
+      {
+        "content": "WHEN a finite real equation chain contains closed `INR` coefficients\nand natural-number index sums, DO rewrite matching coefficient sums\nwith `rewrite <- (plus_INR a b) in h.`, then normalize each hypothesis\nseparately with `cbn in h.` and finish with `nra`; PROVIDED `Reals`\nis imported, `a,b` are small closed naturals, and the instantiated\nequations determine the target by linear arithmetic. Avoid rejected\n`norm_num at/in` forms and space-separated lists such as\n`cbn in h1 h2.`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00010",
+        "section": "tactics"
+      }
+    ],
+    "next_id": 11
+  },
+  "source": "source_assisted_v2",
+  "text": "### tactics\n- [rocq-00001] WHEN `Hprod : u * v = 0` over stdlib reals, DO\n`destruct (Rmult_integral u v Hprod) as [Hu | Hv].`\nrather than guessing `Rmult_eq_zero` or `mul_eq_zero`, PROVIDED\n`Reals` is imported. If `Hnz : u <> 0` is established, close the\nfirst branch with `exfalso; exact (Hnz Hu).` and use `Hv` in the\nsurviving branch.\n\n- [rocq-00002] WHEN normalizing large `nat` powers to a common base, DO rewrite in `H`\nusing `Nat.pow_mul_l` forward for every nested product power,\n`Nat.pow_mul_r` backward for towers, and `Nat.pow_add_r` backward for\nmatching same-base products, PROVIDED stdlib `PeanoNat` is available.\nAvoid whole-power computation by `reflexivity`; factor small concrete\nbases largest-first and inspect replacements, since replacing smaller\nnumerals can alter unary suffixes of larger ones.\n\n- [rocq-00003] WHEN `H : b ^ u = b ^ v` over `nat`, DO extract its actual exponents:\n`assert (Hex : u = v). { apply Nat.pow_inj_r with (a := b).\n- exact Hb. - exact H. }`\nThen use `lia`/`nia` on the arithmetic goal, PROVIDED `Hb : 1 < b`\n(use `lia` instead for concrete bases). Do not apply injectivity to a\ndifferent target equality: it generates powers of that target's sides.\n\n- [rocq-00004] WHEN proving a real polynomial lower bound by completing a square,\nDO use `assert (Hs : 0 <= t * t) by apply Rle_0_sqr.` for the chosen\nreal expression `t`. Prove the completed-square identity with `ring`,\nspelling its square as `t * t` too; rewrite it in the polynomial\nhypothesis and retain `Hs` for `lra`, PROVIDED `Reals` is imported\nand the rewritten bound follows by linear arithmetic from `Hs`.\n\n- [rocq-00005] WHEN reducing stdlib real logarithms, DO derive `0 < ln t` from\n`1 < t` by asserting `ln 1 < ln t` using `ln_increasing`\n(premises `0 < 1`, `1 < t`), then rewriting `ln_1`.\nUse `ln_mult` for products, `ln_Rinv` for reciprocals, `ln_inv`\nfor injectivity, and `Rdiv_pos_pos` for quotient positivity;\nPROVIDED `Reals` is imported and the respective operands are strictly\npositive. Discharge positivity premises from each logarithm rewrite.\n\n- [rocq-00006] WHEN `H : A/d = B/(c*d)` over `R` remains unchanged after\n`field_simplify in H`, DO assert\n`Hmul : (A/d)*(c*d*d) = (B/(c*d))*(c*d*d)`\nusing `rewrite H. reflexivity.`, then run `field_simplify in Hmul`.\nUse `nra` for cancellation toward `c*A = B` and `lra` for\ndenominator obligations, inspecting their order;\nPROVIDED `0 < d` and `c` is a positive concrete numeral.\n\n- [rocq-00007] WHEN an equality compares a closed finite computation with a concrete\nvalue, such as counting a filtered finite sequence, DO first try\n`compute. reflexivity.` before searching for mathematical classification\nlemmas or Boolean-equality facts, PROVIDED all inputs are concrete,\npredicates are transparent and executable, and enumeration is\ncomputationally manageable. Nested finite filters, modulo, and Boolean\nequality need not require separate lemmas. Include `reflexivity.`:\nnormalization alone may leave the equality open.\n\n- [rocq-00008] WHEN `field_simplify` needs already-known denominator disequalities or\nrejects them in bracket arguments, DO omit those proof arguments and\nuse `field_simplify in H; try easy.`. This handles conjunctions of\nnonzero conditions that `assumption` leaves open, PROVIDED every\ngenerated condition follows directly from the context. Inspect the\nnormalized `H` separately: discharging side conditions does not\nguarantee that all divisions disappeared.\n\n- [rocq-00010] WHEN a finite real equation chain contains closed `INR` coefficients\nand natural-number index sums, DO rewrite matching coefficient sums\nwith `rewrite <- (plus_INR a b) in h.`, then normalize each hypothesis\nseparately with `cbn in h.` and finish with `nra`; PROVIDED `Reals`\nis imported, `a,b` are small closed naturals, and the instantiated\nequations determine the target by linear arithmetic. Avoid rejected\n`norm_num at/in` forms and space-separated lists such as\n`cbn in h1 h2.`.\n\n\n### pitfalls\n- [rocq-00009] WHEN specializing a local hypothesis with concrete natural-number\narguments under `Open Scope R_scope`, DO annotate each numeral\nexplicitly, e.g. `pose proof (Hrec 3%nat 5%nat ltac:(lia) ltac:(lia)) as h.`,\nPROVIDED those binders are `nat` and any premises supplied by `lia`\nare arithmetic. Expected argument types need not override numeral\nscope; bare numerals can still elaborate as `R`.",
+  "training_theorems": [
+    "mathd_algebra_206",
+    "amc12a_2016_p2",
+    "mathd_algebra_410",
+    "aime_1988_p3",
+    "mathd_numbertheory_221",
+    "aime_1990_p4",
+    "mathd_numbertheory_403",
+    "aime_1988_p8"
+  ]
+}

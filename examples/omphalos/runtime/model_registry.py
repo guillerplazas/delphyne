@@ -33,12 +33,19 @@ is only meaningful relative to when it was incurred.
 Published API rates (dollars per million input / cached-input / output
 tokens), newest first per model:
 
-- gpt-5.6-sol:   5.00 / 0.50 / 30.00   (unchanged since launch)
+- gpt-6-astra:  10.00 / 1.00 / 50.00   verified 2026-09-19
+- gpt-5.6-sol:   4.00 / 0.40 / 20.00   verified 2026-09-19
+                 5.00 / 0.50 / 30.00   previous registry assumption
 - gpt-5.6-terra: 2.00 / 0.20 / 12.00   from 2026-07-30
                  2.50 / 0.25 / 15.00   before that
 - gpt-5.6-luna:  0.20 / 0.02 /  1.20   from 2026-07-30
                  1.00 / 0.10 /  6.00   before that
 - gpt-5.4:       2.50 / 0.25 / 15.00
+
+The September 19 boundary records verification, not an inferred provider
+price-change date. Earlier entries are preserved for archival reproducibility.
+The independent campaign additionally accounts for cache writes, service
+tiers, regional processing and long-context premiums in its local adapter.
 
 The upstream fix (adding these entries to the stdlib table and dropping
 the prefix inference) lives on the `fix/openai-pricing` branch. Even
@@ -120,7 +127,13 @@ OMPHALOS_PRICING: Mapping[str, Sequence[tuple[date, ModelPricing]]] = {
     # Each list is ordered newest-first; `pricing_for` picks the first
     # entry whose date is not in the future relative to the query.
     "gpt-5.6-sol": [
+        (date(2026, 9, 19), _per_million(4.00, 0.40, 20.00)),
         (_LAUNCH, _per_million(5.00, 0.50, 30.00)),
+    ],
+    # Verified against official model pages on 2026-09-19. Older
+    # measurements retain their dated rates; no inferred launch date.
+    "gpt-6-astra": [
+        (date(2026, 9, 19), _per_million(10.00, 1.00, 50.00)),
     ],
     "gpt-5.6-terra": [
         (PRICE_CUT_2026_07_30, _per_million(2.00, 0.20, 12.00)),
@@ -148,7 +161,7 @@ they were actually billed at.
 # fmt: on
 
 
-_GUARDED_FAMILIES = ("gpt-5.4", "gpt-5.5", "gpt-5.6")
+_GUARDED_FAMILIES = ("gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-6")
 """
 Name prefixes for which the stdlib's prefix fallback is *wrong* (they
 all resolve to `gpt-5`, which is 2x cheaper). A name starting with one

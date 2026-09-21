@@ -1,0 +1,97 @@
+{
+  "author": "astra_medium",
+  "playbook": {
+    "bullets": [
+      {
+        "content": "WHEN real polynomial constraints yield `Hprod : u * v = 0` and\n`Hu : u <> 0`, DO\n`destruct (Rmult_integral u v Hprod) as [Hz | Hv].`\nClose the zero branch with `exfalso; exact (Hu Hz).` and use `Hv`\nin the remaining arithmetic. PROVIDED `Reals` is imported; obtain\nthe product equation with `nra` after rewriting function definitions\nwhen applicable. Prove `Hu` from the full constraints, not root\ndistinctness alone.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00001",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a nat power equation has bases factoring into a common base, DO\nkeep powers symbolic: factor larger numeric bases before smaller ones\n(smaller numerals can match successor-tails). Use reflexivity only for\nsmall base identities. Distribute every product power, including inner\nproducts, with `rewrite (Nat.pow_mul_l a b n) in H.`, then merge\nwith `rewrite <- (Nat.pow_add_r b u v) in H.`\nPROVIDED the factors share the intended base; avoid computing huge closed powers.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00002",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `H : b ^ E = b ^ F` over nat is normalized but the final\ngoal is a different arithmetic equality, DO extract precisely H's exponents:\n`assert (Hex : E = F). { apply Nat.pow_inj_r with (a := b); [lia | exact H]. }`\nThen try `nia`. PROVIDED `1 < b` is available or provable by `lia`\nand the remaining goal follows arithmetically. Do not apply injectivity\ndirectly to the different final equality.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00003",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN completing the square for a real quadratic bound, especially if\nautomation stalls on square notation, DO use explicit products:\n`assert (Hs : 0 <= t * t) by apply Rle_0_sqr.`\nProve the concrete identity `polynomial = t * t + c` with `ring`,\nrewrite it in the defining equality, then use `lra`, retaining Hs.\nPROVIDED `Reals` and `R_scope` are available and the rewritten bound\nfollows linearly from Hs; t denotes the chosen real expression.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00004",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN normalizing real logarithms, DO derive positivity from `1 < u`\nusing `assert (Hp : ln 1 < ln u). { apply ln_increasing; lra. }`\nthen `rewrite ln_1 in Hp.` Use `Rdiv_pos_pos` for positive quotients.\nExpand all products, including inner ones, with `ln_mult`; `ln_Rinv`\nhandles reciprocals and requires positivity. Use `lra`/`nra` for\nresulting logarithmic relations. PROVIDED arguments are positive,\n`apply ln_inv` reduces `U = V` to positivity of U, positivity of V,\nand `ln U = ln V`.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00005",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `Heq : A / d = B / (c * d)` remains a quotient equality\nafter `field_simplify in Heq`, DO assert\n`Hmul : (A / d) * (c*d*d) = (B / (c*d)) * (c*d*d)`\nby `(rewrite Heq; reflexivity)`, then `field_simplify in Hmul`.\nTry `nra` for the cancellation goal and discharge every nonzero\nside goal with `lra`. PROVIDED `0 < d` is known and c is a\nfixed positive numeral; inspect generated goals rather than assuming\nside conditions come first.\n",
+        "harmful": 0,
+        "helpful": 1,
+        "id": "rocq-00006",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN a closed equality computes a finite enumeration using `seq`, `filter`,\n`length`, and decidable nat arithmetic, DO try `compute. reflexivity.`\nbefore developing a symbolic characterization of the counted objects.\nPROVIDED all relevant definitions are transparent and the computation fits\nthe resource budget; variables, opaque constants, or much larger bounds\nmay block or make this approach impractical.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00007",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN `About` or `Check` reports that a tactic name is not a defined object,\nDO distinguish object lookup from tactic parsing: test the intended tactic\nin a proof rather than searching for supporting lemmas solely because of\nthat lookup failure. PROVIDED the name is intended as tactic syntax;\nmissing references to actual lemmas still require correction or lookup.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00008",
+        "section": "pitfalls"
+      },
+      {
+        "content": "WHEN passing nonzero hypotheses through `field_simplify [...] in H`\nfails, DO use `field_simplify in H; try easy.` instead, then inspect\nremaining goals. PROVIDED the denominator nonzero facts are already\navailable, `easy` can assemble their conjunction where `assumption`\ncannot. Prove any remaining nonzero obligations explicitly; this repair\nhandles side conditions, not residual division in the transformed equality.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00009",
+        "section": "tactics"
+      },
+      {
+        "content": "WHEN applying a local hypothesis to concrete nat arguments under\n`Open Scope R_scope`, DO scope those arguments explicitly, e.g.\n`pose proof (Hrec 4%nat 2%nat ltac:(lia) ltac:(lia)) as h.`\nPROVIDED the binders are nat and the supplied side conditions are\narithmetic; expected argument types alone need not prevent numerals\nfrom being parsed as R.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00010",
+        "section": "pitfalls"
+      },
+      {
+        "content": "WHEN collected real equations contain small closed nat indices and\ncoefficients `INR a + INR b`, DO normalize with\n`rewrite <- (plus_INR a b) in h.` then `cbn in h.`\nRepeat individually for each equation, including symmetry and base-case\ninstances, then try `nra`. Keep recurrence equations multiplied out\nrather than introducing quotients. PROVIDED the collected equations\nsuffice arithmetically; use separate `cbn in h1.` and `cbn in h2.`\ncommands, not a space-separated hypothesis list.\n",
+        "harmful": 0,
+        "helpful": 0,
+        "id": "rocq-00011",
+        "section": "tactics"
+      }
+    ],
+    "next_id": 12
+  },
+  "source": "source_assisted_v2",
+  "text": "### tactics\n- [rocq-00001] WHEN real polynomial constraints yield `Hprod : u * v = 0` and\n`Hu : u <> 0`, DO\n`destruct (Rmult_integral u v Hprod) as [Hz | Hv].`\nClose the zero branch with `exfalso; exact (Hu Hz).` and use `Hv`\nin the remaining arithmetic. PROVIDED `Reals` is imported; obtain\nthe product equation with `nra` after rewriting function definitions\nwhen applicable. Prove `Hu` from the full constraints, not root\ndistinctness alone.\n\n- [rocq-00002] WHEN a nat power equation has bases factoring into a common base, DO\nkeep powers symbolic: factor larger numeric bases before smaller ones\n(smaller numerals can match successor-tails). Use reflexivity only for\nsmall base identities. Distribute every product power, including inner\nproducts, with `rewrite (Nat.pow_mul_l a b n) in H.`, then merge\nwith `rewrite <- (Nat.pow_add_r b u v) in H.`\nPROVIDED the factors share the intended base; avoid computing huge closed powers.\n\n- [rocq-00003] WHEN `H : b ^ E = b ^ F` over nat is normalized but the final\ngoal is a different arithmetic equality, DO extract precisely H's exponents:\n`assert (Hex : E = F). { apply Nat.pow_inj_r with (a := b); [lia | exact H]. }`\nThen try `nia`. PROVIDED `1 < b` is available or provable by `lia`\nand the remaining goal follows arithmetically. Do not apply injectivity\ndirectly to the different final equality.\n\n- [rocq-00004] WHEN completing the square for a real quadratic bound, especially if\nautomation stalls on square notation, DO use explicit products:\n`assert (Hs : 0 <= t * t) by apply Rle_0_sqr.`\nProve the concrete identity `polynomial = t * t + c` with `ring`,\nrewrite it in the defining equality, then use `lra`, retaining Hs.\nPROVIDED `Reals` and `R_scope` are available and the rewritten bound\nfollows linearly from Hs; t denotes the chosen real expression.\n\n- [rocq-00005] WHEN normalizing real logarithms, DO derive positivity from `1 < u`\nusing `assert (Hp : ln 1 < ln u). { apply ln_increasing; lra. }`\nthen `rewrite ln_1 in Hp.` Use `Rdiv_pos_pos` for positive quotients.\nExpand all products, including inner ones, with `ln_mult`; `ln_Rinv`\nhandles reciprocals and requires positivity. Use `lra`/`nra` for\nresulting logarithmic relations. PROVIDED arguments are positive,\n`apply ln_inv` reduces `U = V` to positivity of U, positivity of V,\nand `ln U = ln V`.\n\n- [rocq-00006] WHEN `Heq : A / d = B / (c * d)` remains a quotient equality\nafter `field_simplify in Heq`, DO assert\n`Hmul : (A / d) * (c*d*d) = (B / (c*d)) * (c*d*d)`\nby `(rewrite Heq; reflexivity)`, then `field_simplify in Hmul`.\nTry `nra` for the cancellation goal and discharge every nonzero\nside goal with `lra`. PROVIDED `0 < d` is known and c is a\nfixed positive numeral; inspect generated goals rather than assuming\nside conditions come first.\n\n- [rocq-00007] WHEN a closed equality computes a finite enumeration using `seq`, `filter`,\n`length`, and decidable nat arithmetic, DO try `compute. reflexivity.`\nbefore developing a symbolic characterization of the counted objects.\nPROVIDED all relevant definitions are transparent and the computation fits\nthe resource budget; variables, opaque constants, or much larger bounds\nmay block or make this approach impractical.\n\n- [rocq-00009] WHEN passing nonzero hypotheses through `field_simplify [...] in H`\nfails, DO use `field_simplify in H; try easy.` instead, then inspect\nremaining goals. PROVIDED the denominator nonzero facts are already\navailable, `easy` can assemble their conjunction where `assumption`\ncannot. Prove any remaining nonzero obligations explicitly; this repair\nhandles side conditions, not residual division in the transformed equality.\n\n- [rocq-00011] WHEN collected real equations contain small closed nat indices and\ncoefficients `INR a + INR b`, DO normalize with\n`rewrite <- (plus_INR a b) in h.` then `cbn in h.`\nRepeat individually for each equation, including symmetry and base-case\ninstances, then try `nra`. Keep recurrence equations multiplied out\nrather than introducing quotients. PROVIDED the collected equations\nsuffice arithmetically; use separate `cbn in h1.` and `cbn in h2.`\ncommands, not a space-separated hypothesis list.\n\n\n### pitfalls\n- [rocq-00008] WHEN `About` or `Check` reports that a tactic name is not a defined object,\nDO distinguish object lookup from tactic parsing: test the intended tactic\nin a proof rather than searching for supporting lemmas solely because of\nthat lookup failure. PROVIDED the name is intended as tactic syntax;\nmissing references to actual lemmas still require correction or lookup.\n\n- [rocq-00010] WHEN applying a local hypothesis to concrete nat arguments under\n`Open Scope R_scope`, DO scope those arguments explicitly, e.g.\n`pose proof (Hrec 4%nat 2%nat ltac:(lia) ltac:(lia)) as h.`\nPROVIDED the binders are nat and the supplied side conditions are\narithmetic; expected argument types alone need not prevent numerals\nfrom being parsed as R.",
+  "training_theorems": [
+    "mathd_algebra_206",
+    "amc12a_2016_p2",
+    "mathd_algebra_410",
+    "aime_1988_p3",
+    "mathd_numbertheory_221",
+    "aime_1990_p4",
+    "mathd_numbertheory_403",
+    "aime_1988_p8"
+  ]
+}
